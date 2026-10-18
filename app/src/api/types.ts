@@ -194,5 +194,14 @@ export interface MetricRow {
   n_candidates?: number;
 }
 
+export interface LiveSuggestion { id: string; t_wall: number; t_rec: number | null; grade: string; text: string; head: string; score: number; status: "pending" | "approved" | "dismissed"; bbox: number[] }
+export interface LiveBookmark { id: string; t_wall: number; t_rec: number | null; kind: string; note: string }
+export interface LiveSession {
+  id: string; running: boolean; started: number; frames: number; last_frame_t: number; source: string; interval: number; approval: boolean;
+  obs: Record<string, unknown> | null; obs_connected: boolean; banner: string; pending: number; bookmarks: number; last_error: string | null; dir: string;
+}
+export interface LiveStatus { active: boolean; session: LiveSession | null; suggestions: LiveSuggestion[]; bookmarks: LiveBookmark[] }
+export type LiveEvent = { session: string; t: number; type: string; [k: string]: unknown };
+
 export type Layout = "card" | "feed";
 export const REASONS = ["재미없음", "임팩트없음", "중복", "잘림", "맥락없음", "기타"] as const;

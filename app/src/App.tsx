@@ -3,6 +3,7 @@ import { Progress, Tabs, Toasts } from "./components/ui";
 import { Calibration } from "./features/Calibration";
 import { Candidates } from "./features/Candidates";
 import { EditPoints } from "./features/EditPoints";
+import { Live } from "./features/Live";
 import { Alerts, Header } from "./features/Header";
 import { Metrics } from "./features/Metrics";
 import { Pipeline } from "./features/Pipeline";
@@ -11,13 +12,13 @@ import { Sidebar } from "./features/Sidebar";
 import { UpdateBanner } from "./features/UpdateBanner";
 import { AppProvider, useApp } from "./state/store";
 
-type Tab = "candidates" | "editpoints" | "pipeline" | "calibration" | "metrics" | "settings";
-const TABS: Tab[] = ["pipeline", "candidates", "editpoints", "calibration", "metrics", "settings"];
+type Tab = "candidates" | "editpoints" | "pipeline" | "calibration" | "metrics" | "live" | "settings";
+const TABS: Tab[] = ["pipeline", "candidates", "editpoints", "calibration", "metrics", "live", "settings"];
 const TAB_KEY = "cf.tab";
 const hashTab = (): Tab | null => { const h = location.hash.replace("#", "") as Tab; return TABS.includes(h) ? h : null; };
 
 function Main() {
-  const { selected, activeJob, toasts, viewJobId, runError } = useApp();
+  const { selected, activeJob, toasts, viewJobId, runError, liveStatus } = useApp();
   const [tab, setTab] = useState<Tab>(() => hashTab() || (localStorage.getItem(TAB_KEY) as Tab) || "pipeline");
   useEffect(() => { localStorage.setItem(TAB_KEY, tab); if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`); }, [tab]);
   useEffect(() => { const h = () => { const t = hashTab(); if (t) setTab(t); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
@@ -39,6 +40,7 @@ function Main() {
           : [{ key: "candidates" as Tab, label: "후보" }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
         { key: "calibration", label: "캘리브레이션" },
         { key: "metrics", label: "지표 · 작업" },
+        { key: "live", label: "라이브", count: liveStatus?.active ? "●" : undefined },
         { key: "settings", label: "설정" },
       ]} />
       <div className="content">
@@ -50,6 +52,7 @@ function Main() {
         {tab === "editpoints" && <EditPoints />}
         {tab === "calibration" && <Calibration />}
         {tab === "metrics" && <Metrics />}
+        {tab === "live" && <Live />}
         {tab === "settings" && <Settings />}
       </div>
       <Toasts items={toasts} />

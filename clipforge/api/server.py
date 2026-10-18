@@ -66,6 +66,27 @@ class KeptAdd(BaseModel):
     note: str = ""
 
 
+class LiveStart(BaseModel):
+    config: dict = {}
+
+
+class LiveMark(BaseModel):
+    note: str = ""
+
+
+class LiveApprove(BaseModel):
+    text: str | None = None
+
+
+class LiveBanner(BaseModel):
+    items: list[str]
+
+
+class ObsProbe(BaseModel):
+    url: str = "ws://127.0.0.1:4455"
+    password: str = ""
+
+
 class Decision(BaseModel):
     start: float
     end: float
@@ -198,6 +219,39 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @app.get("/api/label-categories")
     def label_categories():
         return engine.label_categories()
+
+    # ---- live ----
+    @app.get("/api/live")
+    def live_status():
+        return engine.live_status()
+
+    @app.post("/api/live/start")
+    def live_start(body: LiveStart):
+        return engine.live_start(body.config)
+
+    @app.post("/api/live/stop")
+    def live_stop():
+        return engine.live_stop()
+
+    @app.post("/api/live/mark")
+    def live_mark(body: LiveMark):
+        return engine.live_mark(body.note)
+
+    @app.post("/api/live/suggestions/{sid}/approve")
+    def live_approve(sid: str, body: LiveApprove):
+        return engine.live_approve(sid, body.text)
+
+    @app.post("/api/live/suggestions/{sid}/dismiss")
+    def live_dismiss(sid: str):
+        return engine.live_dismiss(sid)
+
+    @app.put("/api/live/banner")
+    def live_banner(body: LiveBanner):
+        return engine.live_banner(body.items)
+
+    @app.post("/api/live/obs/probe")
+    def live_obs_probe(body: ObsProbe):
+        return engine.live_obs_inputs(body.url, body.password)
 
     # 원본/편집본 영상 자체 (편집 포인트 검토용 재생). Range 지원.
     @app.api_route("/media/video/{vid}", methods=["GET", "HEAD"])

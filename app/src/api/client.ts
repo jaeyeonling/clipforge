@@ -1,5 +1,5 @@
 import type {
-  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, KeptSeg, LabelCategory, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
+  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, KeptSeg, LabelCategory, Layout, LiveBookmark, LiveSession, LiveStatus, LiveSuggestion, LogLine, MetricRow, PreviewResult, Profile, StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -72,4 +72,12 @@ export const api = {
   profile: (game: string) => request<Profile>(`/api/profiles/${game}`),
   saveProfile: (game: string, rois: Record<string, number[]>) => put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
   metrics: () => request<MetricRow[]>("/api/metrics"),
+  live: () => request<LiveStatus>("/api/live"),
+  liveStart: (config: Record<string, unknown>) => post<LiveSession>("/api/live/start", { config }),
+  liveStop: () => post<LiveSession>("/api/live/stop", {}),
+  liveMark: (note = "") => post<LiveBookmark>("/api/live/mark", { note }),
+  liveApprove: (id: string, text?: string) => post<LiveSuggestion>(`/api/live/suggestions/${id}/approve`, { text: text ?? null }),
+  liveDismiss: (id: string) => post<LiveSuggestion>(`/api/live/suggestions/${id}/dismiss`, {}),
+  liveBanner: (items: string[]) => put<{ text: string; items: string[] }>("/api/live/banner", { items }),
+  liveObsProbe: (url: string, password: string) => post<{ ok: boolean; obs: { obs: string }; text_sources: string[] }>("/api/live/obs/probe", { url, password }),
 };

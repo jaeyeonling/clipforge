@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, toErrorInfo } from "../api/client";
 import { useEngineEvents } from "../api/ws";
-import type { EngineEvent, Episode, ErrorInfo, Health, Job, LogLine, StageName } from "../api/types";
+import type { EngineEvent, Episode, ErrorInfo, Health, Job, LiveEvent, LiveStatus, LogLine, StageName } from "../api/types";
 
 export interface Toast { id: number; text: string; bad: boolean }
 export type JobParams = Parameters<typeof api.runJob>[2];
@@ -21,6 +21,9 @@ interface Store {
   runError: RunError | null;
   wsConnected: boolean;
   tick: number;                   // 데이터가 바뀌었을 때 증가 → 후보·지표 다시 읽기
+  liveStatus: LiveStatus | null;
+  liveEvents: LiveEvent[];
+  refreshLive: () => Promise<void>;
   toasts: Toast[];
   toast: (text: string, bad?: boolean) => void;
   fail: (e: unknown) => void;
@@ -50,6 +53,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [logPath, setLogPath] = useState("");
   const [runError, setRunError] = useState<RunError | null>(null);
   const [tick, setTick] = useState(0);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const refreshLive = useCallback(async () => setLiveStatus(await api.live()), []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeq = useRef(0);
 
@@ -111,6 +117,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ---- 이벤트 (WebSocket) ----
   const onEvent = useCallback((ev: EngineEvent) => {
+    if ((ev as unknown as { type: string }).type === "live") {
+      const le = (ev as unknown as { event: LiveEvent }).event;
+      setLiveEvents((l) => [...l.slice(-300), le]);
+      if (["suggestion", "bookmark", "banner", "started", "stopped", "error", "warn"].includes(le.type)) {
+        refreshLive().catch(() => {});
+        if (le.type === "suggestion" && le.status === "pending") toast(`득템 제안: ${le.head || le.text} — 라이브 탭에서 승인`);
+        if (le.type === "error") toast(`라이브 오류: ${le.message}`, true);
+      }
+      return;
+    }
     const mine = ev.job_id === activeJobId || ev.job_id === viewJobId;
     if (ev.type === "log" && mine) {
       setLog((l) => [...l.slice(-800), { t: ev.t, type: "log", stage: ev.stage || "", level: ev.level || "info", message: ev.message || "" }]);
@@ -133,7 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshEpisodes().catch(() => {});
     }
     if (ev.type === "queued" || ev.type === "started") refreshJobs().catch(() => {});
-  }, [activeJobId, viewJobId, jobs, refreshJobs, refreshEpisodes, toast]);
+  }, [activeJobId, viewJobId, jobs, refreshJobs, refreshEpisodes, refreshLive, toast]);
   const { connected: wsConnected } = useEngineEvents(onEvent);
 
   useEffect(() => {
@@ -151,7 +167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [jobs, activeJobId]);
 
   const value: Store = {
-    health, episodes, selected, selectEpisode, jobs, activeJob, viewJobId, log, logTitle, logPath, runError, wsConnected, tick, toasts,
+    health, episodes, selected, selectEpisode, jobs, activeJob, viewJobId, log, logTitle, logPath, runError, wsConnected, tick, toasts, liveStatus, liveEvents, refreshLive,
     toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, runJob, cancelJob, viewJob, clearLog, dismissError,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

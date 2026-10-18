@@ -364,6 +364,79 @@ class Engine:
             w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader(); w.writerows(rows)
         return {"ok": True, "labels": len(rows)}
 
+    # ---- live (방송 중) ----
+    _live = None
+
+    def _live_emit(self, ev: dict) -> None:
+        from .. import jobs as jobs_mod
+        for cb in jobs_mod._listeners:
+            try:
+                cb(ev)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def live_status(self) -> dict:
+        from ..live.source import ScreenSource  # noqa: F401 — 가져오기 확인
+        s = self._live
+        return {"active": bool(s and s.running), "session": s.status() if s else None,
+                "suggestions": [vars(x) for x in s.suggestions[-50:]] if s else [], "bookmarks": s.bookmarks[-50:] if s else []}
+
+    def live_start(self, config: dict | None = None) -> dict:
+        from ..live.session import LiveSession
+        if self._live and self._live.running:
+            raise ApiError("E_LIVE_RUNNING", "라이브 세션이 이미 돌고 있습니다", "먼저 정지하세요.")
+        cfg = dict(config or {})
+        if cfg.get("source", "screen") == "frames" and not (cfg.get("frames_dir") or cfg.get("episode")):
+            raise ApiError("E_BAD_PARAMS", "frames 소스에는 episode 또는 frames_dir 이 필요합니다")
+        self._live = LiveSession(self.project, cfg, on_event=self._live_emit)
+        return self._live.start()
+
+    def live_stop(self) -> dict:
+        if not self._live:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+        return self._live.stop()
+
+    def live_mark(self, note: str = "") -> dict:
+        if not self._live or not self._live.running:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다", "라이브 탭에서 시작하세요.")
+        return self._live.mark(note)
+
+    def live_approve(self, sid: str, text: str | None = None) -> dict:
+        if not self._live:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+        try:
+            return self._live.approve(sid, text)
+        except KeyError:
+            raise ApiError("E_NOT_FOUND", f"제안 없음: {sid}")
+
+    def live_dismiss(self, sid: str) -> dict:
+        if not self._live:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+        try:
+            return self._live.dismiss(sid)
+        except KeyError:
+            raise ApiError("E_NOT_FOUND", f"제안 없음: {sid}")
+
+    def live_banner(self, items: list[str]) -> dict:
+        if not self._live:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+        return {"text": self._live.set_banner(items), "items": self._live.banner_items}
+
+    def live_obs_inputs(self, url: str = "ws://127.0.0.1:4455", password: str = "") -> dict:
+        """OBS 연결 점검 + 텍스트 소스 목록 (설정 화면)."""
+        from ..live.obs import ObsClient, ObsError
+        c = ObsClient(url, password)
+        try:
+            info = c.connect()
+            inputs = [i for i in c.get_input_list() if "text" in str(i.get("inputKind", ""))]
+            return {"ok": True, "obs": info, "text_sources": [i.get("inputName") for i in inputs]}
+        except (ObsError, OSError, TimeoutError) as e:
+            raise ApiError("E_OBS", f"OBS 연결 실패: {str(e)[:160]}", "OBS 가 켜져 있고 도구 → WebSocket 서버 설정에서 서버가 활성화돼 있는지, 포트·비밀번호가 맞는지 확인하세요.")
+        except Exception as e:  # noqa: BLE001
+            raise ApiError("E_OBS", f"OBS 연결 실패: {str(e)[:160]}", "OBS WebSocket 서버 설정을 확인하세요.")
+        finally:
+            c.close()
+
     # ---- calibration / profile ----
     def calibrate_check(self, vid: str) -> dict:
         from .. import calibrate

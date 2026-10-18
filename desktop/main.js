@@ -5,7 +5,8 @@
 //   - /ws 구독 → 트레이 상태·OS 알림.  6시간마다 latest.json 확인 → 업데이트 있으면 알림 + 트레이 메뉴 "업데이트 적용"
 //   - --smoke : 준비 뒤 5초 후 종료 (자동 점검).  --smoke-setup : 설치 화면까지만 띄우고 종료하지 않음 (화면 점검)
 "use strict";
-const { app, BrowserWindow, Menu, Tray, Notification, shell, dialog, nativeImage, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, Tray, Notification, shell, dialog, nativeImage, ipcMain, globalShortcut } = require("electron");
+const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const WebSocket = require("ws");
@@ -371,6 +372,17 @@ async function boot() {
     await win.loadURL(engine.url);
     subscribeEvents();
     log(`shell: ui loaded ${engine.url}`);
+    // 라이브 북마크 전역 단축키 (게임 창이 앞에 있어도 동작). 엔진이 라이브 중이 아니면 조용히 무시.
+    try {
+      const ok = globalShortcut.register("Control+Alt+M", () => {
+        const req = http.request(`${engine.url}/api/live/mark`, { method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+          if (res.statusCode === 200) notify("북마크", "라이브 북마크를 남겼습니다"); res.resume();
+        });
+        req.on("error", (e) => log(`mark: ${e.message}`));
+        req.end(JSON.stringify({ note: "단축키" }));
+      });
+      log(`shell: globalShortcut Ctrl+Alt+M ${ok ? "ok" : "실패(다른 앱이 사용 중)"}`);
+    } catch (e) { log(`shell: globalShortcut ${e.message}`); }
     if (engine.cfg.mode === "runtime" && AUTO_UPDATE) {
       const upd = await checkUpdates();
       if (upd?.length) { await applyUpdates(); log(`auto-update: applied; VERSION=${JSON.stringify(C.readLocalVersion(engine.cfg.runtimeDir))}`); }
@@ -405,6 +417,7 @@ async function boot() {
 
 function quitApp(code = 0) {
   quitting = true;
+  try { globalShortcut.unregisterAll(); } catch { /* ignore */ }
   try { ws?.close(); } catch { /* ignore */ }
   engine?.stop();
   tray?.destroy();

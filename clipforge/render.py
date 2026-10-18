@@ -132,10 +132,11 @@ def chat_messages_for(c: ShortCandidate, chat: list[dict] | None, pre: float = 1
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
                   cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0,
                   transcript: dict | None = None, subs: bool = True, chat: list[dict] | None = None,
-                  top_mode: str = "auto", layout: str = "feed", brand: str = "", episode_label: str = "",
+                  top_mode: str = "title", layout: str = "card", brand: str = "", episode_label: str = "",
                   progress=None) -> list[dict]:
     """ui = ui_state 구간 목록 — 크롭 중심이 인벤토리/캐릭터창을 따라간다.
-    chat = chat_text 메시지 목록 [{t, nick, text}] — 상단 채팅 피드 모드의 입력. top_mode = auto|title|chat."""
+    chat = chat_text 메시지 목록 [{t, nick, text}] — 상단 채팅 피드 모드의 입력. top_mode = auto|title|chat.
+    기본 layout=card + top_mode=title = 친구가 2026-10-18 최종 확정한 포맷(손글씨 제목 띠 + 템 창 추적 크롭 + 대사 자막 + 방송 채팅)."""
     from .topband import CHAT_H_TOP, TITLE_H, chat_band, title_band
     out_dir.mkdir(parents=True, exist_ok=True)
     if layout == "feed":

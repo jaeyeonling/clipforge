@@ -232,7 +232,8 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         (out / "keep").mkdir(parents=True, exist_ok=True); (out / "no").mkdir(parents=True, exist_ok=True)
         prog(0.05, "렌더 (NVENC)")
         idx = render_shorts(cands, meta, out, k=int(job.params.get("k", 5)), transcript=tr, chat=chat, ui=ui,
-                            layout=job.params.get("layout", "feed"), brand=job.params.get("brand", "디아블로2 하이라이트"),
+                            layout=job.params.get("layout", "card"), top_mode=job.params.get("top", "title"),
+                            brand=job.params.get("brand", "디아블로2 하이라이트"),
                             episode_label=short_episode_label(ep.get("title", "")) or vid,
                             progress=lambda f, m="": prog(0.05 + 0.9 * f, m))
         prog(1.0, f"{len(idx)} drafts")

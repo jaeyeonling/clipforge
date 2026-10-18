@@ -186,15 +186,13 @@ def cmd_export(a):
             print("  (transcript.json 없음 — 대사 자막 생략. python -m clipforge.run transcribe 로 전사 먼저)")
         chat_p = CACHE / a.vid / "chat_text.json"
         chat = [{"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")} for s in Segments.load(chat_p).items] if chat_p.exists() else None
-        if a.top != "auto":
-            out = REVIEW / a.vid / f"shorts_{a.top}"
-            (out / "keep").mkdir(parents=True, exist_ok=True)
         ep = load_episode(a.vid) or {}
         label = short_episode_label(ep.get("title", "")) or a.vid
-        if a.layout != "feed" and a.top != "auto":
+        # 기본(card + title) = 확정 포맷 → shorts/. 그 외 실험 렌더는 shorts_<layout|top>/ 로 분리
+        if a.layout == "feed":
+            out = REVIEW / a.vid / "shorts_feed"; (out / "keep").mkdir(parents=True, exist_ok=True)
+        elif a.top != "title":
             out = REVIEW / a.vid / f"shorts_{a.top}"; (out / "keep").mkdir(parents=True, exist_ok=True)
-        elif a.layout != "feed":
-            out = REVIEW / a.vid / "shorts_card"; (out / "keep").mkdir(parents=True, exist_ok=True)
         idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx, ui=ui, ease=a.ease, transcript=tr, subs=not a.no_subs,
                             chat=chat, top_mode=a.top, layout=a.layout, brand=a.brand, episode_label=label)
         print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
@@ -330,8 +328,8 @@ def main():
     p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
     p.add_argument("--ease", type=float, default=0.0, help="크롭 중심 이동 시간(초). 0=즉시 점프(기본)")
     p.add_argument("--no-subs", action="store_true", help="대사 자막(ASS) 생략")
-    p.add_argument("--top", default="auto", choices=["auto", "title", "chat"], help="상단 카드: auto(앵커 종류별) | title | chat. 강제 시 review/<vid>/shorts_<mode>/ 에 출력")
-    p.add_argument("--layout", default="feed", choices=["feed", "card"], help="feed(기본: 16:9 전체+자막+채팅 피드, @마골 구조) | card(상단 카드+정사각 크롭)")
+    p.add_argument("--top", default="title", choices=["title", "auto", "chat"], help="상단 카드: title(기본·확정) | auto(앵커 종류별) | chat. title 외는 review/<vid>/shorts_<mode>/ 에 출력")
+    p.add_argument("--layout", default="card", choices=["card", "feed"], help="card(기본·친구 확정 2026-10-18: 손글씨 제목 띠+템 창 추적 크롭+방송 채팅) | feed(실험: @마골 구조, shorts_feed/)")
     p.add_argument("--brand", default="디아블로2 하이라이트", help="feed 레이아웃 상단 채널 띠 문구")
     p.set_defaults(f=cmd_export)
     for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:

@@ -310,6 +310,11 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 - 회차 라벨은 제목에서 "래더 N기 M일차" 추출. 인트로 = [회차, 득템 훅]. `export --layout feed`(기본) | `card`(이전 상단 카드+정사각 크롭, `shorts_card/`).
 - 크롭 추적(ui_state)은 feed 에선 안 쓴다 — 화면 전체를 보여주므로 툴팁이 잘릴 일이 없다. 대신 UI 글자가 작아지는 건 마골도 같은 선택.
 
+### 8.3.10 최종 확정 포맷 = `card` + 제목 띠 (2026-10-18 저녁)
+- 친구가 `shorts_title/02_story_10-44_0.76.mp4`(손글씨 제목 띠 + 템 창 추적 크롭 + 대사 자막 + 방송 채팅 그대로)를 **최종 형태로 확정**. `feed`(8.3.9)와 `ledger` 제안(docs/design/SHORTS_LAYOUT.md)은 채택되지 않음 — 코드는 `--layout feed` 실험 옵션으로만 유지.
+- 기본값 변경: `render_shorts(layout="card", top_mode="title")`, CLI `export --shorts` 기본 = card/title → `review/<vid>/shorts/`. feed 는 `shorts_feed/`, `--top auto|chat` 은 `shorts_<top>/`. 앱 잡 파라미터 `layout`·`top` 동일.
+- 세부는 docs/design/SHORTS_LAYOUT.md §0.
+
 ### 8.4 정답 없이 시작하는 법 — 제목이 곧 약한 정답
 친구 채널 영상 제목은 그 회차의 핵심 득템을 명시한다("59일차만에 … 지존참 직득", "56~57일차 … 자룬 직득"). 제목의 아이템명을 배너 OCR의 APPEND 토큰과 퍼지 매칭하면 **그 회차 쇼츠 1순위의 시각이 자동으로 나온다**. 편집본 40여 편 × 1개 = 약 40개의 hit@1 라벨을 공짜로 얻는다. 이것이 Phase 1의 첫 평가 셋. 친구가 후보 중 고른 것(`harvest`)이 쌓이면 그걸로 가중치를 조정한다.
 

@@ -76,7 +76,8 @@ wav 16k ─ STFT(n_fft 1024 · hop 256 = 16ms) ─ log|X| 0~5kHz(320 bin) ─ �
 - ✅ `eval`: labels/<id>.csv(kept, no 제외) × candidates.json → recall/precision/coverage, reports/<id>_editpoints_eval.json.
 - ✅ 편집 포인트 탭: 원본 재생(`/media/video/<id>`, Range), 후보 목록(정답 겹침 표시·필터), 키보드 판정(kept/no → labels 의 `ui` 행, auto align 행과 공존).
 - ✅ 라벨 범주 붙이기(2026-10-19): 범주는 `games/common.yaml label_categories`(drop·reaction·fail·talk·chat·misc, 단축키 1~6, 색). 편집 포인트 탭의 "정답 구간" 카드에서 칩 클릭/숫자키로 붙이고, CSV 의 label 열이 `kept` → 범주 key 로 바뀐다. `evaluate` 가 label 별로 집계하므로 **범주별 recall** 이 바로 나온다(어떤 신호를 보강할지 알려주는 표). 최종본이 없을 때는 플레이어에서 I/O 로 구간을 찍어 직접 추가(`manual` 행). API: kept list/set/add/delete.
-- ⬜ 친구 쇼츠 역매핑 · ⬜ 원본 VOD 실측(§6).
+- ✅ 친구 쇼츠 역매핑(2026-10-19): `run align <id> --shorts <파일|폴더…>` / 앱 파이프라인(편집본 회차의 align 단계에 쇼츠 파일 지정) → 쇼츠마다 회차 안의 구간을 찾아 `labels/<id>.shorts.csv` 에 `keep` 행(note `auto align shorts <파일> …`). 쇼츠가 두 순간을 이어 붙였으면 구간 2개 모두 keep. 같은 파일 재실행은 교체, 사람 판정 행 보존. 후보 카드에 겹치는 쇼츠 이름이 "정답" 배지로 뜨고 hit@K 에 바로 반영. **실데이터 확인**: 친구가 카톡으로 보낸 36초 쇼츠(406×720 재인코딩) → ep59 10:44–11:20, 98% 매칭 — 우리 02 초안 구간과 일치.
+- ⬜ 원본 VOD 실측(§6).
 
 ep59(편집본)를 원본처럼 돌린 점검: 후보 11개(임계 1.5), 합성 최종본 3구간 align 93% 매칭, recall 100% / coverage 38%. coverage 가 큰 건 편집본이라 전부 '재미있는' 구간이기 때문 — 원본에서의 수치는 아직 없다.
 

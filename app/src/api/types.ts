@@ -142,6 +142,7 @@ export interface Candidate {
   decision?: "keep" | "no" | "";
   reason?: string;
   media_url?: string;
+  gt?: string[];        // 겹치는 친구 쇼츠(역매핑)·확정본 이름
 }
 
 export interface CalibCheck {

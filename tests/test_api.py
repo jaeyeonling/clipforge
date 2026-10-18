@@ -158,3 +158,19 @@ def test_kept_categories_crud_and_by_label(engine):
         engine.kept_set(vid, 12, 18, "nope")
     with _pt.raises(ApiError):
         engine.kept_delete(vid, 1, 2)
+
+
+def test_candidates_show_shorts_ground_truth(engine):
+    vid = _fake_episode(engine)
+    idx = engine.project.review / vid / "shorts"; idx.mkdir(parents=True)
+    from clipforge.schema import write_json
+    write_json(idx / "index.json", "index", [{"file": "01.mp4", "rank": 1, "variant": "story", "start": 10.0, "end": 30.0, "anchor": 15.0, "score": 0.9, "hook_lines": []},
+                                              {"file": "02.mp4", "rank": 2, "variant": "short", "start": 50.0, "end": 70.0, "anchor": 55.0, "score": 0.5, "hook_lines": []}])
+    (engine.project.labels / f"{vid}.shorts.csv").write_text("start,end,label,note\n12,28,keep,auto align shorts friend1.mp4 0.0-16.0 votes=100 margin=9\n", encoding="utf-8")
+    rows = engine.candidates_list(vid)
+    assert rows[0]["gt"] == ["friend1.mp4"] and rows[1]["gt"] == []
+    import pytest as _pt
+    with _pt.raises(ApiError) as ei:
+        engine.job_run(vid, ["align"], {})
+    assert ei.value.code == "E_BAD_PARAMS"
+    assert engine.job_run(vid, ["eval"], {"shorts": ["x"]})["status"] in ("queued", "running", "done")

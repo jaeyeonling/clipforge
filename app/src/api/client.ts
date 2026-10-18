@@ -60,7 +60,7 @@ export const api = {
   jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
   jobLog: (id: string, tail = 400) => request<{ job_id: string; path: string; lines: LogLine[] }>(`/api/jobs/${id}/log?tail=${tail}`),
-  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean; final?: string; kind?: EpisodeKind; threshold?: number }) =>
+  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean; final?: string; shorts?: string[]; kind?: EpisodeKind; threshold?: number }) =>
     post<Job>("/api/jobs", { episode, stages, params }),
   cancelJob: (id: string) => post<Job>(`/api/jobs/${id}/cancel`, {}),
   candidates: (id: string) => request<Candidate[]>(`/api/episodes/${encodeURIComponent(id)}/candidates`),

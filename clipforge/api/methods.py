@@ -99,8 +99,8 @@ class Engine:
         bad = [s for s in (stages or []) if s not in STAGES]
         if bad:
             raise ApiError("E_BAD_STAGE", f"알 수 없는 단계: {bad}", f"가능: {STAGES}")
-        if "align" in (stages or []) and not (params or {}).get("final"):
-            raise ApiError("E_BAD_PARAMS", "align 단계에는 최종본(편집본) 파일이 필요합니다", "파라미터 final 에 영상 경로를 주세요.")
+        if "align" in (stages or []) and not ((params or {}).get("final") or (params or {}).get("shorts")):
+            raise ApiError("E_BAD_PARAMS", "align 단계에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다", "원본이면 친구 편집본을, 편집본이면 친구 쇼츠를 지정하세요.")
         from ..jobs import DEFAULT_STAGES, episode_kind
         job = self.runner.submit(episode, stages or DEFAULT_STAGES[episode_kind(self.project, episode, params)], params)
         return job.to_dict()
@@ -182,12 +182,29 @@ class Engine:
             return load_json(sj, "shorts")
         rows = load_json(idx_p, "index")
         decisions = self._decisions(vid)
+        gt = self._shorts_ground_truth(vid)
         for r in rows:
             key = (f"{r['start']:.1f}", f"{r['end']:.1f}")
             r["decision"] = decisions.get(key, {}).get("label", "")
             r["reason"] = decisions.get(key, {}).get("reason", "")
             r["media_url"] = f"/media/review/{vid}/shorts/{r['file']}"
+            ov = [g for g in gt if min(r["end"], g["end"]) - max(r["start"], g["start"]) >= 3.0]
+            r["gt"] = [g["name"] for g in ov]                       # 이 후보와 겹치는 친구 쇼츠(역매핑)·확정 정답
         return rows
+
+    def _shorts_ground_truth(self, vid: str) -> list[dict]:
+        """labels/<vid>.shorts.csv 의 keep 행 중 사람이 UI 에서 누른 것(note 'ui …')이 아닌 것 = 친구 쇼츠 역매핑·확정본."""
+        p = self._labels_path(vid)
+        out = []
+        if not p.exists():
+            return out
+        with open(p, encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                note = r.get("note", "")
+                if r.get("label") == "keep" and not note.startswith("ui"):
+                    name = note.split(" ")[3] if note.startswith("auto align shorts ") and len(note.split(" ")) > 3 else (note[:30] or "keep")
+                    out.append({"start": float(r["start"]), "end": float(r["end"]), "name": name})
+        return out
 
     def _labels_path(self, vid: str) -> Path:
         return self.project.labels / f"{vid}.shorts.csv"

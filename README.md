@@ -129,6 +129,7 @@ set CLIPFORGE_ENGINE_DIST=1 && cd desktop && npm start   # 껍데기를 번들 �
 ```
 python -m clipforge.run prep <orig>                       # 원본 VOD 전처리 (audio.wav)
 python -m clipforge.run align <orig> --final <final.mp4>  # 살아남은 구간 → labels/<orig>.csv (kept), cache/<orig>/align.json
+python -m clipforge.run align <edited> --shorts <쇼츠.mp4|폴더>  # 친구 쇼츠 역매핑 → labels/<edited>.shorts.csv (keep) — Phase 1 정답 늘리기
 python -m clipforge.run eval <orig>                       # 후보 vs kept → recall / coverage
 ```
 설계: docs/design/ALIGN.md (오디오 랜드마크 지문, 창 투표, 경계 다듬기).

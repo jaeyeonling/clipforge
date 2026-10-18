@@ -307,11 +307,23 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, f"{len(segs.items)} candidates · coverage {cov:.0%}")
     elif stage == "align":
         # Phase 2 정답: 최종본 ↔ 원본 정렬 → labels/<vid>.csv kept
-        from .align import align_files, extract_audio, pretty, write_labels
+        from .align import align_files, align_shorts, collect_shorts, extract_audio, pretty, pretty_shorts, write_labels, write_shorts_labels
         final = job.params.get("final")
-        if not final:
-            raise EngineError("E_BAD_PARAMS", "align 에는 최종본(편집본) 파일이 필요합니다", "파라미터 final 에 영상 경로 또는 prep 된 회차 id 를 주세요.")
+        shorts = job.params.get("shorts")
+        if not final and not shorts:
+            raise EngineError("E_BAD_PARAMS", "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다", "원본이면 친구 편집본을, 편집본이면 친구 쇼츠를 지정하세요.")
         _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
+        if shorts:
+            files = collect_shorts(shorts if isinstance(shorts, list) else [shorts])
+            if not files:
+                raise EngineError("E_FILE_MISSING", f"쇼츠 파일이 없습니다: {shorts}", "mp4 파일이나 폴더 경로를 확인하세요.")
+            res = align_shorts(cache / "audio.wav", files, cache, progress=lambda f, m="": prog(0.05 + (0.45 if final else 0.9) * f, m))
+            n = write_shorts_labels(project.labels / f"{vid}.shorts.csv", res)
+            job.log(pretty_shorts(res))
+            (cache / "align_shorts.json").write_text(json.dumps([{"file": r["file"], "path": r["path"], "segments": [s.to_dict() for s in r["segments"]],
+                                                                   "matched_frac": r["diag"]["matched_frac"]} for r in res], ensure_ascii=False, indent=1), encoding="utf-8")
+            if not final:
+                prog(1.0, f"쇼츠 {len(files)}개 → keep {n}구간"); return
         fp = Path(str(final))
         if (project.cache / str(final) / "audio.wav").exists():
             final_wav, final_name = project.cache / str(final) / "audio.wav", str(final)

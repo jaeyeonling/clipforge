@@ -89,3 +89,25 @@ def test_params_roundtrip_in_cache(tmp_path):
     from clipforge.align import Fingerprint
     fp2 = Fingerprint.load(p)
     assert fp2.params["peaks_per_sec"] == 10 and len(fp2.hashes) == len(fp.hashes) and fp2.duration_s == pytest.approx(20)
+
+
+def test_align_shorts_writes_keep_labels(tmp_path):
+    """쇼츠 2개(하나는 두 순간을 이어 붙임) → labels/<id>.shorts.csv keep 행, 재실행 시 교체, 사람 행 보존."""
+    from clipforge.align import align_shorts, collect_shorts, write_shorts_labels
+    orig = synth_original(80)
+    owav = tmp_path / "audio.wav"; write_wav(owav, orig)
+    s1, _ = make_final(orig, [(10, 22)], intro_s=0.5, card_s=0)
+    s2, _ = make_final(orig, [(30, 38), (60, 70)], intro_s=0.5, card_s=1.0)
+    d = tmp_path / "shorts"; d.mkdir()
+    write_wav(d / "a.wav", s1); write_wav(d / "b.wav", s2); (d / "readme.txt").write_text("x")
+    files = collect_shorts([d])
+    assert [f.name for f in files] == ["a.wav", "b.wav"]
+    res = align_shorts(owav, files, tmp_path / "cache")
+    assert len(res[0]["segments"]) == 1 and len(res[1]["segments"]) == 2
+    assert abs(res[0]["segments"][0].orig_start - 10) < 0.3 and abs(res[1]["segments"][1].orig_start - 60) < 0.3
+    lab = tmp_path / "ep.shorts.csv"
+    lab.write_text("start,end,label,note\n1,2,no,ui x | 중복\n", encoding="utf-8")
+    assert write_shorts_labels(lab, res) == 3
+    rows = lab.read_text(encoding="utf-8").splitlines()
+    assert len(rows) == 1 + 1 + 3 and sum("auto align shorts a.wav" in r for r in rows) == 1 and "ui x" in rows[1] + rows[2]
+    assert write_shorts_labels(lab, res) == 3 and len(lab.read_text(encoding="utf-8").splitlines()) == 5

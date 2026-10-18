@@ -122,13 +122,26 @@ def cmd_eval(a):
 
 
 def cmd_align(a):
-    """최종본(편집본) ↔ 원본 정렬 → labels/<vid>.csv 에 kept 구간 (docs/design/ALIGN.md).
-    --final 은 영상 파일 경로(ffmpeg 로 오디오 추출) 또는 prep 된 회차 id."""
-    from .align import align_files, extract_audio, pretty, write_labels
+    """오디오 지문 정렬 (docs/design/ALIGN.md).
+    --final  최종본 ↔ 원본 → labels/<vid>.csv kept (Phase 2 정답)
+    --shorts 친구 쇼츠 ↔ 회차 → labels/<vid>.shorts.csv keep (Phase 1 정답 역매핑)"""
+    if not a.final and not a.shorts:
+        raise SystemExit("--final 또는 --shorts 중 하나는 필요합니다")
+    from .align import align_files, align_shorts, collect_shorts, extract_audio, pretty, pretty_shorts, write_labels, write_shorts_labels
     cache = CACHE / a.vid
     orig_wav = cache / "audio.wav"
     if not orig_wav.exists():
         raise FileNotFoundError(f"{orig_wav} 없음 — 먼저 python -m clipforge.run prep {a.vid}")
+    if a.shorts:
+        files = collect_shorts(a.shorts)
+        if not files:
+            raise FileNotFoundError(f"쇼츠 파일이 없습니다: {a.shorts}")
+        res = align_shorts(orig_wav, files, cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r"))
+        print(pretty_shorts(res))
+        n = write_shorts_labels(LABELS / f"{a.vid}.shorts.csv", res)
+        print(f"[align shorts] {n} keep 구간 → {LABELS / f'{a.vid}.shorts.csv'}")
+        if not a.final:
+            return
     fin = Path(a.final)
     if (CACHE / a.final / "audio.wav").exists():
         final_wav = CACHE / a.final / "audio.wav"; final_name = a.final
@@ -348,7 +361,8 @@ def main():
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)
         p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3"); p.set_defaults(f=fn)
     p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
-    p = sp.add_parser("align"); p.add_argument("vid", help="원본 회차 id (prep 완료)"); p.add_argument("--final", required=True, help="최종본 영상 경로 또는 회차 id")
+    p = sp.add_parser("align"); p.add_argument("vid", help="회차 id (prep 완료)"); p.add_argument("--final", help="최종본 영상 경로 또는 회차 id (원본 → kept 정답)")
+    p.add_argument("--shorts", nargs="+", help="친구 쇼츠 파일/폴더 (편집본 → labels/<id>.shorts.csv keep 정답)")
     p.set_defaults(f=cmd_align)
     p = sp.add_parser("export"); p.add_argument("vid"); p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
     p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")

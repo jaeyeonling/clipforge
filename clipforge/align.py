@@ -316,6 +316,75 @@ def write_labels(path: Path, segs: list[Match], final_name: str = "final", keep_
     return len(segs)
 
 
+# ---------- 쇼츠 역매핑 (Phase 1 정답 늘리기) ----------
+VIDEO_EXTS = (".mp4", ".mkv", ".mov", ".m4v", ".webm", ".m4a", ".wav", ".mp3", ".aac")
+
+
+def collect_shorts(paths: list[str | Path]) -> list[Path]:
+    """파일/폴더 목록 → 쇼츠 파일 목록 (폴더는 영상 확장자만, 이름순)."""
+    out: list[Path] = []
+    for p in paths:
+        p = Path(p)
+        if p.is_dir():
+            out.extend(sorted(q for q in p.iterdir() if q.is_file() and q.suffix.lower() in VIDEO_EXTS))
+        elif p.is_file():
+            out.append(p)
+    return out
+
+
+def align_shorts(episode_wav: Path, shorts: list[Path], cache_dir: Path, p: Params | None = None, progress=None) -> list[dict]:
+    """쇼츠 하나하나를 회차(편집본 또는 원본) 오디오에 정렬. 반환 [{file, segments: [Match…], diag}]. 회차 지문은 캐시."""
+    p = p or Params()
+    results = []
+    work = cache_dir / "align"; work.mkdir(parents=True, exist_ok=True)
+    for i, s in enumerate(shorts):
+        if progress:
+            progress(i / max(1, len(shorts)), f"쇼츠 {s.name}")
+        wav = s if s.suffix.lower() == ".wav" else extract_audio(s, work / f"shorts_{s.stem}.wav")
+        segs, diag = align_files(episode_wav, wav, cache_dir=cache_dir, p=p)
+        results.append({"file": s.name, "path": str(s), "segments": segs, "diag": diag})
+    if progress:
+        progress(1.0, "쇼츠 정렬 완료")
+    return results
+
+
+def write_shorts_labels(path: Path, results: list[dict], min_seg_s: float = 3.0) -> int:
+    """labels/<id>.shorts.csv 에 쇼츠마다 keep 행(회차 시각). 같은 파일의 이전 auto 행은 교체, 사람 행은 보존.
+    쇼츠가 여러 순간을 이어 붙인 것이면 구간이 여러 개 — 각각 keep (쇼츠에 들어간 순간은 전부 정답)."""
+    rows: list[dict] = []
+    if path.exists():
+        with open(path, encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+    names = {r["file"] for r in results}
+    rows = [r for r in rows if not any(str(r.get("note", "")).startswith(f"auto align shorts {n} ") for n in names)]
+    n = 0
+    for r in results:
+        for s in r["segments"]:
+            if s.orig_end - s.orig_start < min_seg_s:
+                continue
+            rows.append({"start": f"{s.orig_start:.2f}", "end": f"{s.orig_end:.2f}", "label": "keep",
+                         "note": f"auto align shorts {r['file']} {s.final_start:.1f}-{s.final_end:.1f} votes={s.votes} margin={s.margin}"})
+            n += 1
+    rows.sort(key=lambda r: float(r["start"]))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader()
+        w.writerows({k: r.get(k, "") for k in ("start", "end", "label", "note")} for r in rows)
+    return n
+
+
+def pretty_shorts(results: list[dict]) -> str:
+    from .timeline import fmt_time
+    lines = [f"[align shorts] {len(results)}개"]
+    for r in results:
+        segs = r["segments"]; d = r["diag"]
+        if not segs:
+            lines.append(f"  {r['file']}: 매칭 없음 (이 회차의 소리가 아니거나 BGM 으로 덮임)"); continue
+        lines.append(f"  {r['file']} ({fmt_time(d['final_duration_s'])}, {d['matched_frac'] * 100:.0f}% 매칭) → " +
+                     ", ".join(f"{fmt_time(s.orig_start)}-{fmt_time(s.orig_end)}" for s in segs))
+    return "\n".join(lines)
+
+
 def extract_audio(video: Path, out_wav: Path) -> Path:
     """최종본 영상 → 16k mono WAV (ffmpeg)."""
     import subprocess

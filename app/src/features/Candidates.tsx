@@ -129,6 +129,7 @@ function CandidateCard({ c, focused, inCompare, busy, onFocus, onDecide, onCompa
       {c.media_url ? <video ref={videoRef} src={c.media_url} controls preload="metadata" playsInline /> : <div className="novideo">초안 없음 (export 단계 미실행)</div>}
       <div className="body">
         <div className="rank"><span className="n">#{c.rank ?? "-"}</span><span>{c.variant}</span><span className="muted small">{fmtTime(c.start)}–{fmtTime(c.end)} · {len}s</span>
+          {c.gt && c.gt.length > 0 && <span className="badge ok" title={`친구 쇼츠·확정본과 겹침: ${c.gt.join(", ")}`}>정답</span>}
           <button className={cx("cmp", inCompare && "on")} title="비교에 담기 (C)" onClick={(e) => { e.stopPropagation(); onCompare(); }}>⇄</button></div>
         {c.hook_lines?.length ? <div className="hook">{c.hook_lines.join(" / ")}</div> : null}
         <div className="meta">점수 {Number(c.score).toFixed(2)} · 앵커 {fmtTime(c.anchor)} {(ev.anchor_kinds || []).join("+")} · 컷 {ev.n_cuts ?? "-"} · 자막 {c.subtitle_cues ?? "-"}</div>

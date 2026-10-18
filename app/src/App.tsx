@@ -12,13 +12,13 @@ import { Sidebar } from "./features/Sidebar";
 import { UpdateBanner } from "./features/UpdateBanner";
 import { AppProvider, useApp } from "./state/store";
 
-type Tab = "candidates" | "editpoints" | "pipeline" | "calibration" | "metrics" | "live" | "settings";
-const TABS: Tab[] = ["pipeline", "candidates", "editpoints", "calibration", "metrics", "live", "settings"];
+import { Help, Stepper, Welcome, type Tab } from "./features/Onboarding";
+const TABS: Tab[] = ["pipeline", "candidates", "editpoints", "calibration", "metrics", "live", "settings", "help"];
 const TAB_KEY = "cf.tab";
 const hashTab = (): Tab | null => { const h = location.hash.replace("#", "") as Tab; return TABS.includes(h) ? h : null; };
 
 function Main() {
-  const { selected, activeJob, toasts, viewJobId, runError, liveStatus, lastDone, candCount } = useApp();
+  const { selected, activeJob, toasts, viewJobId, runError, liveStatus, lastDone, candCount, episodes } = useApp();
   const [tab, setTab] = useState<Tab>(() => hashTab() || (localStorage.getItem(TAB_KEY) as Tab) || "pipeline");
   useEffect(() => { localStorage.setItem(TAB_KEY, tab); if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`); }, [tab]);
   useEffect(() => { const h = () => { const t = hashTab(); if (t) setTab(t); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
@@ -51,27 +51,31 @@ function Main() {
         {selected?.title && <span className="sub" title={selected.title}>{selected.title}</span>}
       </div>
       <UpdateBanner onSettings={() => setTab("settings")} />
+      {selected && tab !== "help" && tab !== "live" && tab !== "settings" && <Stepper onTab={setTab} />}
       <Tabs<Tab> value={tab} onChange={setTab} items={[
-        { key: "pipeline", label: "파이프라인" },
+        { key: "pipeline", label: "실행" },
         ...(selected?.kind === "original"
-          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 후보", count: candCount || undefined }]
-          : [{ key: "candidates" as Tab, label: "후보", count: candCount || undefined }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
-        { key: "calibration", label: "캘리브레이션" },
-        { key: "metrics", label: "지표 · 작업" },
+          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined }]
+          : [{ key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
+        { key: "calibration", label: "화면 영역" },
+        { key: "metrics", label: "기록" },
         { key: "live", label: "라이브", count: liveStatus?.active ? "●" : undefined },
         { key: "settings", label: "설정" },
+        { key: "help", label: "도움말" },
       ]} />
       <div className="content">
+        {!episodes.length && tab !== "help" && tab !== "settings" && tab !== "live" && <Welcome onTab={setTab} />}
         {running && tab !== "pipeline" && (
           <div className="ticker"><span><b>{activeJob.episode}</b> · {activeJob.stage} {Math.round(activeJob.pct)}% {activeJob.message}</span><Progress pct={activeJob.pct} /></div>
         )}
-        <div hidden={tab !== "pipeline"}><Pipeline /></div>
-        {tab === "candidates" && <Candidates />}
+        <div hidden={tab !== "pipeline" || !episodes.length}><Pipeline /></div>
+        {tab === "candidates" && episodes.length > 0 && <Candidates />}
         {tab === "editpoints" && <EditPoints />}
         {tab === "calibration" && <Calibration />}
         {tab === "metrics" && <Metrics />}
         {tab === "live" && <Live />}
         {tab === "settings" && <Settings />}
+        {tab === "help" && <Help />}
       </div>
       <Toasts items={toasts} />
     </div>

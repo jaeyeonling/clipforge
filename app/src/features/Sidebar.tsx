@@ -8,7 +8,7 @@ import { useApp } from "../state/store";
 const VIDEO_RE = /\.(mp4|mkv|mov|m4v|ts|flv|webm)$/i;
 
 export function Sidebar() {
-  const { episodes, selected, selectEpisode, refreshEpisodes, toast, fail } = useApp();
+  const { episodes, selected, selectEpisode, refreshEpisodes, registerVideos, toast, fail } = useApp();
   const [path, setPath] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EpisodeKind>("edited");
@@ -21,17 +21,9 @@ export function Sidebar() {
 
   /** 여러 파일 등록. 제목은 파일이 하나일 때만 적용. 복사하지 않는다(같은 드라이브면 하드링크, 아니면 원본 경로 참조). */
   const register = useCallback(async (paths: string[], titleForSingle = "") => {
-    const list = paths.filter((p) => VIDEO_RE.test(p));
-    if (!list.length) { toast("영상 파일(mp4/mkv/mov)이 아닙니다", true); return; }
-    let lastId: string | null = null, ok = 0;
-    for (const [i, p] of list.entries()) {
-      setBusy(`${i + 1}/${list.length} 등록 중…`);
-      try { const ep = await api.addEpisode(p, list.length === 1 ? titleForSingle : "", game, undefined, kind); lastId = ep.id; ok++; }
-      catch (e) { fail(e); }
-    }
-    setBusy(null);
-    if (ok) { toast(`${ok}개 등록됨`); await refreshEpisodes(); if (lastId) selectEpisode(lastId); }
-  }, [toast, fail, refreshEpisodes, selectEpisode, kind, game]);
+    if (!paths.some((p) => VIDEO_RE.test(p))) { toast("영상 파일(mp4/mkv/mov)이 아닙니다", true); return; }
+    try { await registerVideos(paths, { title: titleForSingle, kind, game }, setBusy); } finally { setBusy(null); }
+  }, [toast, registerVideos, kind, game]);
 
   const submit = async () => { if (path.trim()) { await register([path.trim()], title.trim()); setPath(""); setTitle(""); } };
   const pick = async () => { if (!shell) return; try { const ps = await shell.shell.pickVideos(); if (ps.length) await register(ps, title.trim()); } catch (e) { fail(e); } };

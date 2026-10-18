@@ -54,12 +54,35 @@ export function Pipeline() {
     try { await runJob(j.episode, j.stages, { layout: (p.layout as Layout) || "card", k: Number(p.k) || 5, force: !!p.force, kind: p.kind as EpisodeKind, final: p.final as string | undefined, shorts: p.shorts as string[] | undefined, threshold: Number(p.threshold) || undefined }); } catch (e) { fail(e); }
   };
 
+  const [advanced, setAdvanced] = useState(false);
+  // 한 버튼: 처음이면 전체, 이미 처리했으면 캐시 재사용(순위만 / 포인트만)
+  const quickStages: StageName[] = !selected?.stages?.prep ? DEFAULT_STAGES[kind]
+    : kind === "edited" ? ["shorts", "export", "xml", "eval"] : ["candidates", "eval"];
+  const quickLabel = kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기";
+  const quickDesc = !selected?.stages?.prep
+    ? (kind === "edited" ? "영상을 읽고(준비) → 말을 글로(전사) → 득템 배너·채팅·소리 신호 → 쇼츠 후보 → 세로 초안 렌더 → Premiere XML. 4K 10분 기준 약 10분."
+       : "영상을 읽고 → 전사 → 신호 → 편집 포인트 후보 → 평가. 원본 길이의 약 1/8 시간이 걸립니다.")
+    : (kind === "edited" ? "이미 읽어 둔 결과를 써서 후보·초안·XML 만 다시 만듭니다. 1~2분." : "이미 읽어 둔 신호로 편집 포인트만 다시 뽑습니다. 수 초.");
+  const quickStart = async () => {
+    if (!selected) return;
+    try { await runJob(selected.id, quickStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
+  };
   const state = activeJob?.status === "error" ? "error" : activeJob?.status === "done" ? "done" : "";
   const elapsed = activeJob?.started ? ((activeJob.finished || Date.now() / 1000) - activeJob.started) : 0;
 
   return (
     <>
-      <Card title={`파이프라인 · ${KIND_LABEL[kind]}`} right={selected && <span className="muted xs">{selected.id}</span>}>
+      <Card title={`실행 · ${KIND_LABEL[kind]}`} right={selected && <span className="muted xs">{selected.id}</span>}>
+        <div className="quick">
+          <div className="grow">
+            <div className="quick-title">{quickLabel}</div>
+            <div className="muted small">{quickDesc}</div>
+          </div>
+          {running ? <Button variant="danger" onClick={() => cancelJob().catch(fail)}>취소</Button>
+            : <Button variant="primary" onClick={quickStart} disabled={!selected}>{quickLabel}</Button>}
+        </div>
+        <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "▾ 고급 설정 닫기" : "▸ 고급 설정 (단계 선택 · 레이아웃 · 강제 재계산)"}</button>
+        <div hidden={!advanced}>
         <div className="stage-grid">
           {visible.map((s) => (
             <label key={s} className={cx("stage-opt", stages.has(s) && "on")}>
@@ -107,7 +130,8 @@ export function Pipeline() {
           <label className={cx("check", force && "on")} title="캐시를 무시하고 다시 계산"><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} disabled={running} /> 강제 재계산</label>
           <span className="grow" style={{ flex: 1 }} />
           {running ? <Button variant="danger" onClick={() => cancelJob().catch(fail)}>취소</Button>
-            : <Button variant="primary" onClick={start} disabled={!selected || !ordered.length}>실행 {ordered.length ? `(${ordered.length}단계)` : ""}</Button>}
+            : <Button variant="primary" onClick={start} disabled={!selected || !ordered.length}>선택한 단계 실행 {ordered.length ? `(${ordered.length})` : ""}</Button>}
+        </div>
         </div>
         {kind === "original" && <p className="muted xs" style={{ marginTop: 8 }}>원본은 길어서 OCR 이 무거운 신호(채팅 텍스트)와 편집본 전용 신호(컷 밀도·줌 강조)는 돌리지 않습니다. 득템 배너는 화면이 바뀔 때만 읽습니다.</p>}
         <div className="runbar" style={{ marginTop: 14 }}>

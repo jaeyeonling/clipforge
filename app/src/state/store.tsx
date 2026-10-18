@@ -34,6 +34,7 @@ interface Store {
   refreshEpisodes: () => Promise<void>;
   refreshJobs: () => Promise<void>;
   addEpisode: (path: string, title: string) => Promise<void>;
+  registerVideos: (paths: string[], opts: { title?: string; kind?: "edited" | "original"; game?: string }, onProgress?: (msg: string) => void) => Promise<number>;
   runJob: (episode: string, stages: StageName[], params: JobParams) => Promise<void>;
   cancelJob: () => Promise<void>;
   viewJob: (id: string) => Promise<void>;
@@ -93,6 +94,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refreshEpisodes();
     selectEpisode(ep.id);
   }, [refreshEpisodes, selectEpisode, toast]);
+
+  const registerVideos = useCallback(async (paths: string[], opts: { title?: string; kind?: "edited" | "original"; game?: string }, onProgress?: (msg: string) => void) => {
+    const list = paths.filter((p) => /\.(mp4|mkv|mov|m4v|ts|flv|webm)$/i.test(p));
+    if (!list.length) { toast("영상 파일(mp4/mkv/mov)이 아닙니다", true); return 0; }
+    let lastId: string | null = null, ok = 0;
+    for (const [i, p] of list.entries()) {
+      onProgress?.(`${i + 1}/${list.length} 등록 중…`);
+      try { const ep = await api.addEpisode(p, list.length === 1 ? opts.title || "" : "", opts.game || "d2r", undefined, opts.kind || "edited"); lastId = ep.id; ok++; }
+      catch (e) { fail(e); }
+    }
+    if (ok) { toast(`${ok}개 등록됨 — 이제 실행 탭에서 분석을 시작하세요`); await refreshEpisodes(); if (lastId) selectEpisode(lastId); }
+    return ok;
+  }, [toast, fail, refreshEpisodes, selectEpisode]);
 
   const clearLog = useCallback(() => { setLog([]); setLogTitle("로그"); setLogPath(""); }, []);
   const dismissError = useCallback(() => setRunError(null), []);
@@ -185,7 +199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     health, episodes, selected, selectEpisode, jobs, activeJob, viewJobId, log, logTitle, logPath, runError, wsConnected, tick, toasts, liveStatus, liveEvents, refreshLive,
-    toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, runJob, cancelJob, viewJob, clearLog, dismissError, lastDone, candCount,
+    toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, registerVideos, runJob, cancelJob, viewJob, clearLog, dismissError, lastDone, candCount,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

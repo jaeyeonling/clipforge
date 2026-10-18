@@ -32,9 +32,9 @@ def main() -> None:
     from clipforge import __version__ as ver
 
     # 1) 릴리스 아티팩트 (앱 코드 zip + 구성요소 zip + latest.json, URL 은 이 폴더 자체)
-    base = out.as_uri()          # file:///E:/clipforge-release
+    # URL 은 상대(파일 이름만): 앱이 update-url.txt 의 폴더 기준으로 해석하므로 USB 드라이브 문자가 바뀌어도 된다
     cmd = [sys.executable, str(ROOT / "scripts" / "build_engine_dist.py"), "--skip-packages", "--skip-ffmpeg", "--skip-models",
-           "--release", str(out), "--base-url", base]
+           "--release", str(out), "--base-url", "rel"]
     if not a.skip_components:
         cmd.append("--release-components")
     subprocess.run(cmd, check=True)

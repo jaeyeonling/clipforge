@@ -268,7 +268,9 @@ def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str,
     comp_ver = ver.get("component_versions") or {"python-base": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "cuda": "12.9+cudnn9.27",
                                                   "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
     comp_base = (components_url or base_url).rstrip("/")
-    entry = lambda p, v, base=base_url.rstrip("/"): {"version": v, "url": f"{base}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size}
+    # base_url 이 "rel"/""/"." 이면 파일 이름만 적는다 → 껍데기가 latest.json 을 읽은 주소 기준으로 상대 해석 (USB: 드라이브 문자가 달라도 됨)
+    rel = lambda base: base.strip() in ("", ".", "rel")
+    entry = lambda p, v, base=base_url.rstrip("/"): {"version": v, "url": p.name if rel(base) else f"{base}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size}
     code_zip = rel_dir / f"engine-code-{__version__}.zip"
     zip_paths(out, CODE_PATHS, code_zip)
     manifest = {"published": time.strftime("%Y-%m-%dT%H:%M:%S"), "shell": {"version": __version__, "min_engine_code": __version__},

@@ -10,6 +10,9 @@ rois:
   chat:     [0.0, 0.815, 0.234, 0.185]    # 900x400 @4K
   # 우상단 게임명/난이도/공포의 영역 레벨 텍스트.
   zone:     [0.86, 0.0, 0.14, 0.06]
+  # 하단 HUD 구슬. 둘 다 안 보이면 게임 화면이 아님(줌·카드·로딩·엔딩). 인벤토리/캐릭터창은 한쪽만 가린다.
+  hud_red_orb:  [0.20, 0.86, 0.055, 0.09]
+  hud_blue_orb: [0.735, 0.86, 0.055, 0.09]
 
 # 네이티브 크롭으로 저장할 ROI (OCR 용). 나머지는 frames/ 에서 잘라 쓴다.
 roi_crops: [banner, chat]
@@ -17,6 +20,13 @@ roi_crops: [banner, chat]
 frames:
   fps: 1.0
   max_height: 1080     # 4K 소스는 1080p 로, 그 이하는 원본 유지
+  scene_cuts: true     # prep 단일 패스에 scdet 분기 (편집본의 컷 밀도 신호용. 원본 녹화엔 끄는 게 맞음)
+  scdet_threshold: 10
+
+# Events → Curve 어댑터 커널 (초). 이벤트 시각 t 를 [t-pre, t+post] 로 펼친다.
+events:
+  item_banner:   {labels: [append], pre: 8,  post: 6,  weight: 1.5}
+  edit_emphasis: {labels: [zoom, note],  pre: 3,  post: 3,  weight: 1.0}
 
 item_colors:   # HSV (OpenCV h 0-180). d2r-image 차용, 미검증 — d2_item_label 구현 시 실제 프레임으로 보정
   gold:   [20, 75, 140, 26, 95, 230]

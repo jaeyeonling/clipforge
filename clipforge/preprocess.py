@@ -23,11 +23,11 @@ from pathlib import Path
 from .profiles import guess_game, load_profile, roi_pixels
 
 
-def run(cmd: list[str], quiet: bool = True) -> None:
+def run(cmd: list[str], quiet: bool = True, cwd: Path | None = None) -> None:
     shown = " ".join(c if len(c) < 60 else c[:57] + "..." for c in cmd[:10])
     print(f"  $ {shown}{' ...' if len(cmd) > 10 else ''}", flush=True)
     t0 = time.time()
-    subprocess.run(cmd, check=True,
+    subprocess.run(cmd, check=True, cwd=cwd,
                    stdout=subprocess.DEVNULL if quiet else None,
                    stderr=subprocess.DEVNULL if quiet else None)
     print(f"    ({time.time() - t0:.0f}s)", flush=True)
@@ -51,6 +51,18 @@ def probe(video: Path) -> dict:
     }
 
 
+def parse_scdet(path: Path) -> list[float]:
+    """metadata=print 출력에서 장면 전환 시각(초) 추출. 'lavfi.scd.time=...' 줄만."""
+    cuts = []
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.startswith("lavfi.scd.time="):
+            try:
+                cuts.append(round(float(line.split("=", 1)[1]), 3))
+            except ValueError:
+                pass
+    return cuts
+
+
 def hw_decode_args() -> list[str]:
     """NVIDIA 머신이면 NVDEC. 실패하면 호출부에서 CPU로 재시도."""
     return ["-hwaccel", "cuda"]
@@ -62,20 +74,31 @@ def build_single_pass(video: Path, out: Path, meta: dict, want_audio: bool) -> l
     frame_h = meta["frames"]["height"]
     crops = meta["roi_crops"]
 
+    scene_cuts = bool(meta.get("scene_cuts", True))
     n_out = 1 + len(crops)
     labels = "".join(f"[s{i}]" for i in range(n_out))
-    fc = [f"[0:v]fps={fps}" + (f",split={n_out}{labels}" if n_out > 1 else "[s0]"),
-          f"[s0]scale=-2:{frame_h}[frames]"]
+    src = "[v0]" if scene_cuts else "[0:v]"
+    fc = []
+    if scene_cuts:
+        # 전체 프레임레이트 스트림을 320p 로 줄여 장면 전환 감지. 비용 측정 결과 추가 시간 ~0 (디코딩이 병목)
+        fc.append("[0:v]split=2[v0][v1]")
+        fc.append(f"[v1]scale=320:-2,scdet=t={meta.get('scdet_threshold', 10)},"
+                  f"metadata=mode=print:file=scdet.txt[sc]")
+    fc.append(f"{src}fps={fps}" + (f",split={n_out}{labels}" if n_out > 1 else "[s0]"))
+    fc.append(f"[s0]scale=-2:{frame_h}[frames]")
     for i, name in enumerate(crops, 1):
         x, y, w, h = meta["rois"][name]
         fc.append(f"[s{i}]crop={w}:{h}:{x}:{y}[{name}]")
 
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-filter_complex", ";".join(fc)]
-    cmd += ["-map", "[frames]", "-q:v", "3", str(out / "frames" / "%06d.jpg")]
+    # 경로는 전부 cache 디렉터리 기준 상대경로 (subprocess cwd=out). 'C:' 의 콜론이 필터 옵션 파서를 깨뜨리기 때문.
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video.resolve()), "-filter_complex", ";".join(fc)]
+    cmd += ["-map", "[frames]", "-q:v", "3", "frames/%06d.jpg"]
     for name in crops:
-        cmd += ["-map", f"[{name}]", "-q:v", "2", str(out / "rois" / name / "%06d.jpg")]
+        cmd += ["-map", f"[{name}]", "-q:v", "2", f"rois/{name}/%06d.jpg"]
+    if scene_cuts:
+        cmd += ["-map", "[sc]", "-f", "null", "-"]
     if want_audio:
-        cmd += ["-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(out / "audio.wav")]
+        cmd += ["-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "audio.wav"]
     return cmd
 
 
@@ -97,6 +120,8 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
         meta["frames"] = {"fps": float(prof["frames"].get("fps", 1.0)),
                           "height": min(int(prof["frames"].get("max_height", 1080)), meta["height"])}
         meta["roi_crops"] = [n for n in prof["roi_crops"] if n in meta["rois"]]
+        meta["scene_cuts"] = bool(prof["frames"].get("scene_cuts", True))
+        meta["scdet_threshold"] = float(prof["frames"].get("scdet_threshold", 10))
         meta_p.write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     meta = json.loads(meta_p.read_text(encoding="utf-8"))
     print(f"  duration={meta['duration']:.0f}s  {meta['width']}x{meta['height']}@{meta['fps']:.2f}  "
@@ -113,12 +138,17 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
             (rois_d / name).mkdir(parents=True)
         cmd = build_single_pass(video, out, meta, want_audio=need_audio)
         try:
-            run(cmd[:1] + hw_decode_args() + cmd[1:])
+            run(cmd[:1] + hw_decode_args() + cmd[1:], cwd=out)
         except subprocess.CalledProcessError:
             print("  (hw decode failed, falling back to CPU)")
-            run(cmd)
+            run(cmd, cwd=out)
         n = len(list(frames_d.glob("*.jpg")))
         print(f"  frames: {n}  (expected ~{int(meta['duration'] * meta['frames']['fps'])})")
+        if (out / "scdet.txt").exists():
+            cuts = parse_scdet(out / "scdet.txt")
+            (out / "cuts.json").write_text(json.dumps(cuts), encoding="utf-8")
+            (out / "scdet.txt").unlink()
+            print(f"  scene cuts: {len(cuts)}")
     elif need_audio:   # 프레임은 있고 오디오만 빠진 경우: 비디오 디코딩 없이
         run(["ffmpeg", "-y", "-v", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000",
              "-c:a", "pcm_s16le", str(audio_p)])

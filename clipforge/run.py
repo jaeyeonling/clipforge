@@ -19,6 +19,7 @@ from pathlib import Path
 from .candidates import DEFAULT_WEIGHTS, make_candidates
 from .evaluate import evaluate
 from .preprocess import preprocess
+from .profiles import load_profile
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segments, fmt_time
 
@@ -30,16 +31,22 @@ def load_meta(vid: str) -> dict:
     return json.loads((CACHE / vid / "meta.json").read_text(encoding="utf-8"))
 
 
-def load_curves(vid: str) -> dict[str, Curve]:
-    out = {}
+def load_signals(vid: str) -> tuple[dict[str, Curve], dict[str, Segments]]:
+    curves, events = {}, {}
     for name in REGISTRY:
         p = CACHE / vid / f"{name}.json"
-        if p.exists():
-            try:
-                out[name] = Curve.load(p)
-            except TypeError:
-                pass          # Segments(이벤트) 신호는 어댑터(다음 단계)를 거쳐 들어온다
-    return out
+        if not p.exists():
+            continue
+        try:
+            curves[name] = Curve.load(p)
+        except TypeError:
+            events[name] = Segments.load(p)
+    return curves, events
+
+
+def load_kernels(vid: str) -> dict[str, dict]:
+    meta = load_meta(vid)
+    return load_profile(meta.get("game", "d2r")).get("events", {}) or {}
 
 
 def parse_weights(items: list[str] | None) -> dict[str, float]:
@@ -64,9 +71,10 @@ def cmd_signals(a):
 
 def cmd_cands(a) -> Segments:
     meta = load_meta(a.vid)
-    segs = make_candidates(load_curves(a.vid), meta["duration"], parse_weights(a.w), threshold=a.threshold)
+    curves, events = load_signals(a.vid)
+    segs = make_candidates(curves, meta["duration"], parse_weights(a.w), events, load_kernels(a.vid), threshold=a.threshold)
     segs.save(CACHE / a.vid / "candidates.json")
-    print(f"[cands] {len(segs.items)} candidates, coverage {segs.total_duration() / meta['duration']:.1%}")
+    print(f"[cands] {len(segs.items)} candidates, coverage {segs.total_duration() / meta['duration']:.1%}  signals={segs.meta.get('signals')}")
     for s in segs.items:
         print(f"  {fmt_time(s.start)}-{fmt_time(s.end)}  score={s.score:.2f}")
     return segs
@@ -82,12 +90,13 @@ def cmd_eval(a):
 def cmd_sweep(a):
     meta = load_meta(a.vid)
     labels = Segments.from_csv(LABELS / f"{a.vid}.csv")
-    curves = load_curves(a.vid)
+    curves, events = load_signals(a.vid)
+    kernels = load_kernels(a.vid)
     w = parse_weights(a.w)
     print(f"weights={w}")
     print(f"{'thr':>5} {'recall':>7} {'prec':>7} {'cover':>7} {'n':>4}")
     for thr in [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]:
-        c = make_candidates(curves, meta["duration"], w, threshold=thr)
+        c = make_candidates(curves, meta["duration"], w, events, kernels, threshold=thr)
         r = evaluate(c, labels, meta["duration"])
         print(f"{thr:5.2f} {r.recall:7.1%} {r.precision:7.1%} {r.coverage:7.1%} {r.n_candidates:4d}")
 

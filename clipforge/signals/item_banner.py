@@ -11,7 +11,7 @@
 
 출력: Segments("item_banner") — start=end=전이 시각, label="append"|"reset",
       meta={"added", "removed", "text"}. RESET 은 edit_emphasis 의 입력이 된다.
-OCR 결과는 rois/banner_ocr.json 에 초 단위로 캐시되어 파라미터를 바꿔도 재사용된다.
+OCR 결과는 cache/<id>/banner_ocr.json 에 초 단위로 캐시되어 파라미터를 바꿔도 재사용된다.
 """
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def item_banner(cache: Path, step: int = 3, min_stable: int = 3) -> Segments:
     roi_dir = cache / "rois" / "banner"
     if not roi_dir.exists():
         raise FileNotFoundError(f"{roi_dir} 없음 — prep 이 games/<game>.yaml 의 roi_crops 에 banner 를 포함해야 함")
-    ocr = BannerOCR(roi_dir, cache / "rois" / "banner_ocr.json")
+    ocr = BannerOCR(roi_dir, cache / "banner_ocr.json")
     n = len(ocr)
     t0 = time.time()
     coarse = list(range(0, n, step))

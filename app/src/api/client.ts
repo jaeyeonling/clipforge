@@ -1,5 +1,5 @@
 import type {
-  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
+  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, KeptSeg, LabelCategory, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -48,6 +48,13 @@ export const api = {
   addEpisode: (video_path: string, title: string, game = "d2r", id?: string, kind: EpisodeKind = "edited") =>
     post<Episode>("/api/episodes", { video_path, title, game, id: id || null, kind }),
   editpoints: (id: string) => request<EditPointsResult>(`/api/episodes/${encodeURIComponent(id)}/editpoints`),
+  kept: (id: string) => request<{ episode: string; kept: KeptSeg[]; categories: LabelCategory[] }>(`/api/episodes/${encodeURIComponent(id)}/kept`),
+  keptSet: (id: string, start: number, end: number, label: string, new_start?: number, new_end?: number) =>
+    put<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept`, { start, end, label, new_start: new_start ?? null, new_end: new_end ?? null }),
+  keptAdd: (id: string, start: number, end: number, label = "kept", note = "") =>
+    post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept`, { start, end, label, note }),
+  keptDelete: (id: string, start: number, end: number) =>
+    request<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept?start=${start}&end=${end}`, { method: "DELETE" }),
   decideEditPoint: (id: string, start: number, end: number, label: "kept" | "no" | "", reason = "") =>
     post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/decision`, { start, end, label, reason, kind: "editpoints" }),
   jobs: () => request<Job[]>("/api/jobs"),

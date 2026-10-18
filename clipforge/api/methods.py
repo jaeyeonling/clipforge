@@ -204,6 +204,81 @@ class Engine:
                         out[(f"{float(r['start']):.1f}", f"{float(r['end']):.1f}")] = {"label": r["label"], "reason": reason}
         return out
 
+    # ---- Phase 2: 정답 구간(kept) 과 범주 ----
+    def label_categories(self) -> list[dict]:
+        import yaml
+        p = self.project.games / "common.yaml"
+        cats = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("label_categories") if p.exists() else None
+        return cats or [{"key": "kept", "label": "kept", "hint": "", "color": "#9be28a", "shortcut": "1"}]
+
+    def _kept_rows(self, vid: str) -> list[dict]:
+        p = self.project.labels / f"{vid}.csv"
+        if not p.exists():
+            return []
+        with open(p, encoding="utf-8", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def _write_kept_rows(self, vid: str, rows: list[dict]) -> None:
+        p = self.project.labels / f"{vid}.csv"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        rows.sort(key=lambda r: float(r["start"]))
+        with open(p, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader()
+            w.writerows({k: r.get(k, "") for k in ("start", "end", "label", "note")} for r in rows)
+
+    @staticmethod
+    def _same(r: dict, start: float, end: float) -> bool:
+        return abs(float(r["start"]) - float(start)) < 0.05 and abs(float(r["end"]) - float(end)) < 0.05
+
+    def kept_list(self, vid: str) -> dict:
+        """정답 구간 목록: [{start, end, label, source: auto|manual|ui, note}] + 범주 정의."""
+        rows = []
+        for r in self._kept_rows(vid):
+            if r.get("label") in ("no", ""):
+                continue
+            note = r.get("note", "")
+            src = "auto" if note.startswith("auto align") else ("ui" if note.startswith("ui") else "manual")
+            rows.append({"start": float(r["start"]), "end": float(r["end"]), "label": r.get("label", "kept"), "source": src, "note": note})
+        return {"episode": vid, "kept": rows, "categories": self.label_categories()}
+
+    def kept_set(self, vid: str, start: float, end: float, label: str, new_start: float | None = None, new_end: float | None = None) -> dict:
+        """구간의 범주(또는 경계)를 바꾼다. label 은 범주 key 또는 'kept'(범주 없음)."""
+        keys = {c["key"] for c in self.label_categories()} | {"kept"}
+        if label not in keys:
+            raise ApiError("E_BAD_LABEL", f"범주가 아닙니다: {label}", f"가능: {sorted(keys)}")
+        rows = self._kept_rows(vid)
+        hit = [r for r in rows if self._same(r, start, end)]
+        if not hit:
+            raise ApiError("E_NOT_FOUND", f"정답 구간 없음: {start}-{end}")
+        for r in hit:
+            r["label"] = label
+            if new_start is not None and new_end is not None:
+                if not (0 <= float(new_start) < float(new_end)):
+                    raise ApiError("E_BAD_PARAMS", "구간은 0 ≤ start < end")
+                r["start"], r["end"] = f"{float(new_start):.2f}", f"{float(new_end):.2f}"
+        self._write_kept_rows(vid, rows)
+        return {"ok": True, "labels": len(rows)}
+
+    def kept_add(self, vid: str, start: float, end: float, label: str = "kept", note: str = "") -> dict:
+        """사람이 직접 구간 추가 (최종본이 없을 때, 또는 align 이 놓친 구간)."""
+        if not (0 <= float(start) < float(end)):
+            raise ApiError("E_BAD_PARAMS", "구간은 0 ≤ start < end")
+        keys = {c["key"] for c in self.label_categories()} | {"kept"}
+        if label not in keys:
+            raise ApiError("E_BAD_LABEL", f"범주가 아닙니다: {label}", f"가능: {sorted(keys)}")
+        rows = [r for r in self._kept_rows(vid) if not self._same(r, start, end)]
+        rows.append({"start": f"{float(start):.2f}", "end": f"{float(end):.2f}", "label": label, "note": f"manual {note}".strip()})
+        self._write_kept_rows(vid, rows)
+        return {"ok": True, "labels": len(rows)}
+
+    def kept_delete(self, vid: str, start: float, end: float) -> dict:
+        rows = self._kept_rows(vid)
+        keep = [r for r in rows if not self._same(r, start, end)]
+        if len(keep) == len(rows):
+            raise ApiError("E_NOT_FOUND", f"정답 구간 없음: {start}-{end}")
+        self._write_kept_rows(vid, keep)
+        return {"ok": True, "labels": len(keep)}
+
     # ---- Phase 2: 편집 포인트 ----
     def editpoints_list(self, vid: str) -> dict:
         """candidates.json + labels/<vid>.csv(kept·판정) → 후보 목록(겹침 표시), 정답 구간, 지표."""
@@ -228,7 +303,10 @@ class Engine:
         return {"episode": vid, "duration": duration, "candidates": rows, "signals": cands.meta.get("signals", []),
                 "kept": [{"start": l.start, "end": l.end, "label": l.label, "note": l.meta.get("note", "")} for l in kept],
                 "report": ({"recall": rep.recall, "precision": rep.precision, "coverage": rep.coverage, "n_labels": rep.n_labels, "n_candidates": rep.n_candidates,
-                            "missed": [{"start": m.start, "end": m.end, "label": m.label} for m in rep.missed]} if rep else None),
+                            "missed": [{"start": m.start, "end": m.end, "label": m.label} for m in rep.missed],
+                            "by_label": {lab: {"hit": rep.hit_by_label.get(lab, 0), "total": rep.hit_by_label.get(lab, 0) + rep.missed_by_label.get(lab, 0)}
+                                         for lab in sorted(set(rep.hit_by_label) | set(rep.missed_by_label))}} if rep else None),
+                "categories": self.label_categories(),
                 "align": ({"final": align.get("final"), "matched_frac": align.get("matched_frac"), "n_segments": align.get("n_segments"), "unmatched": align.get("unmatched")} if align else None),
                 "video_url": f"/media/video/{vid}" if self.project.video_path(vid) else None}
 

@@ -133,3 +133,28 @@ def test_phase2_editpoints_and_metrics(engine, tmp_path):
     assert ei.value.code == "E_BAD_PARAMS"
     with _pt.raises(ApiError):
         engine.decision_set(vid, 1, 2, "keep", kind="editpoints")                     # editpoints 는 kept|no
+
+
+def test_kept_categories_crud_and_by_label(engine):
+    from clipforge.timeline import Segment, Segments
+    vid = _fake_episode(engine, "orig2")
+    cats = {c["key"] for c in engine.label_categories()}
+    assert {"drop", "reaction", "fail"} <= cats
+    Segments("candidates", [Segment(10, 20, "cand", 2.0)], meta={}).save(engine.project.cache / vid / "candidates.json")
+    (engine.project.labels / f"{vid}.csv").write_text("start,end,label,note\n12,18,kept,auto align f.mp4 0-6\n70,75,kept,auto align f.mp4 8-13\n", encoding="utf-8")
+    assert [k["source"] for k in engine.kept_list(vid)["kept"]] == ["auto", "auto"]
+    engine.kept_set(vid, 12, 18, "drop")
+    engine.kept_set(vid, 70, 75, "reaction", new_start=69, new_end=76)
+    engine.kept_add(vid, 100, 104, "fail", "직접")
+    k = engine.kept_list(vid)["kept"]
+    assert [(x["label"], x["start"], x["end"]) for x in k] == [("drop", 12.0, 18.0), ("reaction", 69.0, 76.0), ("fail", 100.0, 104.0)]
+    assert k[2]["source"] == "manual"
+    rep = engine.editpoints_list(vid)["report"]
+    assert rep["by_label"] == {"drop": {"hit": 1, "total": 1}, "fail": {"hit": 0, "total": 1}, "reaction": {"hit": 0, "total": 1}}
+    engine.kept_delete(vid, 100, 104)
+    assert len(engine.kept_list(vid)["kept"]) == 2
+    import pytest as _pt
+    with _pt.raises(ApiError):
+        engine.kept_set(vid, 12, 18, "nope")
+    with _pt.raises(ApiError):
+        engine.kept_delete(vid, 1, 2)

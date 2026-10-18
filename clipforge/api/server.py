@@ -51,6 +51,21 @@ class ProfileSet(BaseModel):
     panel_bands: dict | None = None
 
 
+class KeptSet(BaseModel):
+    start: float
+    end: float
+    label: str = "kept"
+    new_start: float | None = None
+    new_end: float | None = None
+
+
+class KeptAdd(BaseModel):
+    start: float
+    end: float
+    label: str = "kept"
+    note: str = ""
+
+
 class Decision(BaseModel):
     start: float
     end: float
@@ -163,6 +178,26 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @app.get("/api/episodes/{vid}/editpoints")
     def editpoints(vid: str):
         return engine.editpoints_list(vid)
+
+    @app.get("/api/episodes/{vid}/kept")
+    def kept_list(vid: str):
+        return engine.kept_list(vid)
+
+    @app.put("/api/episodes/{vid}/kept")
+    def kept_set(vid: str, body: KeptSet):
+        return engine.kept_set(vid, body.start, body.end, body.label, body.new_start, body.new_end)
+
+    @app.post("/api/episodes/{vid}/kept")
+    def kept_add(vid: str, body: KeptAdd):
+        return engine.kept_add(vid, body.start, body.end, body.label, body.note)
+
+    @app.delete("/api/episodes/{vid}/kept")
+    def kept_delete(vid: str, start: float, end: float):
+        return engine.kept_delete(vid, start, end)
+
+    @app.get("/api/label-categories")
+    def label_categories():
+        return engine.label_categories()
 
     # 원본/편집본 영상 자체 (편집 포인트 검토용 재생). Range 지원.
     @app.api_route("/media/video/{vid}", methods=["GET", "HEAD"])

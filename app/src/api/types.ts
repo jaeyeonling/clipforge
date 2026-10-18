@@ -50,10 +50,17 @@ export interface EditPoint {
   idx: number; start: number; end: number; score: number; label: string; meta: Record<string, unknown>;
   kept: boolean; kept_labels: string[]; decision: "kept" | "no" | "";
 }
+export interface LabelCategory { key: string; label: string; hint?: string; color?: string; shortcut?: string }
+export interface KeptSeg { start: number; end: number; label: string; source: "auto" | "manual" | "ui"; note: string }
 export interface EditPointsResult {
   episode: string; duration: number; candidates: EditPoint[]; signals: string[];
   kept: { start: number; end: number; label: string; note: string }[];
-  report: { recall: number; precision: number; coverage: number; n_labels: number; n_candidates: number; missed: { start: number; end: number; label: string }[] } | null;
+  categories: LabelCategory[];
+  report: {
+    recall: number; precision: number; coverage: number; n_labels: number; n_candidates: number;
+    missed: { start: number; end: number; label: string }[];
+    by_label: Record<string, { hit: number; total: number }>;
+  } | null;
   align: { final: string; matched_frac: number; n_segments: number; unmatched: [number, number][] } | null;
   video_url: string | null;
 }

@@ -32,3 +32,13 @@ pipelines:
   original:
     signals: [audio_loudness, frame_motion, item_banner, chat_burst, speech_keyword, ui_state]
     scene_cuts: false
+
+# 정답 구간(labels/<id>.csv, Phase 2)의 범주. align 이 만든 kept 구간에 사람이 범주만 붙인다 → 범주별 recall 로 어떤 신호를 보강할지 안다.
+# key 가 CSV 의 label 열에 들어간다. 'kept' 는 아직 범주를 안 붙인 상태.
+label_categories:
+  - {key: drop,     label: 득템·드랍,   hint: 아이템이 떨어지거나 감별하는 순간. 배너 추가와 함께 옴,    color: "#f0f660", shortcut: "1"}
+  - {key: reaction, label: 리액션,      hint: 환호·탄식·웃음. 소리가 크거나 말이 빨라짐,                color: "#9be28a", shortcut: "2"}
+  - {key: fail,     label: 실패·죽음,   hint: 죽음·탈주·실수. 화면이 멈추거나 색이 바뀜,                color: "#ff7b70", shortcut: "3"}
+  - {key: talk,     label: 설명·토크,   hint: 빌드·시세·계획 설명. 전사 텍스트가 길고 음량은 평탄,          color: "#8ec5ff", shortcut: "4"}
+  - {key: chat,     label: 채팅 반응,   hint: 채팅이 터지거나 채팅을 읽어주는 구간,                      color: "#c8a0ff", shortcut: "5"}
+  - {key: misc,     label: 기타,        hint: 위에 안 맞는 것. 많아지면 범주를 추가,                      color: "#8f8979", shortcut: "6"}

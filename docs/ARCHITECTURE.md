@@ -179,7 +179,7 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 | 4 | ✅ Events→Curve 어댑터 + `edit_emphasis`(HUD 소실=줌, 밝은 사각형=메모장) + `cut_density`(prep scdet) + `chat_burst`(채팅 ROI 마스크 XOR) | 5개 신호 가중합. ep59 최고 후보 2:42~3:09 = 제목 아이템(지존참). 채팅 변화율 상위 12초가 전부 2:51~3:41 |
 | 5 | ✅ 쇼츠 후보 생성기 `shorts.py` (앵커→창→쉼·컷 스냅→5축 점수, short/story variant, `run shorts`) | ep59: short 1위 3:25~3:42(지존참 리액션), story 1위 2:39~3:14(지존참 드랍) = 제목 순간. 스냅샷 `experiments/ep59_shorts.json` |
 | 6 | ✅ `export --shorts`: 1080×1920 초안(상단 훅 텍스트 띠 400 / 게임 정사각 크롭 1080 / 채팅 ROI 440), NVDEC→NVENC, `review/<id>/shorts/index.md` 에 편집 지시표 | ep59 6개 초안 49초(≈8초/개). 크롭 중심·툴팁 추적·사전 기반 자막은 후속 |
-| 7 | 제목 → 아이템 → 배너 시각 약한 정답 + hit@K 평가 | ep59 hit@1 = 지존참 구간 |
+| 7 | ✅ `weaklabel`(episodes.csv 제목 → slang.yaml 키워드 → 배너 append 퍼지 매칭 → `labels/<id>.shorts.csv` title_item ±30s) + `eval --shorts`(hit@K, MRR) + `harvest --shorts`(keep/ → label=keep) | ep59: 지존참 → 2:51 (fuzz 100). story hit@1 = 1/1, short rank 2 (1위는 같은 드랍의 3:25 채팅 줌 리액션) |
 | 8 | 도메인 사전 v0: d2data 조인 → `data/d2r/items.json`, 인벤 약어 → `slang.yaml`, 배너 토큰 매칭률 | 매칭률 숫자 |
 | 9 | `xml` 쇼츠 시퀀스 + 리뷰 시퀀스(마커+V2) → 친구 Premiere 피드백 | 실사용 1회 |
 | 10 | 편집본 5~10편으로 확장, 가중치 조정 | hit@3 ≥ 0.8 |
@@ -262,6 +262,8 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 
 ### 8.4 정답 없이 시작하는 법 — 제목이 곧 약한 정답
 친구 채널 영상 제목은 그 회차의 핵심 득템을 명시한다("59일차만에 … 지존참 직득", "56~57일차 … 자룬 직득"). 제목의 아이템명을 배너 OCR의 APPEND 토큰과 퍼지 매칭하면 **그 회차 쇼츠 1순위의 시각이 자동으로 나온다**. 편집본 40여 편 × 1개 = 약 40개의 hit@1 라벨을 공짜로 얻는다. 이것이 Phase 1의 첫 평가 셋. 친구가 후보 중 고른 것(`harvest`)이 쌓이면 그걸로 가중치를 조정한다.
+
+구현(7단계): `episodes.csv`(id, title, url, views …) → `weaklabel` 이 `data/d2r/slang.yaml` 표제어·별칭으로 제목 키워드를 뽑고 rapidfuzz partial_ratio ≥ 85 로 배너 append 토큰과 매칭 → `labels/<id>.shorts.csv` 에 `title_item` 구간(배너 시각 −30s ~ +30s). 정답 창 폭은 **지표를 좋게 보이려고 조정하지 않는다** — ep59 에서 short 1위(3:25 리액션)가 창 밖 4초라 rank 2 로 기록된 채 둔다. 친구 keep 이 쌓이면 그쪽이 진짜 정답.
 
 ### 8.5 친구 채널(기준 채널) 관측
 - 장편 위주 채널로 **쇼츠는 아직 없음**. 디아2 래더 "노거래 맨땅" 시리즈가 축.

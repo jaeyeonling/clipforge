@@ -7,6 +7,9 @@
   python -m clipforge.run export   foo [--shorts --k 3]    # 후보 클립 mp4 (--shorts: 9:16 쇼츠 초안 review/foo/shorts/)
   python -m clipforge.run sweep    foo                     # threshold 를 바꿔가며 recall/coverage 표
   python -m clipforge.run shorts   foo [--k 5]             # 쇼츠 후보 (앵커→창→점수), Phase 1
+  python -m clipforge.run weaklabel foo [--title ...]      # 제목→배너 매칭 약한 정답 labels/foo.shorts.csv
+  python -m clipforge.run eval     foo --shorts            # hit@K / MRR
+  python -m clipforge.run harvest  foo --shorts            # review/foo/shorts/keep/ → labels (label=keep)
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
@@ -18,13 +21,15 @@ import subprocess
 from pathlib import Path
 
 from .candidates import DEFAULT_WEIGHTS, make_candidates
+from .eval_shorts import evaluate_shorts
 from .evaluate import evaluate
 from .preprocess import preprocess
 from .profiles import load_profile
 from .render import render_shorts
 from .shorts import ShortCandidate, make_shorts, pretty as shorts_pretty, save_shorts
 from .signals import REGISTRY, run_signal
-from .timeline import Curve, Segments, fmt_time
+from .timeline import Curve, Segment, Segments, fmt_time
+from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE, LABELS, REVIEW = ROOT / "cache", ROOT / "labels", ROOT / "review"
@@ -83,11 +88,50 @@ def cmd_cands(a) -> Segments:
     return segs
 
 
+def load_shorts(vid: str) -> list[ShortCandidate]:
+    p = CACHE / vid / "shorts.json"
+    if not p.exists():
+        raise SystemExit(f"{p} 없음 — 먼저 python -m clipforge.run shorts {vid}")
+    return [ShortCandidate(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
+
+
 def cmd_eval(a):
     meta = load_meta(a.vid)
+    if a.shorts:
+        lab_p = LABELS / f"{a.vid}.shorts.csv"
+        if not lab_p.exists():
+            raise SystemExit(f"{lab_p} 없음 — weaklabel 또는 harvest --shorts 로 정답을 먼저 만드세요")
+        labels = Segments.from_csv(lab_p)
+        for rep in evaluate_shorts(load_shorts(a.vid), labels):
+            print(rep.pretty())
+        return
     labels = Segments.from_csv(LABELS / f"{a.vid}.csv")
     cands = Segments.load(CACHE / a.vid / "candidates.json")
     print(evaluate(cands, labels, meta["duration"]).pretty())
+
+
+def cmd_weaklabel(a):
+    """제목 → 아이템 키워드 → 배너 추가 시각 → labels/<vid>.shorts.csv (label=title_item)."""
+    meta = load_meta(a.vid)
+    ep = load_episode(a.vid)
+    title = a.title or (ep or {}).get("title")
+    if not title:
+        raise SystemExit(f"제목 없음 — episodes.csv 에 {a.vid} 행을 추가하거나 --title 로 주세요")
+    slang = load_slang(meta.get("game", "d2r"))
+    kws = title_keywords(title, slang)
+    print(f"[weaklabel] title: {title}")
+    print(f"  keywords: {[k for k, _ in kws]}")
+    banner_p = CACHE / a.vid / "item_banner.json"
+    if not banner_p.exists():
+        raise SystemExit("item_banner.json 없음 — signals 먼저")
+    matches = match_banner(kws, Segments.load(banner_p))
+    for m in matches:
+        print(f"  {m['keyword']:<8} -> banner append @ {fmt_time(m['t'])}  fuzz={m['score']}  added=\"{m['added'][:30]}\"")
+    if not matches:
+        print("  (매칭 없음 — slang.yaml 별칭 보강 필요. 배너 토큰:",
+              [s.meta.get('added', '')[:20] for s in Segments.load(banner_p).items if s.label == 'append'], ")")
+    p = write_weak_labels(a.vid, matches, LABELS, duration=meta["duration"])
+    print(f"  -> {p}")
 
 
 def cmd_sweep(a):
@@ -143,7 +187,33 @@ def cmd_shorts(a):
 
 
 def cmd_harvest(a):
-    """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프."""
+    """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프.
+    --shorts: review/<vid>/shorts/keep/*.mp4 → labels/<vid>.shorts.csv (label=keep)."""
+    if a.shorts:
+        idx_p = REVIEW / a.vid / "shorts" / "index.json"
+        if not idx_p.exists():
+            raise SystemExit(f"{idx_p} 없음 — export --shorts 먼저")
+        index = {r["file"]: r for r in json.loads(idx_p.read_text(encoding="utf-8"))}
+        kept = [p.name for p in (REVIEW / a.vid / "shorts" / "keep").glob("*.mp4") if p.name in index]
+        lab_p = LABELS / f"{a.vid}.shorts.csv"
+        import csv as _csv
+        rows = []
+        if lab_p.exists():
+            with open(lab_p, encoding="utf-8", newline="") as f:
+                rows = list(_csv.DictReader(f))
+        existing = {(r["start"], r["end"]) for r in rows if r.get("label") == "keep"}
+        added = 0
+        for name in kept:
+            r = index[name]
+            key = (f"{r['start']:.1f}", f"{r['end']:.1f}")
+            if key in existing:
+                continue
+            rows.append({"start": key[0], "end": key[1], "label": "keep", "note": f"harvest {name}"})
+            added += 1
+        with open(lab_p, "w", encoding="utf-8", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader(); w.writerows(rows)
+        print(f"[harvest --shorts] {added} new keep labels ({len(kept)} files in keep/) -> {lab_p}")
+        return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
     kept = {p.name.split("_")[0] for p in (REVIEW / a.vid / "keep").glob("*.mp4")}
     lab_p = LABELS / f"{a.vid}.csv"
@@ -172,7 +242,8 @@ def main():
     p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
     p.set_defaults(f=cmd_export)
     for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:
-        p = sp.add_parser(name); p.add_argument("vid"); p.set_defaults(f=fn)
+        p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--shorts", action="store_true"); p.set_defaults(f=fn)
+    p = sp.add_parser("weaklabel"); p.add_argument("vid"); p.add_argument("--title", default=None); p.set_defaults(f=cmd_weaklabel)
 
     a = ap.parse_args()
     a.f(a)

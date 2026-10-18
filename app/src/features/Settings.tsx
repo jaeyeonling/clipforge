@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api/client";
+import { TIP } from "../api/tips";
 import pkg from "../../package.json";
 import { Badge, Button, Card, Empty, cx } from "../components/ui";
 import { useApp } from "../state/store";
@@ -26,18 +27,18 @@ export function Settings() {
         <Card title="버전">
           <table className="data">
             <tbody>
-              <tr><td>엔진</td><td className="num">{health?.engine_version ?? "-"}</td><td className="muted xs">python · clipforge/</td></tr>
+              <tr><td>분석 엔진</td><td className="num">{health?.engine_version ?? "-"}</td><td className="muted xs">python · clipforge/</td></tr>
               <tr><td>화면</td><td className="num">{pkg.version}</td><td className="muted xs">React · app/dist</td></tr>
-              {info && <tr><td>앱 (껍데기)</td><td className="num">{info.shellVersion}</td><td className="muted xs">Electron {shell?.versions.electron} · {info.packaged ? "설치본" : "개발"} · 모드 {info.mode}</td></tr>}
+              {info && <tr><td>앱</td><td className="num">{info.shellVersion}</td><td className="muted xs">Electron {shell?.versions.electron} · {info.packaged ? "설치본" : "개발"} · 모드 {info.mode}</td></tr>}
               {info && Object.entries(info.versions.components).map(([k, v]) => (
-                <tr key={k}><td>{COMPONENT_LABEL[k] || k}</td><td className="num">{v}</td><td className="muted xs">런타임 구성요소</td></tr>
+                <tr key={k}><td>{COMPONENT_LABEL[k] || k}</td><td className="num">{v}</td><td className="muted xs">구성요소</td></tr>
               ))}
             </tbody>
           </table>
           {!inShell && <p className="muted xs" style={{ marginTop: 10 }}>브라우저로 열려 있습니다. 껍데기·런타임 버전과 업데이트는 데스크톱 앱에서 보입니다.</p>}
         </Card>
 
-        <Card title="업데이트" right={inShell && <Button size="sm" onClick={check} disabled={checking || !!st?.checking}>{checking || st?.checking ? "확인 중…" : "지금 확인"}</Button>}>
+        <Card title={<span data-tip={TIP.update}>업데이트</span>} right={inShell && <Button size="sm" onClick={check} disabled={checking || !!st?.checking}>{checking || st?.checking ? "확인 중…" : "지금 확인"}</Button>}>
           {!inShell ? <Empty title="데스크톱 앱에서만" /> : !st ? <span className="muted small">상태 읽는 중…</span> : (
             <>
               <div className="row small" style={{ marginBottom: 8 }}>
@@ -84,8 +85,8 @@ export function Settings() {
           <p className="muted xs" style={{ marginTop: 10 }}>영상·캐시·라벨은 데이터 폴더에, 파이썬·모델은 런타임 폴더에 있습니다. 앱을 지워도 둘 다 남습니다.</p>
         </Card>
 
-        <Card title="피드백 보내기">
-          <p className="small">판정(keep/no)·작업 기록·로그를 zip 하나로 묶습니다. 영상과 캐시는 들어가지 않습니다 (보통 1MB 미만). 만든 파일을 카톡으로 보내 주세요.</p>
+        <Card title={<span data-tip={TIP.feedback}>피드백 보내기</span>}>
+          <p className="small">판정(쓸 만함/안 씀)·작업 기록·로그를 zip 하나로 묶습니다. 영상과 캐시는 들어가지 않습니다 (보통 1MB 미만). 만든 파일을 카톡으로 보내 주세요.</p>
           <div className="row" style={{ marginTop: 8 }}>
             <Button size="sm" variant="primary" onClick={() => api.feedbackExport().then((r) => {
               toast(`피드백 파일 생성: ${r.files}개 항목, ${Math.round(r.size / 1024)}KB`, false, shell ? { label: "폴더 열기", onClick: () => shell!.shell.openPath(r.dir) } : undefined);
@@ -97,7 +98,7 @@ export function Settings() {
             <>
               <table className="data">
                 <tbody>
-                  {([["ffmpeg", health.ffmpeg_ok, health.ffmpeg || ""], ["NVENC", health.nvenc, "GPU 인코딩"], ["GPU", !!health.gpu, health.gpu || "없음"], ["Whisper GPU", health.whisper_gpu, "CUDA 전사"], ["OCR", health.rapidocr, "RapidOCR"], ["폰트", health.fonts_ok, "assets/fonts"], ["디스크 여유", (health.disk_free_gb ?? 0) >= 10, `${health.disk_free_gb ?? "-"}GB`]] as [string, boolean, string][]).map(([k, ok, d]) => (
+                  {([["영상 도구 (ffmpeg)", health.ffmpeg_ok, health.ffmpeg || ""], ["GPU 인코딩 (NVENC)", health.nvenc, "세로 초안 렌더 속도"], ["GPU", !!health.gpu, health.gpu || "없음"], ["음성 인식 GPU", health.whisper_gpu, "없으면 CPU 로 느리게"], ["글자 인식 (OCR)", health.rapidocr, "득템 배너·채팅 읽기"], ["폰트", health.fonts_ok, "초안 제목 글씨"], ["디스크 여유", (health.disk_free_gb ?? 0) >= 10, `${health.disk_free_gb ?? "-"}GB`]] as [string, boolean, string][]).map(([k, ok, d]) => (
                     <tr key={k}><td>{k}</td><td><Badge tone={ok ? "ok" : "bad"}>{ok ? "OK" : "없음"}</Badge></td><td className="muted xs mono">{d}</td></tr>
                   ))}
                 </tbody>

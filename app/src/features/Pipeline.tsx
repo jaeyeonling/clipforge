@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_STAGES, KIND_LABEL, STAGES, STAGE_LABEL, type EpisodeKind, type Layout, type StageName } from "../api/types";
+import { DEFAULT_STAGES, KIND_LABEL, STAGES, STAGE_LABEL, STAGE_TECH, type EpisodeKind, type Layout, type StageName } from "../api/types";
 import { Badge, Button, Card, Progress, Spinner, cx, fmtDur } from "../components/ui";
 import { inShell, shell } from "../shell";
+import { STAGE_TIP, TIP } from "../api/tips";
 import { useApp } from "../state/store";
 
 const PRESETS: { key: string; label: string; title: string; kinds: EpisodeKind[]; stages: StageName[] }[] = [
-  { key: "full", label: "전체", title: "처음 처리하는 회차: 준비 → 결과까지", kinds: ["edited", "original"], stages: [] },
-  { key: "rank", label: "순위만", title: "캐시 재사용: 쇼츠 후보·초안·XML·평가만 (규칙을 바꾼 뒤)", kinds: ["edited"], stages: ["shorts", "export", "xml", "eval"] },
-  { key: "points", label: "포인트만", title: "캐시 재사용: 편집 포인트 후보·평가만 (가중치를 바꾼 뒤)", kinds: ["original"], stages: ["candidates", "eval"] },
-  { key: "eval", label: "평가만", title: "정답이 바뀐 뒤 지표만", kinds: ["edited", "original"], stages: ["eval"] },
+  { key: "full", label: "처음부터 전부", title: "처음 처리하는 회차: 영상 읽기부터 결과까지", kinds: ["edited", "original"], stages: [] },
+  { key: "rank", label: "초안만 다시", title: "이미 읽어 둔 결과로 쇼츠 후보·세로 초안·Premiere 파일·점수만 다시", kinds: ["edited"], stages: ["shorts", "export", "xml", "eval"] },
+  { key: "points", label: "포인트만 다시", title: "이미 읽어 둔 신호로 편집 포인트·점수만 다시", kinds: ["original"], stages: ["candidates", "eval"] },
+  { key: "eval", label: "점수만", title: "판정이 바뀐 뒤 점수만 다시 매김", kinds: ["edited", "original"], stages: ["eval"] },
 ];
 const STATUS_KO: Record<string, string> = { queued: "대기", running: "실행 중", done: "완료", error: "오류", cancelled: "취소" };
 /** 회차 종류별로 보여줄 단계 (다른 종류의 단계는 숨긴다) */
@@ -79,15 +80,15 @@ export function Pipeline() {
             <div className="muted small">{quickDesc}</div>
           </div>
           {running ? <Button variant="danger" onClick={() => cancelJob().catch(fail)}>취소</Button>
-            : <Button variant="primary" onClick={quickStart} disabled={!selected}>{quickLabel}</Button>}
+            : <Button variant="primary" onClick={quickStart} disabled={!selected} data-tip={TIP.quickRun}>{quickLabel}</Button>}
         </div>
-        <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "▾ 고급 설정 닫기" : "▸ 고급 설정 (단계 선택 · 레이아웃 · 강제 재계산)"}</button>
+        <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "▾ 고급 설정 닫기" : "▸ 고급 설정 (단계 골라 돌리기 · 레이아웃 · 처음부터 다시)"}</button>
         <div hidden={!advanced}>
         <div className="stage-grid">
           {visible.map((s) => (
-            <label key={s} className={cx("stage-opt", stages.has(s) && "on")}>
+            <label key={s} className={cx("stage-opt", stages.has(s) && "on")} data-tip={STAGE_TIP[s]}>
               <input type="checkbox" checked={stages.has(s)} onChange={() => toggle(s)} disabled={running} />
-              <span><span className="name">{s}</span><br /><span className="ko">{STAGE_LABEL[s]}</span></span>
+              <span><span className="name">{STAGE_LABEL[s]}</span><br /><span className="ko">{STAGE_TECH[s]}</span></span>
               {selected?.stages?.[s] && <span className="done"><Badge tone="ok">완료</Badge></span>}
             </label>
           ))}
@@ -117,17 +118,17 @@ export function Pipeline() {
           <span className="sep" />
           {kind === "edited" ? (
             <>
-              <label className="check">레이아웃
+              <label className="check" data-tip={TIP.layout}>레이아웃
                 <select className="field sm" value={layout} onChange={(e) => setLayout(e.target.value as Layout)} disabled={running} title="card = 친구 확정 포맷(제목 띠 + 템 창 크롭 + 채팅). feed 는 실험용">
                   <option value="card">card (확정)</option><option value="feed">feed (실험)</option>
                 </select>
               </label>
-              <label className="check">상위 <input className="field sm num" type="number" min={1} max={10} value={k} onChange={(e) => setK(Number(e.target.value) || 5)} disabled={running} /></label>
+              <label className="check" data-tip={TIP.topk}>초안 개수 <input className="field sm num" type="number" min={1} max={10} value={k} onChange={(e) => setK(Number(e.target.value) || 5)} disabled={running} /></label>
             </>
           ) : (
-            <label className="check" title="후보 임계값 — 낮출수록 후보가 늘어 recall ↑ coverage ↑">임계값 <input className="field sm num" type="number" step={0.1} min={0.2} max={5} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 1.5)} disabled={running} /></label>
+            <label className="check" data-tip={TIP.threshold}>민감도(낮을수록 많이) <input className="field sm num" type="number" step={0.1} min={0.2} max={5} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 1.5)} disabled={running} /></label>
           )}
-          <label className={cx("check", force && "on")} title="캐시를 무시하고 다시 계산"><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} disabled={running} /> 강제 재계산</label>
+          <label className={cx("check", force && "on")} data-tip={TIP.force}><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} disabled={running} /> 처음부터 다시</label>
           <span className="grow" style={{ flex: 1 }} />
           {running ? <Button variant="danger" onClick={() => cancelJob().catch(fail)}>취소</Button>
             : <Button variant="primary" onClick={start} disabled={!selected || !ordered.length}>선택한 단계 실행 {ordered.length ? `(${ordered.length})` : ""}</Button>}
@@ -141,7 +142,7 @@ export function Pipeline() {
               {running && <Spinner />}
               {activeJob ? (
                 <><b>{STATUS_KO[activeJob.status] || activeJob.status}</b>
-                  <span>{activeJob.stage && activeJob.status === "running" ? `${activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
+                  <span>{activeJob.stage && activeJob.status === "running" ? `${STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
                   {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}
                   {running && activeJob.eta_s != null && activeJob.eta_s > 0 && <span className="eta">· 약 {fmtDur(activeJob.eta_s)} 남음</span>}
                   {!running && activeJob.status === "queued" && activeJob.eta_s != null && <span className="muted">· 예상 {fmtDur(activeJob.eta_s)}</span>}</>
@@ -181,13 +182,13 @@ export function LogPane() {
   return (
     <div className="logpane" style={{ marginTop: 12 }}>
       <div className="logbar">
-        <span className="grow" title={logPath}>{logTitle}{logPath ? ` — ${logPath}` : ""}</span>
+        <span className="grow" title={logPath}>{logTitle === "로그" ? "진행 기록" : logTitle}{logPath ? ` — ${logPath}` : ""}</span>
         <label className="check xs"><input type="checkbox" checked={errOnly} onChange={(e) => setErrOnly(e.target.checked)} /> 오류만</label>
         <Button variant="ghost" size="sm" onClick={clearLog}>지우기</Button>
       </div>
       <div ref={box} className={cx("log", errOnly && "err-only")}>
         {log.length ? log.map((l, i) => <div key={i} className={cx("line", l.level)}>{l.stage && <span className="st">{l.stage}</span>}{l.message}</div>)
-          : <div className="nothing">작업을 실행하면 진행 로그가 여기 쌓입니다. 지표·작업 탭에서 이전 작업을 눌러도 볼 수 있습니다.</div>}
+          : <div className="nothing">실행하면 진행 기록이 여기 쌓입니다. 기록 탭에서 이전 작업을 눌러도 볼 수 있습니다.</div>}
       </div>
     </div>
   );

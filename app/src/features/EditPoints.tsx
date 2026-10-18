@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { EditPointsResult, KeptSeg, LabelCategory } from "../api/types";
 import { Badge, Button, Card, Empty, Spinner, cx, fmtTime } from "../components/ui";
 import { useApp } from "../state/store";
+import { TIP } from "../api/tips";
 
 /**
  * Phase 2: 원본 → 편집 포인트.
@@ -42,7 +43,7 @@ export function EditPoints() {
   const decide = useCallback(async (idx: number, label: "kept" | "no") => {
     const c = data?.candidates[idx]; if (!c || !selected) return;
     const next = c.decision === label ? "" : label;
-    try { await api.decideEditPoint(selected.id, c.start, c.end, next); toast(next ? `${next} 저장됨` : "판정 해제"); await load(); } catch (e) { fail(e); }
+    try { await api.decideEditPoint(selected.id, c.start, c.end, next); toast(next ? `${next === "kept" ? "정답으로" : "아님으로"} 저장됨` : "판정 취소"); await load(); } catch (e) { fail(e); }
   }, [data, selected, toast, fail, load]);
   const setCat = useCallback(async (k: KeptSeg, key: string) => {
     if (!selected) return;
@@ -108,15 +109,15 @@ export function EditPoints() {
             <span className="keys"><kbd>Tab</kbd> 패널 전환 · <kbd>I</kbd>/<kbd>O</kbd> 시작/끝 찍기 · <kbd>A</kbd> 구간 추가 · <kbd>Esc</kbd> 정지</span>
             <span className="grow" style={{ flex: 1 }} />
             <span className="mono xs muted">IN {mark.in == null ? "–" : fmtTime(mark.in)} · OUT {mark.out == null ? "–" : fmtTime(mark.out)}</span>
-            <select className="field sm" value={addCat} onChange={(e) => setAddCat(e.target.value)} title="추가할 구간의 범주">
-              <option value="kept">범주 없음</option>{cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            <select className="field sm" value={addCat} onChange={(e) => setAddCat(e.target.value)} data-tip="추가할 구간의 종류">
+              <option value="kept">종류 없음</option>{cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
             <Button size="sm" onClick={addRange} disabled={mark.in == null || mark.out == null}>구간 추가</Button>
           </div>
         </Card>
 
-        <Card title={`정답 구간 · ${kept.length}개${unlabeled ? ` (범주 없음 ${unlabeled})` : ""}`} className={cx(pane === "kept" && "pane-active")}
-          right={<span className="keys"><kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>1</kbd>~<kbd>{cats.length}</kbd> 범주 · <kbd>Enter</kbd> 재생 · <kbd>Del</kbd> 삭제</span>}>
+        <Card title={<span data-tip={TIP.category}>{`정답 구간 · ${kept.length}개${unlabeled ? ` (종류 없음 ${unlabeled})` : ""}`}</span>} className={cx(pane === "kept" && "pane-active")}
+          right={<span className="keys"><kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>1</kbd>~<kbd>{cats.length}</kbd> 종류 · <kbd>Enter</kbd> 재생 · <kbd>Del</kbd> 삭제</span>}>
           {!kept.length ? <p className="muted small">아직 정답이 없습니다. 파이프라인에서 최종본 파일로 align 을 돌리거나, 재생하면서 I/O 로 구간을 찍어 추가하세요.</p> : (
             <ul className="kept-list" onClick={() => setPane("kept")}>
               {kept.map((k, i) => {
@@ -125,7 +126,7 @@ export function EditPoints() {
                   <li key={`${k.start}-${k.end}`} className={cx("kept-row", pane === "kept" && i === kfocus && "focused")} onClick={() => { setKfocus(i); setPane("kept"); }} onDoubleClick={() => seek(k.start - 1)}>
                     <span className="t mono">{fmtTime(k.start)}–{fmtTime(k.end)}</span>
                     <span className="d muted xs">{Math.round(k.end - k.start)}s</span>
-                    <span className="src"><Badge tone={k.source === "auto" ? "ok" : ""} title={k.note}>{k.source === "auto" ? "align" : k.source === "ui" ? "판정" : "직접"}</Badge></span>
+                    <span className="src"><Badge tone={k.source === "auto" ? "ok" : ""} title={k.note}>{k.source === "auto" ? "자동(편집본)" : k.source === "ui" ? "판정" : "직접"}</Badge></span>
                     <span className="cats">
                       {cats.map((cat) => (
                         <button key={cat.key} className={cx("cat", k.label === cat.key && "on")} style={{ "--cat": cat.color } as React.CSSProperties} title={`${cat.hint || ""} (${cat.shortcut})`}
@@ -150,9 +151,9 @@ export function EditPoints() {
           {rep ? (
             <>
               <table className="data"><tbody>
-                <tr><td>recall</td><td className="num">{(rep.recall * 100).toFixed(0)}%</td><td className="muted xs">정답 {rep.n_labels}개 중 후보가 잡은 비율 — 1순위</td></tr>
-                <tr><td>coverage</td><td className="num">{(rep.coverage * 100).toFixed(1)}%</td><td className="muted xs">검토해야 할 영상 비율 (목표 ≤ 10%)</td></tr>
-                <tr><td>precision</td><td className="num">{(rep.precision * 100).toFixed(0)}%</td><td className="muted xs">후보 중 정답과 겹친 비율</td></tr>
+                <tr><td data-tip={TIP.recall}>찾은 비율 <span className="muted">(recall)</span></td><td className="num">{(rep.recall * 100).toFixed(0)}%</td><td className="muted xs">정답 {rep.n_labels}개 중 후보가 잡은 비율 (recall) — 가장 중요</td></tr>
+                <tr><td data-tip={TIP.coverage}>검토량 <span className="muted">(coverage)</span></td><td className="num">{(rep.coverage * 100).toFixed(1)}%</td><td className="muted xs">사람이 봐야 할 영상 비율 (coverage, 목표 10% 이하)</td></tr>
+                <tr><td data-tip={TIP.precision}>맞춘 비율 <span className="muted">(precision)</span></td><td className="num">{(rep.precision * 100).toFixed(0)}%</td><td className="muted xs">후보 중 정답과 겹친 비율 (precision)</td></tr>
                 <tr><td>놓침</td><td className="num">{rep.missed.length}</td><td className="muted xs">{rep.missed.slice(0, 6).map((m) => `${fmtTime(m.start)}–${fmtTime(m.end)}`).join(", ")}{rep.missed.length > 6 ? " …" : ""}</td></tr>
               </tbody></table>
               {Object.keys(rep.by_label).length > 0 && (
@@ -163,7 +164,7 @@ export function EditPoints() {
                   })}
                 </div>
               )}
-              <p className="muted xs" style={{ marginTop: 8 }}>범주별 recall 이 낮은 범주가 다음에 보강할 신호를 알려줍니다 (예: 득템이 낮으면 배너·드랍음, 리액션이 낮으면 음량·발화).</p>
+              <p className="muted xs" style={{ marginTop: 8 }}>찾은 비율이 낮은 종류가 다음에 보강할 신호를 알려줍니다 (예: 득템이 낮으면 배너·드랍음, 리액션이 낮으면 음량·발화).</p>
             </>
           ) : <p className="muted small">정답(kept)이 아직 없습니다. 파이프라인에서 최종본 파일을 지정해 align 을 실행하거나, 위에서 직접 구간을 추가하세요.</p>}
           {al && <p className="muted xs" style={{ marginTop: 8 }}>align: 최종본 {al.final} 의 {Math.round((al.matched_frac || 0) * 100)}% 매칭, {al.n_segments}구간{al.unmatched?.length ? ` · 미매칭 ${al.unmatched.length}곳(인트로·카드)` : ""}</p>}
@@ -173,19 +174,19 @@ export function EditPoints() {
 
       <Card title="후보" className={cx(pane === "cands" && "pane-active")} right={
         <span className="row">
-          {(["all", "missed", "undecided"] as const).map((f) => <Button key={f} size="sm" variant="ghost" className={cx(filter === f && "active")} onClick={() => setFilter(f)}>{{ all: "전체", missed: "정답 아님", undecided: "미판정" }[f]}</Button>)}
+          {(["all", "missed", "undecided"] as const).map((f) => <Button key={f} size="sm" variant="ghost" className={cx(filter === f && "active")} onClick={() => setFilter(f)}>{{ all: "전체", missed: "정답과 안 겹침", undecided: "아직 안 봄" }[f]}</Button>)}
         </span>}>
-        <div className="keys" style={{ marginBottom: 6 }}><kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>Enter</kbd> 2초 전부터 재생 · <kbd>K</kbd> kept · <kbd>N</kbd> no</div>
+        <div className="keys" style={{ marginBottom: 6 }}><kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>Enter</kbd> 2초 전부터 재생 · <kbd>K</kbd> 정답으로 · <kbd>N</kbd> 아님</div>
         <ul className="ep-list" onClick={() => setPane("cands")}>
           {rows.map((c, i) => (
             <li key={c.idx} className={cx("ep-row", pane === "cands" && i === focus && "focused", c.kept && "kept", c.decision)} onClick={() => { setFocus(i); setPane("cands"); seek(c.start - 2); }}>
               <span className="t mono">{fmtTime(c.start)}–{fmtTime(c.end)}</span>
               <span className="d muted xs">{Math.round(c.end - c.start)}s</span>
               <span className="s mono">{c.score.toFixed(2)}</span>
-              <span className="tags">{c.kept && <Badge tone="ok" title={c.kept_labels.join(", ")}>{c.kept_labels.map((l) => catOf(l)?.label || l).join("·") || "정답"}</Badge>}{c.decision && <Badge tone={c.decision === "kept" ? "ok" : "bad"}>{c.decision}</Badge>}</span>
+              <span className="tags">{c.kept && <Badge tone="ok" title={c.kept_labels.join(", ")}>{c.kept_labels.map((l) => catOf(l)?.label || l).join("·") || "정답"}</Badge>}{c.decision && <Badge tone={c.decision === "kept" ? "ok" : "bad"}>{c.decision === "kept" ? "정답" : "아님"}</Badge>}</span>
               <span className="btns">
-                <Button size="sm" className={cx(c.decision === "kept" && "on-keep")} onClick={(e) => { e.stopPropagation(); decide(c.idx, "kept"); }}>kept</Button>
-                <Button size="sm" className={cx(c.decision === "no" && "on-no")} onClick={(e) => { e.stopPropagation(); decide(c.idx, "no"); }}>no</Button>
+                <Button size="sm" className={cx(c.decision === "kept" && "on-keep")} onClick={(e) => { e.stopPropagation(); decide(c.idx, "kept"); }} data-tip={TIP.kept}>정답으로</Button>
+                <Button size="sm" className={cx(c.decision === "no" && "on-no")} onClick={(e) => { e.stopPropagation(); decide(c.idx, "no"); }} data-tip={TIP.notKept}>아님</Button>
               </span>
             </li>
           ))}

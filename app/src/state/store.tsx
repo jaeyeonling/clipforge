@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, toErrorInfo } from "../api/client";
 import { useEngineEvents } from "../api/ws";
-import type { EngineEvent, Episode, ErrorInfo, Health, Job, LiveEvent, LiveStatus, LogLine, StageName } from "../api/types";
+import { STAGE_LABEL, type EngineEvent, type Episode, type ErrorInfo, type Health, type Job, type LiveEvent, type LiveStatus, type LogLine, type StageName } from "../api/types";
 
 export interface Toast { id: number; text: string; bad: boolean; action?: { label: string; onClick: () => void } }
 export interface DoneSignal { episode: string; stages: string[]; warnings: { code: string; message: string; hint: string }[]; at: number }
@@ -115,7 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const j = await api.runJob(episode, stages, params);
     setActiveJobId(j.id); setViewJobId(j.id); setRunError(null);
     setLog([]); setLogTitle(`${episode} · ${j.id}`); setLogPath(j.log_path || "");
-    toast(`작업 시작: ${stages.join(" → ")}`);
+    toast(`시작: ${stages.map((s) => STAGE_LABEL[s] || s).join(" → ")}`);
     await refreshJobs();
   }, [refreshJobs, toast]);
 

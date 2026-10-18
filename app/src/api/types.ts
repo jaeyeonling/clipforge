@@ -36,8 +36,18 @@ export interface Health {
 export type StageName = "prep" | "transcribe" | "signals" | "candidates" | "align" | "shorts" | "export" | "xml" | "weaklabel" | "eval";
 export const STAGES: StageName[] = ["prep", "transcribe", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"];
 export const STAGE_LABEL: Record<StageName, string> = {
-  prep: "준비", transcribe: "전사", signals: "신호", candidates: "편집 포인트", align: "정답(정렬)", shorts: "쇼츠 후보", export: "초안 렌더", xml: "Premiere XML", weaklabel: "약한 정답", eval: "평가",
+  prep: "영상 읽기", transcribe: "말을 글로", signals: "순간 신호 찾기", candidates: "편집 포인트 고르기", align: "편집본과 맞춰 정답 만들기",
+  shorts: "쇼츠 후보 고르기", export: "세로 초안 만들기", xml: "Premiere 파일 만들기", weaklabel: "제목으로 정답 추정", eval: "점수 매기기",
 };
+/** 단계의 기술 이름 설명 (고급 설정에서 작게) */
+export const STAGE_TECH: Record<StageName, string> = {
+  prep: "prep · 오디오·프레임·크롭 추출", transcribe: "transcribe · Whisper", signals: "signals · 배너 OCR·채팅·음량·줌", candidates: "candidates",
+  align: "align · 오디오 지문", shorts: "shorts · 순간 순위", export: "export · NVENC 렌더", xml: "xml · xmeml", weaklabel: "weaklabel", eval: "eval · hit@K / recall",
+};
+export const ANCHOR_LABEL: Record<string, string> = { item: "득템", chat: "채팅", zoom: "줌", note: "메모", speech: "발화", loud: "음량", motion: "움직임", cut: "컷" };
+export const VARIANT_LABEL: Record<string, string> = { story: "서사형 (30~45초)", short: "한방형 (15~20초)" };
+export const GRADE_LABEL: Record<string, string> = { set: "세트", unique: "유니크", rare: "희귀", magic: "매직" };
+export const DECISION_LABEL: Record<string, string> = { keep: "쓸 만함", no: "안 씀", kept: "정답", "": "" };
 export type EpisodeKind = "edited" | "original";
 export const KIND_LABEL: Record<EpisodeKind, string> = { edited: "편집본 → 쇼츠", original: "원본 → 편집 포인트" };
 /** 회차 종류별 기본 단계 (jobs.DEFAULT_STAGES 와 동일) */

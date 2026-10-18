@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import { REASONS, type Candidate, type EpisodePaths } from "../api/types";
+import { ANCHOR_LABEL, REASONS, VARIANT_LABEL, type Candidate, type EpisodePaths } from "../api/types";
 import { inShell, shell } from "../shell";
+import { TIP } from "../api/tips";
 import { Button, Empty, Spinner, cx, fmtTime } from "../components/ui";
 import { useApp } from "../state/store";
 
@@ -39,11 +40,11 @@ export function Candidates() {
   const decide = useCallback(async (c: Candidate, label: "keep" | "no", reason: string) => {
     if (!selected) return;
     const next = c.decision === label ? "" : label;              // 같은 버튼 다시 누르면 해제
-    if (next === "no" && !reason) { toast("no 는 사유를 골라 주세요 (N 다음 1~6)", true); return; }
+    if (next === "no" && !reason) { toast("안 쓰는 이유를 골라 주세요 (N 다음 1~6)", true); return; }
     setBusy(keyOf(c));
     try {
       await api.decide(selected.id, c, next, next === "no" ? reason : "");
-      toast(next ? `${next} 저장됨${next === "no" ? " · " + reason : ""}` : "판정 해제");
+      toast(next ? `${next === "keep" ? "쓸 만함" : "안 씀"} 저장됨${next === "no" ? " · " + reason : ""}` : "판정 취소");
       setItems((cur) => cur?.map((x) => (keyOf(x) === keyOf(c) ? { ...x, decision: next, reason: next === "no" ? reason : "" } : x)) ?? cur);
     } catch (e) { fail(e); } finally { setBusy(null); }
   }, [selected, toast, fail]);
@@ -84,10 +85,10 @@ export function Candidates() {
 
   if (!selected) return <Empty title="회차를 선택하세요" />;
   if (items === null) return <div className="row"><Spinner /> <span className="muted">후보 읽는 중…</span></div>;
-  if (!items.length) return <Empty title="후보가 없습니다">파이프라인 탭에서 실행하면 순간 순위가 여기 뜹니다.</Empty>;
+  if (!items.length) return <Empty title="아직 초안이 없습니다">실행 탭에서 '쇼츠 초안 만들기'를 누르면 세로 초안이 순위대로 여기 뜹니다.</Empty>;
   const outputs = paths && (
     <div className="outputs">
-      <span className="muted xs">결과물</span>
+      <span className="muted xs" data-tip={TIP.outputs}>결과물</span>
       <Button size="sm" onClick={() => open(paths.shorts_dir.path)} disabled={!paths.shorts_dir.exists} title={paths.shorts_dir.path}>초안 폴더{paths.shorts_count ? ` (${paths.shorts_count})` : ""}</Button>
       <Button size="sm" onClick={() => open(paths.premiere_shorts.exists ? paths.premiere_shorts.path : paths.premiere_dir.path)} disabled={!paths.premiere_dir.exists} title={paths.premiere_shorts.path}>Premiere XML</Button>
       <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>
@@ -104,16 +105,16 @@ export function Candidates() {
       <div className="filters">
         {(["all", "undecided", "keep", "no"] as Filter[]).map((f) => (
           <Button key={f} variant="ghost" size="sm" className={cx(filter === f && "active")} onClick={() => { setFilter(f); setFocus(0); }}>
-            {{ all: "전체", undecided: "미판정", keep: "keep", no: "no" }[f]} {counts[f]}
+            {{ all: "전체", undecided: "아직 안 봄", keep: "쓸 만함", no: "안 씀" }[f]} {counts[f]}
           </Button>
         ))}
         <span className="keys" title="키보드 단축키">
-          <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>K</kbd> keep · <kbd>N</kbd>+<kbd>1~6</kbd> no 사유 · <kbd>Space</kbd> 재생 · <kbd>C</kbd> 비교 · <kbd>Esc</kbd> 닫기
+          <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>K</kbd> 쓸 만함 · <kbd>N</kbd>+<kbd>1~6</kbd> 안 씀(사유) · <kbd>Space</kbd> 재생 · <kbd>C</kbd> 비교 · <kbd>Esc</kbd> 닫기
         </span>
       </div>
       {reasonPrompt && (
         <div className="reason-prompt">
-          <b>no 사유</b> {REASONS.map((r, i) => <button key={r} className="btn sm" onClick={() => { setReasonPrompt(false); decide(shown[focus], "no", r); }}><kbd>{i + 1}</kbd> {r}</button>)}
+          <b>안 쓰는 이유</b> {REASONS.map((r, i) => <button key={r} className="btn sm" onClick={() => { setReasonPrompt(false); decide(shown[focus], "no", r); }}><kbd>{i + 1}</kbd> {r}</button>)}
           <Button size="sm" variant="ghost" onClick={() => setReasonPrompt(false)}>취소 (Esc)</Button>
         </div>
       )}
@@ -142,16 +143,16 @@ function CandidateCard({ c, focused, inCompare, busy, onFocus, onDecide, onCompa
     <article className={cx("cand", c.decision, focused && "focused", inCompare && "in-compare")} data-key={keyOf(c)} onClick={onFocus} tabIndex={-1}>
       {c.media_url ? <video ref={videoRef} src={c.media_url} controls preload="metadata" playsInline /> : <div className="novideo">초안 없음 (export 단계 미실행)</div>}
       <div className="body">
-        <div className="rank"><span className="n">#{c.rank ?? "-"}</span><span>{c.variant}</span><span className="muted small">{fmtTime(c.start)}–{fmtTime(c.end)} · {len}s</span>
+        <div className="rank"><span className="n" data-tip="순위. 점수가 높은 순서.">#{c.rank ?? "-"}</span><span data-tip={c.variant === "story" ? TIP.variantStory : TIP.variantShort}>{(VARIANT_LABEL[c.variant] || c.variant).split(" ")[0]}</span><span className="muted small">{fmtTime(c.start)}–{fmtTime(c.end)} · {len}초</span>
           {c.gt && c.gt.length > 0 && <span className="badge ok" title={`친구 쇼츠·확정본과 겹침: ${c.gt.join(", ")}`}>정답</span>}
-          <button className={cx("cmp", inCompare && "on")} title="비교에 담기 (C)" onClick={(e) => { e.stopPropagation(); onCompare(); }}>⇄</button></div>
+          <button className={cx("cmp", inCompare && "on")} data-tip={TIP.compare} onClick={(e) => { e.stopPropagation(); onCompare(); }}>⇄</button></div>
         {c.hook_lines?.length ? <div className="hook">{c.hook_lines.join(" / ")}</div> : null}
-        <div className="meta">점수 {Number(c.score).toFixed(2)} · 앵커 {fmtTime(c.anchor)} {(ev.anchor_kinds || []).join("+")} · 컷 {ev.n_cuts ?? "-"} · 자막 {c.subtitle_cues ?? "-"}</div>
+        <div className="meta"><span data-tip={TIP.score}>점수 {Number(c.score).toFixed(2)}</span> · <span data-tip={TIP.anchor}>핵심 순간 {fmtTime(c.anchor)} {(ev.anchor_kinds || []).map((k) => ANCHOR_LABEL[k] || k).join("·")}</span> · <span data-tip={TIP.cuts}>컷 {ev.n_cuts ?? "-"}개</span> · <span data-tip={TIP.subs}>자막 {c.subtitle_cues ?? "-"}줄</span></div>
         <div className="dec">
-          <Button size="sm" className={cx(c.decision === "keep" && "on-keep")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "keep", reason); }} title="쓸 만함 (K)">keep</Button>
-          <Button size="sm" className={cx(c.decision === "no" && "on-no")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "no", reason); }} title="안 씀 (N → 사유)">no</Button>
-          <select className="field sm" value={reason} onChange={(e) => setReason(e.target.value)} onClick={(e) => e.stopPropagation()} title="no 사유">
-            <option value="">사유</option>{REASONS.map((r, i) => <option key={r} value={r}>{i + 1} {r}</option>)}
+          <Button size="sm" className={cx(c.decision === "keep" && "on-keep")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "keep", reason); }} data-tip={TIP.keep}>쓸 만함</Button>
+          <Button size="sm" className={cx(c.decision === "no" && "on-no")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "no", reason); }} data-tip={TIP.no}>안 씀</Button>
+          <select className="field sm" value={reason} onChange={(e) => setReason(e.target.value)} onClick={(e) => e.stopPropagation()} title="안 쓰는 이유">
+            <option value="">이유</option>{REASONS.map((r, i) => <option key={r} value={r}>{i + 1} {r}</option>)}
           </select>
         </div>
       </div>
@@ -166,7 +167,7 @@ function ComparePanel({ items, onDecide, onClose, onRemove }: { items: Candidate
   return (
     <section className="compare">
       <div className="compare-head">
-        <b>비교</b><span className="muted small">{items.length < 2 ? "하나 더 담으면 나란히 봅니다 (카드의 ⇄ 또는 C)" : "같은 순간의 다른 창이거나 중복인지 확인하세요"}</span>
+        <b>비교</b><span className="muted small">{items.length < 2 ? "하나 더 담으면 나란히 봅니다 (카드의 ⇄ 또는 C)" : "같은 순간을 두 번 자른 중복인지 확인하세요"}</span>
         <span style={{ flex: 1 }} />
         <Button size="sm" onClick={playAll}>둘 다 처음부터</Button><Button size="sm" variant="ghost" onClick={pauseAll}>정지</Button><Button size="sm" variant="ghost" onClick={onClose}>닫기 (Esc)</Button>
       </div>
@@ -177,8 +178,8 @@ function ComparePanel({ items, onDecide, onClose, onRemove }: { items: Candidate
             <div className="row between" style={{ marginTop: 6 }}>
               <span className="small"><b>#{c.rank}</b> {c.variant} · {fmtTime(c.start)}–{fmtTime(c.end)} · {Math.round(c.end - c.start)}s · 점수 {Number(c.score).toFixed(2)}</span>
               <span className="row">
-                <Button size="sm" className={cx(c.decision === "keep" && "on-keep")} onClick={() => onDecide(c, "keep", "")}>keep</Button>
-                <Button size="sm" className={cx(c.decision === "no" && "on-no")} onClick={() => onDecide(c, "no", c.reason || "중복")} title="사유: 중복">no (중복)</Button>
+                <Button size="sm" className={cx(c.decision === "keep" && "on-keep")} onClick={() => onDecide(c, "keep", "")}>쓸 만함</Button>
+                <Button size="sm" className={cx(c.decision === "no" && "on-no")} onClick={() => onDecide(c, "no", c.reason || "중복")} title="이유: 중복">안 씀 (중복)</Button>
                 <Button size="sm" variant="ghost" onClick={() => onRemove(c)}>빼기</Button>
               </span>
             </div>

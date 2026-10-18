@@ -52,11 +52,11 @@ export function Toasts({ items }: { items: { id: number; text: string; bad: bool
   );
 }
 
-export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { key: T; label: string; count?: number | string }[] }) {
+export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { key: T; label: string; count?: number | string; tip?: string }[] }) {
   return (
     <nav className="tabs" role="tablist">
       {items.map((it) => (
-        <button key={it.key} role="tab" aria-selected={value === it.key} className={cx("tab", value === it.key && "active")} onClick={() => onChange(it.key)}>
+        <button key={it.key} role="tab" aria-selected={value === it.key} className={cx("tab", value === it.key && "active")} onClick={() => onChange(it.key)} data-tip={it.tip}>
           {it.label}{it.count != null && <span className="count">{it.count}</span>}
         </button>
       ))}

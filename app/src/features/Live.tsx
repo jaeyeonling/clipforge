@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { LiveEvent, LiveStatus } from "../api/types";
 import { Badge, Button, Card, Empty, cx, fmtTime } from "../components/ui";
 import { useApp } from "../state/store";
+import { TIP } from "../api/tips";
 
 const SOURCES = [{ key: "screen", label: "화면 캡처 (방송 중)" }, { key: "frames", label: "회차 프레임 재생 (테스트)" }, { key: "video", label: "영상 파일 재생 (테스트)" }];
 
@@ -65,21 +66,21 @@ export function Live() {
       <div>
         <Card title="캡처 · OBS" right={active ? <Badge tone="running">실행 중</Badge> : <Badge>정지</Badge>}>
           <div className="row" style={{ gap: 10 }}>
-            <label className="check">소스
+            <label className="check" data-tip={TIP.liveSource}>화면 가져오기
               <select className="field sm" value={source} onChange={(e) => setSource(e.target.value)} disabled={active}>{SOURCES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select>
             </label>
             {source === "video" && <input className="field sm" style={{ flex: 1, minWidth: 220 }} placeholder="영상 파일 경로" value={videoPath} onChange={(e) => setVideoPath(e.target.value)} disabled={active} />}
             {source === "frames" && <span className="muted xs">선택한 회차 {selected?.id || "-"} 의 1fps 프레임을 실시간처럼 재생</span>}
-            <label className="check">주기(초) <input className="field sm num" type="number" step={0.5} min={0.5} max={5} value={interval} onChange={(e) => setInterval_(Number(e.target.value) || 1)} disabled={active} /></label>
+            <label className="check" data-tip={TIP.liveInterval}>확인 주기(초) <input className="field sm num" type="number" step={0.5} min={0.5} max={5} value={interval} onChange={(e) => setInterval_(Number(e.target.value) || 1)} disabled={active} /></label>
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
-            <label className={cx("check", approval && "on")} title="끄면 감지한 아이템이 바로 배너로 나갑니다 — 신뢰가 쌓인 뒤에"><input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={active} /> 승인 모드</label>
+            <label className={cx("check", approval && "on")} data-tip={TIP.liveApproval}><input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={active} /> 물어보고 넣기 (승인 모드)</label>
             {(["set", "unique", "rare"] as const).map((g) => (
               <label key={g} className={cx("check", grades.includes(g) && "on")}><input type="checkbox" checked={grades.includes(g)} disabled={active} onChange={(e) => setGrades((cur) => (e.target.checked ? [...cur, g] : cur.filter((x) => x !== g)))} /> {{ set: "세트(초록)", unique: "유니크(금)", rare: "희귀(노랑)" }[g]}</label>
             ))}
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
-            <label className={cx("check", obsOn && "on")}><input type="checkbox" checked={obsOn} onChange={(e) => setObsOn(e.target.checked)} disabled={active} /> OBS 연동</label>
+            <label className={cx("check", obsOn && "on")} data-tip={TIP.liveObs}><input type="checkbox" checked={obsOn} onChange={(e) => setObsOn(e.target.checked)} disabled={active} /> OBS 연동</label>
             {obsOn && (
               <>
                 <input className="field sm" style={{ width: 190 }} value={obsUrl} onChange={(e) => setObsUrl(e.target.value)} disabled={active} title="OBS → 도구 → WebSocket 서버 설정" />
@@ -114,8 +115,8 @@ export function Live() {
               {pending.map((s) => (
                 <li key={s.id} className={cx("sug", s.grade)}>
                   <div className="grow">
-                    <b>{s.head || s.text}</b> <Badge tone={s.grade === "set" ? "ok" : s.grade === "unique" ? "warn" : ""}>{s.grade}</Badge>
-                    <div className="muted xs">OCR "{s.text}" {Math.round(s.score * 100)}% · {new Date(s.t_wall * 1000).toLocaleTimeString("ko-KR")}{s.t_rec != null ? ` · 녹화 ${fmtTime(s.t_rec)}` : ""}</div>
+                    <b>{s.head || s.text}</b> <Badge tone={s.grade === "set" ? "ok" : s.grade === "unique" ? "warn" : ""}>{({ set: "세트", unique: "유니크", rare: "희귀", magic: "매직" } as Record<string, string>)[s.grade] || s.grade}</Badge>
+                    <div className="muted xs">화면에서 읽은 글자 "{s.text}" (확신 {Math.round(s.score * 100)}%) · {new Date(s.t_wall * 1000).toLocaleTimeString("ko-KR")}{s.t_rec != null ? ` · 녹화 ${fmtTime(s.t_rec)}` : ""}</div>
                   </div>
                   <input className="field sm" style={{ width: 150 }} placeholder={s.head || s.text} value={editText[s.id] ?? ""} onChange={(e) => setEditText((m) => ({ ...m, [s.id]: e.target.value }))} title="배너에 넣을 이름을 고쳐 쓸 수 있습니다 (예: 기드참(매찬34))" onKeyDown={(e) => { if (e.key === "Enter") approve(s.id, editText[s.id]); }} />
                   <Button size="sm" variant="primary" onClick={() => approve(s.id, editText[s.id])}>배너에 추가</Button>
@@ -138,13 +139,13 @@ export function Live() {
         <Card title="북마크" right={<span className="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd> 전역 단축키 (데스크톱 앱)</span>}>
           <div className="row">
             <input className="field sm" style={{ flex: 1 }} placeholder="메모 (선택)" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") mark(); }} disabled={!active} />
-            <Button size="sm" variant="primary" onClick={mark} disabled={!active}>지금 북마크</Button>
+            <Button size="sm" variant="primary" onClick={mark} disabled={!active} data-tip={TIP.bookmark}>지금 북마크</Button>
           </div>
           <ul className="bm-list">
             {(st?.bookmarks || []).slice().reverse().slice(0, 12).map((b) => (
               <li key={b.id}><span className="mono xs">{new Date(b.t_wall * 1000).toLocaleTimeString("ko-KR")}{b.t_rec != null ? ` · 녹화 ${fmtTime(b.t_rec)}` : ""}</span><Badge tone={b.kind === "drop" ? "ok" : b.kind === "chat" ? "accent" : ""}>{b.kind}</Badge><span className="small">{b.note}</span></li>
             ))}
-            {!st?.bookmarks?.length && <li className="muted small">방송 후 Phase 2 의 앵커가 됩니다. 득템 승인·채팅 폭주·단축키가 북마크를 만듭니다.</li>}
+            {!st?.bookmarks?.length && <li className="muted small">방송이 끝난 뒤 원본에서 편집 포인트를 찾을 때 이 시각들을 먼저 봅니다. 득템 승인·채팅 폭주·단축키가 북마크를 만듭니다.</li>}
           </ul>
         </Card>
         <Card title="이벤트">

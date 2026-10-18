@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { STAGE_LABEL, type StageName } from "./api/types";
+import { TIP } from "./api/tips";
 import { Progress, Tabs, Toasts } from "./components/ui";
 import { Calibration } from "./features/Calibration";
 import { Candidates } from "./features/Candidates";
@@ -53,20 +55,20 @@ function Main() {
       <UpdateBanner onSettings={() => setTab("settings")} />
       {selected && tab !== "help" && tab !== "live" && tab !== "settings" && <Stepper onTab={setTab} />}
       <Tabs<Tab> value={tab} onChange={setTab} items={[
-        { key: "pipeline", label: "실행" },
+        { key: "pipeline", label: "실행", tip: TIP.tabRun },
         ...(selected?.kind === "original"
-          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined }]
-          : [{ key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
-        { key: "calibration", label: "화면 영역" },
-        { key: "metrics", label: "기록" },
-        { key: "live", label: "라이브", count: liveStatus?.active ? "●" : undefined },
-        { key: "settings", label: "설정" },
-        { key: "help", label: "도움말" },
+          ? [{ key: "editpoints" as Tab, label: "편집 포인트", tip: TIP.tabEdit }, { key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined, tip: TIP.tabShorts }]
+          : [{ key: "candidates" as Tab, label: "쇼츠 초안", count: candCount || undefined, tip: TIP.tabShorts }, { key: "editpoints" as Tab, label: "편집 포인트", tip: TIP.tabEdit }]),
+        { key: "calibration", label: "화면 영역", tip: TIP.tabCalib },
+        { key: "metrics", label: "기록", tip: TIP.tabRecord },
+        { key: "live", label: "라이브", count: liveStatus?.active ? "●" : undefined, tip: TIP.tabLive },
+        { key: "settings", label: "설정", tip: TIP.tabSettings },
+        { key: "help", label: "도움말", tip: TIP.tabHelp },
       ]} />
       <div className="content">
         {!episodes.length && tab !== "help" && tab !== "settings" && tab !== "live" && <Welcome onTab={setTab} />}
         {running && tab !== "pipeline" && (
-          <div className="ticker"><span><b>{activeJob.episode}</b> · {activeJob.stage} {Math.round(activeJob.pct)}% {activeJob.message}</span><Progress pct={activeJob.pct} /></div>
+          <div className="ticker"><span><b>{activeJob.episode}</b> · {STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage} {Math.round(activeJob.pct)}% {activeJob.message}</span><Progress pct={activeJob.pct} /></div>
         )}
         <div hidden={tab !== "pipeline" || !episodes.length}><Pipeline /></div>
         {tab === "candidates" && episodes.length > 0 && <Candidates />}

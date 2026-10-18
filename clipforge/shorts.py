@@ -226,8 +226,33 @@ def _trim_quote(text: str, limit: int = 20) -> str:
     return t.rstrip(PUNCT) + "…"
 
 
-def suggest_hook(c: ShortCandidate, transcript: dict | None, kw_events: Segments | None, lexicon=None) -> list[str]:
-    """[인용 대사, 아이템 맥락]. 인용 = 창 안(앵커−3s ~ 끝)에서 키워드 가중치가 가장 큰 세그먼트, 없으면 앵커 직후 첫 세그먼트."""
+def _load_chat_keywords() -> dict:
+    import yaml
+    p = Path(__file__).resolve().parent.parent / "games" / "common.yaml"
+    return ((yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("chat_keywords") or {}) if p.exists() else {}
+
+
+def best_chat_quote(c: ShortCandidate, chat: Segments | None, pre: float = 8.0) -> tuple[str, float]:
+    """창 [anchor−pre, end] 안의 채팅 중 반응 어휘 가중치가 가장 큰 메시지 (닉네임 제외). (텍스트, 점수)"""
+    if not chat:
+        return "", 0.0
+    kws = _load_chat_keywords()
+    best, best_s = "", 0.0
+    for m in chat.items:
+        if not (c.anchor - pre <= m.start <= c.end):
+            continue
+        text = m.meta.get("text", "")
+        sc = sum(float(ent.get("weight", 0.3)) for ent in kws.values() if any(w in text for w in ent.get("words", [])))
+        sc += 0.2 if m.start >= c.anchor else 0.0
+        sc -= 0.01 * max(0, len(text) - 20)
+        if sc > best_s and 2 <= len(text) <= 40:
+            best, best_s = text, sc
+    return best, best_s
+
+
+def suggest_hook(c: ShortCandidate, transcript: dict | None, kw_events: Segments | None, lexicon=None,
+                 chat: Segments | None = None) -> list[str]:
+    """[인용, 아이템 맥락]. 인용 = 줌/채팅 앵커면 채팅 원문 우선, 아니면 전사 대사. 둘 다 있으면 점수 높은 쪽."""
     quote = ""
     if transcript:
         segs = [sg for sg in transcript.get("segments", []) if sg["end"] >= c.anchor - 3.0 and sg["start"] <= c.end and sg["text"].strip()]
@@ -239,6 +264,16 @@ def suggest_hook(c: ShortCandidate, transcript: dict | None, kw_events: Segments
         if segs:
             best = max(segs, key=score)
             quote = _trim_quote(best["text"])
+            quote_score = score(best)
+        else:
+            quote_score = 0.0
+    else:
+        quote_score = 0.0
+    chat_q, chat_s = best_chat_quote(c, chat)
+    kinds = set(c.evidence.get("anchor_kinds", []))
+    if chat_q and (kinds & {"zoom", "chat"} or chat_s >= 1.0 or not quote):
+        if chat_s >= 0.6 or not quote:
+            quote = "“" + _trim_quote(chat_q, 22) + "”"
     ctx = ""
     heads = []
     for tok in c.evidence.get("items", []):
@@ -324,7 +359,7 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
     except Exception:
         lex = None
     for c in final:
-        c.hook_lines = suggest_hook(c, tr, events.get("speech_keyword"), lex)
+        c.hook_lines = suggest_hook(c, tr, events.get("speech_keyword"), lex, events.get("chat_text"))
     return final
 
 

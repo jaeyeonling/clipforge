@@ -11,14 +11,16 @@ const path = require("node:path");
 const WebSocket = require("ws");
 const { Engine } = require("./engine");
 const C = require("./components");
+const RELEASE = require("./release.config");
 
 const SMOKE = process.argv.includes("--smoke");
 const AUTO_SETUP = process.argv.includes("--auto-setup");
 const AUTO_UPDATE = process.argv.includes("--auto-update");   // 시작 직후 업데이트를 확인해 있으면 바로 적용 (자동 점검용)   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
 const ASSETS = path.join(__dirname, "assets");
-const DEFAULT_UPDATE_URL = "https://updates.example.invalid/clipforge/stable";   // 호스팅 결정 뒤 교체 (R2 추천)
+const DEFAULT_UPDATE_URL = RELEASE.updateUrl;      // GitHub Releases: <owner>/<repo> 의 최신 릴리스 자산 (release.config.js)
 let win = null, tray = null, engine = null, ws = null, quitting = false, logStream = null;
-let pendingUpdates = [];           // plan() 결과 중 아직 적용 안 한 것
+let pendingUpdates = [];           // plan() 결과 중 아직 적용 안 한 것 (층 A·B)
+let shellUpdate = null;            // electron-updater 가 내려받아 둔 껍데기 새 버전 (층 C) {version}
 let setupState = null;             // 첫 실행 설치 진행 상태
 let jobRunning = false;
 
@@ -127,6 +129,7 @@ function updateTrayMenu(status) {
   if (status != null) trayStatus = status;
   if (!tray) return;
   const upd = pendingUpdates.length ? [{ label: `업데이트 적용 (${pendingUpdates.map((u) => u.name).join(", ")})`, enabled: !jobRunning, click: () => applyUpdates().catch((e) => log(`update: ${e.message}`)) }] : [];
+  if (shellUpdate) upd.push({ label: `앱 ${shellUpdate.version} 설치하고 다시 시작`, enabled: !jobRunning, click: () => installShellUpdate() });
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "clipforge 열기", click: () => showWindow() },
     { label: trayStatus, enabled: false },
@@ -200,7 +203,8 @@ function runSetup(cfg) {
         sendSetup({ type: "plan", items, desc: gpu ? "NVIDIA GPU 가 감지되어 GPU 가속을 함께 받습니다." : "NVIDIA GPU 가 없어 GPU 가속은 선택에서 뺐습니다 (CPU 로도 동작, 전사만 느립니다)." });
       } catch (e) {
         log(`setup: manifest 실패 ${e.message}`);
-        sendSetup({ type: "plan", items: [], title: "구성요소 목록을 받지 못했습니다", desc: `${e.message}\n서버: ${updateUrl()}\n네트워크를 확인한 뒤 다시 시도하세요.` });
+        const tokenHint = RELEASE.isPrivate && !C.githubToken() ? "\n비공개 저장소라 토큰이 필요합니다: %LOCALAPPDATA%\\clipforge\\github-token.txt 에 읽기 전용 토큰을 넣고 다시 시도하세요." : "";
+        sendSetup({ type: "plan", items: [], title: "구성요소 목록을 받지 못했습니다", desc: `${e.message}\n서버: ${updateUrl()}${tokenHint}\n네트워크를 확인한 뒤 다시 시도하세요.` });
       }
     };
     ipcMain.removeHandler("setup:ready"); ipcMain.removeHandler("setup:start"); ipcMain.removeHandler("setup:cancel");
@@ -225,6 +229,41 @@ function runSetup(cfg) {
     win.loadURL(setupHtml());
     showWindow();
   });
+}
+
+// ---------- 껍데기 업데이트 (층 C, electron-updater · GitHub Releases latest.yml) ----------
+let autoUpdater = null;
+function setupShellUpdater() {
+  if (!app.isPackaged) { log("shell-update: 개발 모드 — 건너뜀"); return; }
+  try { ({ autoUpdater } = require("electron-updater")); } catch (e) { log(`shell-update: electron-updater 없음 ${e.message}`); return; }
+  autoUpdater.logger = { info: (m) => log(`shell-update: ${m}`), warn: (m) => log(`shell-update: ${m}`), error: (m) => log(`shell-update: ${m}`), debug: () => {} };
+  autoUpdater.autoDownload = true;              // 껍데기는 ~90MB, 조용히 받아 둔다
+  autoUpdater.autoInstallOnAppQuit = true;      // 종료 때 설치. 강제 재시작은 하지 않는다 (방송 방해 금지)
+  autoUpdater.allowDowngrade = false;
+  const token = C.githubToken();
+  if (RELEASE.isPrivate) {
+    if (!token) { log("shell-update: private 저장소인데 토큰이 없습니다 — 껍데기 업데이트 비활성 (github-token.txt)"); autoUpdater = null; return; }
+    autoUpdater.setFeedURL({ provider: "github", owner: RELEASE.owner, repo: RELEASE.repo, private: true, token });
+  }
+  autoUpdater.on("update-available", (info) => log(`shell-update: available ${info.version}`));
+  autoUpdater.on("update-not-available", () => log("shell-update: 최신"));
+  autoUpdater.on("error", (e) => log(`shell-update: error ${e?.message || e}`));
+  autoUpdater.on("update-downloaded", (info) => {
+    shellUpdate = { version: info.version };
+    updateTrayMenu(null);
+    notify(`앱 ${info.version} 준비됨`, "다음에 종료할 때 자동으로 설치됩니다. 지금 설치하려면 트레이 메뉴에서 선택하세요.");
+  });
+}
+async function checkShellUpdate() {
+  if (!autoUpdater) return null;
+  try { const r = await autoUpdater.checkForUpdates(); return r?.updateInfo?.version || null; } catch (e) { log(`shell-update: check 실패 ${e.message}`); return null; }
+}
+function installShellUpdate() {
+  if (!autoUpdater || !shellUpdate || jobRunning) return;
+  quitting = true;
+  try { ws?.close(); } catch { /* ignore */ }
+  engine?.stop();
+  autoUpdater.quitAndInstall(false, true);
 }
 
 // ---------- 앱 내 업데이트 (층 A·B) ----------
@@ -265,7 +304,7 @@ async function applyUpdates() {
   updateTrayMenu("대기 중");
 }
 
-ipcMain.handle("update:check", () => checkUpdates(true));
+ipcMain.handle("update:check", async () => { const a = await checkUpdates(true); const c = await checkShellUpdate(); return { components: a, shell: c }; });
 ipcMain.handle("update:apply", () => applyUpdates());
 ipcMain.handle("shell:openLogs", () => shell.openPath(app.getPath("userData")));
 
@@ -295,8 +334,10 @@ async function boot() {
       if (upd?.length) { await applyUpdates(); log(`auto-update: applied; VERSION=${JSON.stringify(C.readLocalVersion(engine.cfg.runtimeDir))}`); }
     }
     if (engine.cfg.mode === "runtime") {
-      setTimeout(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 10_000);
-      setInterval(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 6 * 3600_000);
+      setupShellUpdater();
+      const tick = () => { checkUpdates().catch((e) => log(`update: ${e.message}`)); checkShellUpdate(); };
+      setTimeout(tick, 10_000);
+      setInterval(tick, 6 * 3600_000);
     }
     if (SMOKE) { log("smoke: ok — 5초 뒤 종료"); setTimeout(() => quitApp(), 5000); }
   } catch (e) {

@@ -52,5 +52,7 @@ module.exports = {
     differentialPackage: true,               // 껍데기(층 C) 차등 업데이트용 blockmap
   },
   compression: process.env.CLIPFORGE_COMPRESSION || "normal",
-  publish: null,                             // 자동 업데이트 서버는 미정 (R2 추천) — 정해지면 generic provider
+  // 껍데기(층 C) 업데이트: electron-updater 가 GitHub Releases 의 latest.yml 을 본다. 빌드 때 app-update.yml 로 들어간다.
+  // 실제 업로드는 scripts/publish_github.py(gh CLI)가 한다 — electron-builder 의 --publish 는 쓰지 않는다(GH_TOKEN 불필요).
+  publish: { provider: "github", owner: require("./release.config").owner, repo: require("./release.config").repo, releaseType: "release" },
 };

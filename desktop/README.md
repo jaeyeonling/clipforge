@@ -22,7 +22,18 @@ set CLIPFORGE_UPDATE_URL=file:///C:/Users/jaeye/source/clipforge/release-test
 npm start                                        # 첫 실행 설치 화면 → 구성요소 선택 → 설치 → 엔진 시작
 npx electron . --auto-setup --smoke              # 같은 흐름을 클릭 없이 끝까지 (자동 점검)
 ```
-업데이트 주소 우선순위: `CLIPFORGE_UPDATE_URL` → `%LOCALAPPDATA%\clipforge\update-url.txt` → main.js 의 DEFAULT_UPDATE_URL(호스팅 결정 뒤 교체).
+업데이트 주소 우선순위: `CLIPFORGE_UPDATE_URL` → `%LOCALAPPDATA%\clipforge\update-url.txt` → `release.config.js`(GitHub Releases `jaeyeonling/clipforge`, 최신 릴리스).
+
+## GitHub Releases 배포 (private 저장소)
+```
+set PATH=C:\Users\jaeye\tools\gh\bin;%PATH%
+gh auth login                                    # 한 번 (브라우저)
+python scripts\publish_github.py runtime         # 런타임 릴리스 runtime-YYYY.MM (구성요소 zip 4개, 처음 한 번)
+python scripts\publish_github.py app             # 앱 릴리스 v<ver>: 화면 빌드 → 엔진 코드 zip·latest.json → NSIS → 업로드
+python scripts\publish_github.py app --dry-run   # 올리지 않고 만들 것만 확인
+```
+private 저장소라 **사용자 PC 에 읽기 전용 토큰**이 필요하다: GitHub → Settings → Developer settings → Fine-grained tokens → Repository access: clipforge, Permissions: Contents Read-only →
+토큰을 `%LOCALAPPDATA%\clipforge\github-token.txt` 에 저장(한 줄). 없으면 첫 실행 화면이 안내한다. 저장소를 public 으로 바꾸면 토큰이 필요 없다.
 
 ## 파일
 - `main.js` 창·트레이·알림·첫 실행 설치·업데이트 적용, `engine.js` 엔진 사이드카(모드: runtime/dist/venv), `components.js` 구성요소 다운로드·설치·롤백, `preload.js` IPC 브리지, `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).

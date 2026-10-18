@@ -257,15 +257,18 @@ def zip_paths(out: Path, rel_paths: list[str], dst: Path, exclude: list[str] | N
                         z.write(f, f.relative_to(out).as_posix())
 
 
-def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str) -> None:
-    """engine-code-<ver>.zip (+ 구성요소 zip) 과 latest.json. 서버에는 이 폴더를 그대로 올린다."""
+def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str, components_url: str | None = None) -> None:
+    """engine-code-<ver>.zip (+ 구성요소 zip) 과 latest.json.
+    base_url       = 앱 릴리스 자산 주소 (engine-code zip·latest.json. GitHub: .../releases/latest/download)
+    components_url = 구성요소 zip 주소 (드물게 갱신되는 런타임 릴리스. GitHub: .../releases/download/runtime-YYYY.MM). 없으면 base_url"""
     sys.path.insert(0, str(ROOT))
     from clipforge import __version__
     rel_dir.mkdir(parents=True, exist_ok=True)
     ver = json.loads((out / "VERSION.json").read_text(encoding="utf-8"))
     comp_ver = ver.get("component_versions") or {"python-base": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "cuda": "12.9+cudnn9.27",
                                                   "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
-    entry = lambda p, v, notes="": {"version": v, "url": f"{base_url.rstrip('/')}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size, **({"notes": notes} if notes else {})}
+    comp_base = (components_url or base_url).rstrip("/")
+    entry = lambda p, v, base=base_url.rstrip("/"): {"version": v, "url": f"{base}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size}
     code_zip = rel_dir / f"engine-code-{__version__}.zip"
     zip_paths(out, CODE_PATHS, code_zip)
     manifest = {"published": time.strftime("%Y-%m-%dT%H:%M:%S"), "shell": {"version": __version__, "min_engine_code": __version__},
@@ -278,13 +281,13 @@ def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str)
             log(f"release: {zp.name} {human(zp.stat().st_size)}")
         info = {**COMPONENT_INFO[name], "paths": component_paths(out, name) if name != "python-base" else ["<root files>", "Lib"]}
         if zp.exists():
-            manifest["components"][name] = {**entry(zp, comp_ver[name]), **info}
+            manifest["components"][name] = {**entry(zp, comp_ver[name], comp_base), **info}
         else:
             manifest["components"][name] = {"version": comp_ver[name], **info}          # zip 없이 버전만 (서버에 이미 있는 경우)
     (rel_dir / "latest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     ver["component_versions"] = comp_ver
     (out / "VERSION.json").write_text(json.dumps(ver, ensure_ascii=False, indent=1), encoding="utf-8")
-    log(f"release: latest.json → {rel_dir}  (base_url={base_url})")
+    log(f"release: latest.json → {rel_dir}  (base_url={base_url}, components={comp_base})")
 
 
 def main() -> None:
@@ -292,7 +295,8 @@ def main() -> None:
     ap.add_argument("--out", default=str(ROOT / "engine-dist"))
     ap.add_argument("--release", metavar="DIR", help="앱 내 업데이트용 아티팩트(engine-code zip + latest.json)를 DIR 에 생성")
     ap.add_argument("--release-components", action="store_true", help="--release 에 구성요소 zip(python/ffmpeg/whisper, 4GB)도 포함")
-    ap.add_argument("--base-url", default="https://updates.example.invalid/clipforge/stable", help="latest.json 의 url 접두 (서버 결정 뒤 바꿈)")
+    ap.add_argument("--base-url", default="https://github.com/jaeyeonling/clipforge/releases/latest/download", help="engine-code zip·latest.json 의 url 접두 (앱 릴리스)")
+    ap.add_argument("--components-url", default=None, help="구성요소 zip 의 url 접두 (런타임 릴리스, 예: .../releases/download/runtime-2026.10). 없으면 --base-url")
     ap.add_argument("--skip-packages", action="store_true"); ap.add_argument("--force-packages", action="store_true")
     ap.add_argument("--skip-ffmpeg", action="store_true"); ap.add_argument("--skip-models", action="store_true")
     ap.add_argument("--smoke", action="store_true", help="구성 뒤 번들 파이썬으로 엔진을 띄워 health 확인")
@@ -314,7 +318,7 @@ def main() -> None:
     if a.smoke:
         step_smoke(out)
     if a.release:
-        step_release(out, Path(a.release).resolve(), a.release_components, a.base_url)
+        step_release(out, Path(a.release).resolve(), a.release_components, a.base_url, a.components_url)
 
 
 if __name__ == "__main__":

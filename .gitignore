@@ -15,3 +15,5 @@ desktop/node_modules/
 desktop/release/
 engine-dist/
 release-test/
+release-runtime/
+release-app/

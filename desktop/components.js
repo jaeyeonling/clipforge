@@ -29,15 +29,54 @@ function sevenZip() {
   return p;
 }
 
+// ---------- GitHub private 저장소 지원 ----------
+// 비공개 저장소의 릴리스 자산은 브라우저 URL(github.com/.../releases/download/...)로 받을 수 없다.
+// 토큰이 있으면 API 로 릴리스를 조회해 자산의 API URL 을 얻고 Accept: application/octet-stream 으로 받는다 (S3 로 리다이렉트).
+// 토큰: CLIPFORGE_GH_TOKEN 환경변수 또는 %LOCALAPPDATA%\clipforge\github-token.txt (fine-grained PAT, 해당 저장소 Contents: read-only).
+function githubToken() {
+  if (process.env.CLIPFORGE_GH_TOKEN) return process.env.CLIPFORGE_GH_TOKEN.trim();
+  try { return fs.readFileSync(path.join(process.env.LOCALAPPDATA || "", "clipforge", "github-token.txt"), "utf8").trim() || null; } catch { return null; }
+}
+const GH_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/(?:latest\/download|download\/([^/]+))\/([^/?#]+)$/;
+
+function httpGetJson(url, headers) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { "user-agent": "clipforge", accept: "application/vnd.github+json", ...headers } }, (res) => {
+      let body = ""; res.setEncoding("utf8"); res.on("data", (c) => (body += c));
+      res.on("end", () => { if (res.statusCode !== 200) return reject(new Error(`GitHub API ${res.statusCode} ${url}: ${body.slice(0, 120)}`)); try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+    }).on("error", reject);
+  });
+}
+
+/** github.com 릴리스 자산 URL → {url, headers}. 토큰이 없거나 GitHub 가 아니면 그대로. */
+async function resolveAsset(url) {
+  const m = GH_RE.exec(url); const token = githubToken();
+  if (!m || !token) return { url, headers: {} };
+  const [, owner, repo, tag, name] = m;
+  const api = tag ? `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}` : `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+  const rel = await httpGetJson(api, { authorization: `Bearer ${token}` });
+  const asset = (rel.assets || []).find((a) => a.name === name);
+  if (!asset) throw new Error(`릴리스 ${rel.tag_name} 에 자산 ${name} 이 없습니다`);
+  return { url: asset.url, headers: { authorization: `Bearer ${token}`, accept: "application/octet-stream", "user-agent": "clipforge" } };
+}
+
 // ---------- 매니페스트·버전 ----------
 async function fetchText(url) {
   if (url.startsWith("file:")) return fsp.readFile(fileURLToPath(url), "utf8");
+  const r = await resolveAsset(url);
   return new Promise((resolve, reject) => {
-    const mod = url.startsWith("https") ? https : http;
-    mod.get(url, { headers: { "cache-control": "no-cache" } }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} ${url}`)); }
-      let body = ""; res.setEncoding("utf8"); res.on("data", (c) => (body += c)); res.on("end", () => resolve(body));
-    }).on("error", reject);
+    const get = (u, headers, n) => {
+      const mod = u.startsWith("https") ? https : http;
+      mod.get(u, { headers: { "cache-control": "no-cache", "user-agent": "clipforge", ...headers } }, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && n < 5) {
+          res.resume(); const next = new URL(res.headers.location, u).toString();
+          return get(next, new URL(next).host === new URL(u).host ? headers : {}, n + 1);          // 다른 호스트(S3)로 가면 Authorization 제거
+        }
+        if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} ${u}`)); }
+        let body = ""; res.setEncoding("utf8"); res.on("data", (c) => (body += c)); res.on("end", () => resolve(body));
+      }).on("error", reject);
+    };
+    get(r.url, r.headers, 0);
   });
 }
 
@@ -108,7 +147,8 @@ async function download(entry, dest, onProgress, signal) {
   } else {
     let have = fs.existsSync(part) ? fs.statSync(part).size : 0;
     if (have > entry.size) { await fsp.unlink(part); have = 0; }
-    await httpDownload(entry.url, part, have, entry.size, onProgress, signal);
+    const r = await resolveAsset(entry.url);
+    await httpDownload(r.url, part, have, entry.size, onProgress, signal, 0, r.headers);
   }
   const sum = await sha256File(part);
   if (sum !== entry.sha256) { await fsp.unlink(part); throw new Error(`해시 불일치: ${path.basename(dest)} (다운로드가 손상됨 — 다시 시도)`); }
@@ -127,13 +167,16 @@ function copyWithProgress(src, dst, total, onProgress, signal) {
   });
 }
 
-function httpDownload(url, part, have, total, onProgress, signal, redirects = 0) {
+function httpDownload(url, part, have, total, onProgress, signal, redirects = 0, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
-    const headers = have > 0 ? { range: `bytes=${have}-` } : {};
+    const headers = { "user-agent": "clipforge", ...extraHeaders, ...(have > 0 ? { range: `bytes=${have}-` } : {}) };
     const req = mod.get(url, { headers }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 5) {
-        res.resume(); return resolve(httpDownload(new URL(res.headers.location, url).toString(), part, have, total, onProgress, signal, redirects + 1));
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        const keep = new URL(next).host === new URL(url).host ? extraHeaders : {};        // 다른 호스트(S3)로 가면 Authorization 제거
+        return resolve(httpDownload(next, part, have, total, onProgress, signal, redirects + 1, keep));
       }
       if (res.statusCode === 416) { res.resume(); return resolve(); }                    // 이미 다 받음
       if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} ${url}`)); }
@@ -240,4 +283,4 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal }) {
 
 function fileUrl(p) { return pathToFileURL(p).toString(); }
 
-module.exports = { fetchManifest, readLocalVersion, present, plan, download, install, apply, seedFromResources, fileUrl, CODE_PATHS };
+module.exports = { fetchManifest, readLocalVersion, present, plan, download, install, apply, seedFromResources, fileUrl, githubToken, CODE_PATHS };

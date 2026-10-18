@@ -10,7 +10,8 @@
     "start": "electron .",
     "smoke": "electron . --smoke",
     "pack": "electron-builder --win --dir --config electron-builder.config.js",
-    "dist": "electron-builder --win nsis --config electron-builder.config.js"
+    "dist": "electron-builder --win nsis --config electron-builder.config.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "devDependencies": {
     "electron": "^35.1.5",

@@ -244,6 +244,7 @@ async function install(runtimeDir, item, zipPath, onProgress) {
     throw new Error(`교체 실패(복원함): ${e.message}`);
   }
   await rmrf(staging); await rmrf(prev);
+  for (const d of [path.dirname(staging), path.dirname(prev)]) { try { await fsp.rmdir(d); } catch { /* 다른 구성요소가 쓰는 중이면 남긴다 */ } }
   // VERSION.json
   const v = readLocalVersion(runtimeDir) || { component_versions: {} };
   v.component_versions = v.component_versions || {};

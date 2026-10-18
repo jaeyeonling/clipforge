@@ -1,0 +1,24 @@
+{
+  "name": "clipforge-app",
+  "private": true,
+  "version": "0.2.0",
+  "description": "clipforge 화면 (React + Vite). 엔진(python -m clipforge.app)이 /api·/ws·/media 를 제공하고, 빌드 결과(dist/)를 그대로 서빙한다.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.7"
+  }
+}

@@ -9,3 +9,5 @@ review/
 videos/
 models/
 project.json
+app/node_modules/
+app/dist/

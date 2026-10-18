@@ -83,7 +83,10 @@ class Project:
     @property
     def fonts(self) -> Path: return self.app_root / "assets" / "fonts"
     @property
-    def ui_dir(self) -> Path: return self.app_root / "ui"
+    def ui_dir(self) -> Path:
+        """React 빌드(app/dist)가 있으면 그것을, 없으면 예전 바닐라 ui/ 를 서빙한다."""
+        dist = self.app_root / "app" / "dist"
+        return dist if (dist / "index.html").exists() else self.app_root / "ui"
 
     def health(self) -> dict:
         """첫 실행 진단: 도구·GPU·모델·폰트."""

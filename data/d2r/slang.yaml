@@ -184,6 +184,10 @@
   aliases:
   - 탈라샤 갑옷
   - 탈셋 갑옷
+  item: s:Tal Rasha's Howling Wind
+  name_ko_official: 탈 라샤의 가이언쉽
+  name_en: 'Tal Rasha''s Guardianship (d2data index: Howling Wind)'
+  note: d2data 는 갑옷을 구명 'Howling Wind' 키로 보관. 한글 문자열은 '가이언쉽'
 기드참:
   kind: unique
   aliases:

@@ -71,7 +71,7 @@ videos/<id>.mp4 ─▶ L0 prep ─▶ cache/<id>/{meta.json, audio.wav, frames/}
 | `cut_density` | Curve | 30초 창 내 scdet 컷 수 | **Phase 1 전용.** 잘게 자른 구간 = 긴장. ffmpeg `scdet=t=10` 로그 파싱 |
 | `d2_item_label` | Events | `{t, quality, text, matched_name}` | HSV 마스크(gold/green/orange/yellow) → 어두운 박스 contour → OCR → 이름 사전(rapidfuzz). 룬·유니크·세트만 이벤트. 배너에 안 적히는 드랍 보완용 |
 | `dnf_result` | Events | 던전 클리어/결과창, 보스 HP 0 | 템플릿 매칭(TM_CCOEFF_NORMED ≥ 0.8) |
-| `speech_keyword` | Events | 트랜스크립트에서 감탄사/키워드 시각 | faster-whisper(large-v3-turbo) 또는 ffmpeg whisper 필터. 한국어 사전은 `games/common.yaml` |
+| `speech_keyword` | Events | 전사에서 리액션/득템 어휘 시각 (강·중·약·득템 그룹, cooldown 8s) | ✅ `transcribe.py`: faster-whisper(GPU) → ffmpeg whisper 필터 폴백. 사전은 `games/common.yaml` |
 | `speech_energy` | Curve | 발화 구간의 음성 에너지(비BGM) | VAD 기반. 리액션 보강 |
 
 캐시 키: `cache/<id>/<signal>.json`에 `meta.params_hash` 기록. 프로필/파라미터가 바뀌면 자동 재계산, 아니면 스킵.
@@ -181,7 +181,8 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 | 6 | ✅ `export --shorts`: 1080×1920 초안(상단 훅 텍스트 띠 400 / 게임 정사각 크롭 1080 / 채팅 ROI 440), NVDEC→NVENC, `review/<id>/shorts/index.md` 에 편집 지시표 | ep59 6개 초안 49초(≈8초/개). 크롭 중심·툴팁 추적·사전 기반 자막은 후속 |
 | 7 | ✅ `weaklabel`(episodes.csv 제목 → slang.yaml 키워드 → 배너 append 퍼지 매칭 → `labels/<id>.shorts.csv` title_item ±30s) + `eval --shorts`(hit@K, MRR) + `harvest --shorts`(keep/ → label=keep) | ep59: 지존참 → 2:51 (fuzz 100). story hit@1 = 1/1, short rank 2 (1위는 같은 드랍의 3:25 채팅 줌 리액션) |
 | 8 | ✅ 도메인 사전 v0: `scripts/build_items.py`(d2data 조인 → `items.json` 1,308개, 한글 누락 76), `slang.yaml`(표제어 27 + 공식 id 링크), `lexicon` 명령(토큰 매칭률 + `reports/<id>_tokens.md`), 배너 정규화에 쉼표 유지(토큰 경계, 7:14 말룬 추가 발견) | ep59 13/14 — 단 slang 을 ep59 로 시드했으니 순환. 새 편집본에서 재측정. 친구 패키지 `docs/FRIEND_PACK.md` |
-| 9 | `xml` 쇼츠 시퀀스 + 리뷰 시퀀스(마커+V2) → 친구 Premiere 피드백 | 실사용 1회 |
+| 9 | ◐ `xml`: `premiere/<id>_review.xml`(V1 원본 + V2 후보 + 쇼츠 마커) + `<id>_shorts.xml`(1080×1920 시퀀스, Basic Motion 스케일/센터 키프레임이 ui_state 를 따라 점프). OTIO fcp_xml 로 읽기 검증 완료 | **Premiere 실제 임포트는 친구 쪽에서 확인 필요** (center 단위 가정) |
+| 9b | ✅ `transcribe`: faster-whisper large-v3-turbo(GPU, int8_float16, 단어 타임스탬프, WAV 직접 입력으로 PyAV 우회) → ffmpeg whisper 필터(CPU) 폴백, `transcript.json`. `speech_keyword` 신호 + 쇼츠 경계가 전사 세그먼트 우선 | ep59: GPU 29.9초(실시간 23×, 352 세그먼트·1,170 단어) vs CPU 필터 ~20분. 품질은 GPU 쪽이 더 정확("노거래 맨땅"). story hit@1 유지 |
 | 10 | 편집본 5~10편으로 확장, 가중치 조정 | hit@3 ≥ 0.8 |
 | — | Phase 2: `align`, 음량/발화 신호(원본), `d2_item_label`, `ui_state`, DNF 프로필 | 원본 샘플 확보 후 |
 
@@ -271,6 +272,7 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 - 새 규칙 `speech_segments`: 바닥 소음(p10) +12dB 에서 켜지고 +8dB 에서 꺼지는 히스테리시스 에너지 VAD, 20ms 프레임, 0.25s 미만 끊김 병합 → 문장 사이 쉼 189개.
 - `snap_end`: 끝점이 발화 중이면 그 발화 끝 +0.3s(최대 8s 연장), 쉼이면 직전 발화 끝 +0.3s. `snap_start`: 발화 시작 −0.3s(최대 4s 당김), 1초 안에 장면 컷이 있으면 컷. 길이 클램프(15~60s)도 발화 끝에서 자른다.
 - 부작용: 창이 길어지며 컷 감점이 늘어 순위가 소폭 변동(지존참 story 1→2위). 컷 감점 가중은 친구 keep 이 쌓이면 재조정.
+- 전사가 있으면(`transcript.json`) 에너지 VAD 대신 **Whisper 단어 경계**로 발화 구간을 잡는다. 효과음을 말로 오인하지 않고 끝점이 단어 끝에 정확히 붙는다. ep59 적용 후 지존참 story 가 다시 1위(2:38~3:13, 리액션 "와, 뭐야!" 3:13.6 포함).
 
 ### 8.4 정답 없이 시작하는 법 — 제목이 곧 약한 정답
 친구 채널 영상 제목은 그 회차의 핵심 득템을 명시한다("59일차만에 … 지존참 직득", "56~57일차 … 자룬 직득"). 제목의 아이템명을 배너 OCR의 APPEND 토큰과 퍼지 매칭하면 **그 회차 쇼츠 1순위의 시각이 자동으로 나온다**. 편집본 40여 편 × 1개 = 약 40개의 hit@1 라벨을 공짜로 얻는다. 이것이 Phase 1의 첫 평가 셋. 친구가 후보 중 고른 것(`harvest`)이 쌓이면 그걸로 가중치를 조정한다.

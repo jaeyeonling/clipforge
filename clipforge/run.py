@@ -12,6 +12,7 @@
   python -m clipforge.run harvest  foo --shorts            # review/foo/shorts/keep/ → labels (label=keep)
   python -m clipforge.run lexicon  foo                     # 배너 토큰 사전 매칭률 + 미매칭 → reports/foo_tokens.md
   python -m clipforge.run xml      foo [--k 3]             # Premiere xmeml: premiere/foo_review.xml, foo_shorts.xml
+  python -m clipforge.run transcribe foo [--backend ...]   # Whisper 전사 → cache/foo/transcript.json (speech_keyword, 경계 스냅)
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
@@ -33,6 +34,7 @@ from .render import render_shorts
 from .shorts import ShortCandidate, make_shorts, pretty as shorts_pretty, save_shorts
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segment, Segments, fmt_time
+from .transcribe import transcribe
 from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -223,6 +225,15 @@ def cmd_xml(a):
     print(f"[xml] review: V1 원본 + V2 후보 {len(cands.items)}개 + 마커 {len(shorts)}개 / shorts: 세로 시퀀스 (variant 별 {a.k}개)")
 
 
+def cmd_transcribe(a):
+    """Whisper 전사 → cache/<vid>/transcript.json. 백엔드: faster_whisper(GPU) → ffmpeg_whisper(CPU) 순 자동."""
+    tr = transcribe(CACHE / a.vid, backend=a.backend, force=a.force)
+    segs = tr.get("segments", [])
+    print(f"[transcribe] {tr.get('backend')} {tr.get('model')}  segments={len(segs)}  elapsed={tr.get('elapsed_s', '?')}s")
+    for s in segs[:5]:
+        print(f"  {fmt_time(s['start'])}-{fmt_time(s['end'])}  {s['text'][:70]}")
+
+
 def cmd_harvest(a):
     """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프.
     --shorts: review/<vid>/shorts/keep/*.mp4 → labels/<vid>.shorts.csv (label=keep)."""
@@ -284,6 +295,7 @@ def main():
     p = sp.add_parser("weaklabel"); p.add_argument("vid"); p.add_argument("--title", default=None); p.set_defaults(f=cmd_weaklabel)
     p = sp.add_parser("lexicon"); p.add_argument("vid"); p.set_defaults(f=cmd_lexicon)
     p = sp.add_parser("xml"); p.add_argument("vid"); p.add_argument("--k", type=int, default=3); p.set_defaults(f=cmd_xml)
+    p = sp.add_parser("transcribe"); p.add_argument("vid"); p.add_argument("--backend", default=None, choices=["faster_whisper", "ffmpeg_whisper"]); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_transcribe)
 
     a = ap.parse_args()
     a.f(a)

@@ -131,6 +131,10 @@ def collect_anchors(events: dict[str, Segments], curves: dict[str, Curve], durat
             continue
         anchors.append({"t": s.start, "kind": s.label, "strength": 0.8 if s.label == "zoom" else 0.7,
                         "text": "", "span": [s.start, s.end]})
+    for s in events.get("speech_keyword", Segments("", [])).items:
+        if s.label in ("강", "득템"):
+            anchors.append({"t": s.start, "kind": "speech", "strength": 0.6 * float(s.score or 1.0),
+                            "text": "", "word": s.meta.get("word", "")})
     if "chat_burst" in curves:
         c = curves["chat_burst"]; v = c.as_array(); thr = np.percentile(v, chat_pct)
         for i in range(1, len(v) - 1):
@@ -213,7 +217,12 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
     variants = variants or VARIANTS
     cuts_p = cache / "cuts.json"
     cuts = json.loads(cuts_p.read_text()) if cuts_p.exists() else []
-    segs = speech_segments(cache / "audio.wav") if (cache / "audio.wav").exists() else []
+    tr_p = cache / "transcript.json"
+    if tr_p.exists():                                   # 전사가 있으면 단어/세그먼트 경계가 더 정확하다
+        from .transcribe import speech_segments_from_transcript
+        segs = speech_segments_from_transcript(json.loads(tr_p.read_text(encoding="utf-8")))
+    else:
+        segs = speech_segments(cache / "audio.wav") if (cache / "audio.wav").exists() else []
     pauses = pauses_from(segs)
     chat_ref = float(np.percentile(curves["chat_burst"].as_array(), 99)) if "chat_burst" in curves else 1.0
 

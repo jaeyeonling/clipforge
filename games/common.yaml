@@ -1,0 +1,19 @@
+# 게임 공통 설정 (D2R·DNF 모두). 게임 프로필(d2r.yaml 등)이 이걸 덮어쓴다.
+
+# 발화 키워드 → speech_keyword 이벤트. 한국 스트리머 리액션 어휘. 전사 텍스트에서 부분 일치로 찾는다.
+# weight 는 앵커 강도(0~1). 친구 전사가 쌓이면 빈도 기반으로 교체.
+speech_keywords:
+  강:  {weight: 1.0, words: [미쳤다, 미쳤네, 미친, 대박, 헐, 와 미쳤, 실화냐, 실화야, 말이 돼, 말이 안 돼, 레전드, 역대급, 나왔다, 떴다, 터졌다]}
+  중:  {weight: 0.7, words: [와, 우와, 오오, 어어, 뭐야, 뭐지, 잠깐, 잠깐만, 아니, 어 뭐야, 이거 봐, 보세요, 봐봐, 진짜, 진짜요, 개꿀, 꿀, 유니크, 세트, 으뜸, 에테로 나왔]}
+  약:  {weight: 0.4, words: [좋다, 좋네, 나이스, 굿, 감사합니다, 고맙습니다, ㅋㅋ, 하하]}
+  # 득템 그룹은 "그 자체로 사건"인 어휘만. 유니크/세트/으뜸은 대화에 너무 흔해(ep59 21회) 중 그룹으로 내림.
+  득템: {weight: 1.0, words: [지존참, 지참, 자룬, 베르룬, 조드, 참룬, 조던, 횃불, 애니참, 룬워드, 고급룬, 직득, 떴다, 나왔다]}
+
+speech_kernel: {pre: 20, post: 6, cooldown: 8}   # 키워드 시각 t 를 [t-pre, t+post] 로 펼침 (Auto-clipper 의 [t-30,t+5] 보다 짧게)
+
+# 전사 백엔드 우선순위. 설치된 것 중 첫 번째를 쓴다.
+transcribe:
+  backends: [faster_whisper, ffmpeg_whisper]
+  language: ko
+  faster_whisper: {model: large-v3-turbo, device: cuda, compute_type: int8_float16, vad: true, word_timestamps: true}
+  ffmpeg_whisper: {model: models/ggml-large-v3-turbo-q8_0.bin, vad_model: models/ggml-silero-v5.1.2.bin, queue: 20}

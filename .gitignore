@@ -1,0 +1,9 @@
+*.pyc
+.venv/
+__pycache__/
+cache/
+finals/
+premiere/
+reports/
+review/
+videos/

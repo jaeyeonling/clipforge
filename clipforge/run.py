@@ -4,7 +4,7 @@
   python -m clipforge.run signals  foo                     # 등록된 신호 전부 계산
   python -m clipforge.run cands    foo [--threshold 1.5] [--w audio_loudness=1 --w frame_motion=0.3]
   python -m clipforge.run eval     foo                     # labels/foo.csv 와 비교
-  python -m clipforge.run export   foo                     # 후보 클립 mp4로 잘라 review/foo/ 에 저장
+  python -m clipforge.run export   foo [--shorts --k 3]    # 후보 클립 mp4 (--shorts: 9:16 쇼츠 초안 review/foo/shorts/)
   python -m clipforge.run sweep    foo                     # threshold 를 바꿔가며 recall/coverage 표
   python -m clipforge.run shorts   foo [--k 5]             # 쇼츠 후보 (앵커→창→점수), Phase 1
 
@@ -21,7 +21,8 @@ from .candidates import DEFAULT_WEIGHTS, make_candidates
 from .evaluate import evaluate
 from .preprocess import preprocess
 from .profiles import load_profile
-from .shorts import make_shorts, pretty as shorts_pretty, save_shorts
+from .render import render_shorts
+from .shorts import ShortCandidate, make_shorts, pretty as shorts_pretty, save_shorts
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segments, fmt_time
 
@@ -104,8 +105,19 @@ def cmd_sweep(a):
 
 
 def cmd_export(a):
-    """후보를 mp4 클립으로 잘라 review/<vid>/ 에 저장. 쓸 것은 keep/ 로 옮기면 그게 레이블이 된다."""
+    """후보를 mp4 클립으로 잘라 review/<vid>/ 에 저장. 쓸 것은 keep/ 로 옮기면 그게 레이블이 된다.
+    --shorts: shorts.json 의 후보를 9:16 세로 초안으로 렌더 (review/<vid>/shorts/)."""
     meta = load_meta(a.vid)
+    if a.shorts:
+        p = CACHE / a.vid / "shorts.json"
+        if not p.exists():
+            raise SystemExit(f"{p} 없음 — 먼저 python -m clipforge.run shorts {a.vid}")
+        cands = [ShortCandidate(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
+        out = REVIEW / a.vid / "shorts"
+        (out / "keep").mkdir(parents=True, exist_ok=True)
+        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx)
+        print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
+        return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
     out = REVIEW / a.vid
     (out / "keep").mkdir(parents=True, exist_ok=True)
@@ -156,7 +168,10 @@ def main():
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)
         p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3"); p.set_defaults(f=fn)
     p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
-    for name, fn in [("eval", cmd_eval), ("export", cmd_export), ("harvest", cmd_harvest)]:
+    p = sp.add_parser("export"); p.add_argument("vid"); p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
+    p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
+    p.set_defaults(f=cmd_export)
+    for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.set_defaults(f=fn)
 
     a = ap.parse_args()

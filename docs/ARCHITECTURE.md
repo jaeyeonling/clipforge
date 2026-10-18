@@ -178,7 +178,7 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 | 3 | ✅ `item_banner` 신호 정식화 (coarse→refine OCR, 안정 상태 전이, Events 출력) | ep59 득템 6개 재현, OCR 캐시로 0.6초 |
 | 4 | ✅ Events→Curve 어댑터 + `edit_emphasis`(HUD 소실=줌, 밝은 사각형=메모장) + `cut_density`(prep scdet) + `chat_burst`(채팅 ROI 마스크 XOR) | 5개 신호 가중합. ep59 최고 후보 2:42~3:09 = 제목 아이템(지존참). 채팅 변화율 상위 12초가 전부 2:51~3:41 |
 | 5 | ✅ 쇼츠 후보 생성기 `shorts.py` (앵커→창→쉼·컷 스냅→5축 점수, short/story variant, `run shorts`) | ep59: short 1위 3:25~3:42(지존참 리액션), story 1위 2:39~3:14(지존참 드랍) = 제목 순간. 스냅샷 `experiments/ep59_shorts.json` |
-| 6 | `export --shorts`: 9:16 크롭 NVENC 초안 mp4 + 훅 텍스트 제안 | 사람이 보고 고를 수 있는 초안 |
+| 6 | ✅ `export --shorts`: 1080×1920 초안(상단 훅 텍스트 띠 400 / 게임 정사각 크롭 1080 / 채팅 ROI 440), NVDEC→NVENC, `review/<id>/shorts/index.md` 에 편집 지시표 | ep59 6개 초안 49초(≈8초/개). 크롭 중심·툴팁 추적·사전 기반 자막은 후속 |
 | 7 | 제목 → 아이템 → 배너 시각 약한 정답 + hit@K 평가 | ep59 hit@1 = 지존참 구간 |
 | 8 | 도메인 사전 v0: d2data 조인 → `data/d2r/items.json`, 인벤 약어 → `slang.yaml`, 배너 토큰 매칭률 | 매칭률 숫자 |
 | 9 | `xml` 쇼츠 시퀀스 + 리뷰 시퀀스(마커+V2) → 친구 Premiere 피드백 | 실사용 1회 |

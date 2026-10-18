@@ -1,18 +1,25 @@
 // clipforge 데스크톱 껍데기 (Electron)
-//   - Python 엔진을 사이드카로 띄우고(engine.js) 준비되면 창에 엔진이 서빙하는 React 화면을 로드
-//   - 트레이 상주: 창을 닫아도 작업은 계속, 트레이에서 다시 열기 / 종료
-//   - 엔진 /ws 를 구독해 작업 완료·오류를 OS 알림으로
-//   - --smoke : 창이 뜨고 엔진이 준비되면 5초 뒤 스스로 종료 (자동 점검용)
+//   - 설치본 모드(runtime): %LOCALAPPDATA%\clipforge\runtime 에 엔진 코드(동봉) + 구성요소(첫 실행 때 다운로드)를 두고 거기서 엔진을 띄운다
+//   - 개발 모드(venv/dist): 저장소의 파이썬으로 바로 띄운다
+//   - 창: 부팅/설치 화면 → 엔진 URL 로드. 닫기 = 트레이로. 트레이에서 열기/업데이트/종료
+//   - /ws 구독 → 트레이 상태·OS 알림.  6시간마다 latest.json 확인 → 업데이트 있으면 알림 + 트레이 메뉴 "업데이트 적용"
+//   - --smoke : 준비 뒤 5초 후 종료 (자동 점검).  --smoke-setup : 설치 화면까지만 띄우고 종료하지 않음 (화면 점검)
 "use strict";
-const { app, BrowserWindow, Menu, Tray, Notification, shell, dialog, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, Tray, Notification, shell, dialog, nativeImage, ipcMain } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const WebSocket = require("ws");
 const { Engine } = require("./engine");
+const C = require("./components");
 
 const SMOKE = process.argv.includes("--smoke");
+const AUTO_SETUP = process.argv.includes("--auto-setup");   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
 const ASSETS = path.join(__dirname, "assets");
+const DEFAULT_UPDATE_URL = "https://updates.example.invalid/clipforge/stable";   // 호스팅 결정 뒤 교체 (R2 추천)
 let win = null, tray = null, engine = null, ws = null, quitting = false, logStream = null;
+let pendingUpdates = [];           // plan() 결과 중 아직 적용 안 한 것
+let setupState = null;             // 첫 실행 설치 진행 상태
+let jobRunning = false;
 
 // ---------- 로그 (userData/shell.log) ----------
 function log(line) {
@@ -21,50 +28,91 @@ function log(line) {
   try { logStream?.write(msg + "\n"); } catch { /* ignore */ }
 }
 
-// ---------- 단일 인스턴스 ----------
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.on("second-instance", () => showWindow());
+app.setAppUserModelId("kr.clipforge.app");
 
-app.setAppUserModelId("kr.clipforge.app");   // Windows 알림에 앱 이름이 나오게
+// ---------- 업데이트 서버 주소 ----------
+function updateUrl() {
+  if (process.env.CLIPFORGE_UPDATE_URL) return process.env.CLIPFORGE_UPDATE_URL;
+  // 오프라인/USB 설치: %LOCALAPPDATA%\clipforge\update-url.txt 에 file:///E:/clipforge-release 같은 주소를 적어 두면 거기서 받는다
+  try {
+    const p = path.join(process.env.LOCALAPPDATA || "", "clipforge", "update-url.txt");
+    const t = fs.readFileSync(p, "utf8").trim(); if (t) return t;
+  } catch { /* none */ }
+  return DEFAULT_UPDATE_URL;
+}
 
 // ---------- 창 ----------
+const PAGE_CSS = `body{margin:0;background:#0b0a09;color:#f5f2e8;font:14px/1.5 'Malgun Gothic',system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
+.box{max-width:640px;width:92%}.brand{font-size:28px;font-weight:800;color:#f0f660;letter-spacing:-.02em}.t{margin-top:14px;font-size:16px;font-weight:700}
+.d{margin-top:6px;color:#8f8979;font-size:12px;white-space:pre-wrap}.spin{margin:18px auto 0;width:22px;height:22px;border:3px solid #2c2925;border-top-color:#f0f660;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}td{padding:8px 6px;border-bottom:1px solid #2c2925;vertical-align:middle}
+td.n{width:28px}td.s{color:#8f8979;white-space:nowrap;text-align:right;width:90px}.bar{height:6px;background:#1a1816;border-radius:4px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:#f0f660;transition:width .2s}
+.st{font-size:11px;color:#8f8979;margin-top:2px}.ok{color:#9be28a}.bad{color:#ff7b70}.btns{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+button{font:inherit;border-radius:6px;border:1px solid #3a3631;background:#211e1b;color:#f5f2e8;padding:8px 14px;cursor:pointer}button.p{background:#f0f660;color:#1a1a10;border-color:#f0f660;font-weight:700}button:disabled{opacity:.45;cursor:default}
+input[type=checkbox]{accent-color:#f0f660}.hint{font-size:12px;color:#8f8979;margin-top:10px}`;
+
+function dataUrl(html) { return "data:text/html;charset=utf-8," + encodeURIComponent(`<!doctype html><html lang="ko"><meta charset="utf-8"><style>${PAGE_CSS}</style><body>${html}</body></html>`); }
+
 function bootHtml(title, detail, spinning) {
-  return `data:text/html;charset=utf-8,` + encodeURIComponent(`<!doctype html><html lang="ko"><meta charset="utf-8">
-  <body style="margin:0;background:#0b0a09;color:#f5f2e8;font:14px/1.5 'Malgun Gothic',system-ui;display:flex;align-items:center;justify-content:center;height:100vh">
-  <div style="text-align:center;max-width:520px">
-    <div style="font-size:28px;font-weight:800;color:#f0f660;letter-spacing:-.02em">clipforge</div>
-    <div style="margin-top:14px;font-size:15px">${title}</div>
-    <div style="margin-top:8px;color:#8f8979;font-size:12px;white-space:pre-wrap">${detail || ""}</div>
-    ${spinning ? `<div style="margin:18px auto 0;width:22px;height:22px;border:3px solid #2c2925;border-top-color:#f0f660;border-radius:50%;animation:s .8s linear infinite"></div><style>@keyframes s{to{transform:rotate(360deg)}}</style>` : ""}
-  </div></body></html>`);
+  return dataUrl(`<div class="box" style="text-align:center"><div class="brand">clipforge</div><div class="t">${title}</div><div class="d">${detail || ""}</div>${spinning ? '<div class="spin"></div>' : ""}</div>`);
+}
+
+// 첫 실행 설치 화면: 구성요소 목록·선택·진행률. 데이터는 setup:event 로 받는다.
+function setupHtml() {
+  return dataUrl(`<div class="box"><div class="brand">clipforge</div><div class="t" id="title">처음 실행: 분석 엔진 구성요소를 내려받습니다</div>
+<div class="d" id="desc">한 번만 받습니다. 이후 업데이트는 바뀐 부분만 받습니다.</div>
+<table id="tb"></table><div class="hint" id="hint"></div>
+<div class="btns"><button id="logs">로그 폴더</button><button id="retry" style="display:none">다시 시도</button><button id="start" class="p" disabled>설치 시작</button></div></div>
+<script>
+const S = window.clipforgeShell.setup; const $ = (s) => document.querySelector(s);
+const human = (n) => n >= 1e9 ? (n/1e9).toFixed(1)+'GB' : n >= 1e6 ? Math.round(n/1e6)+'MB' : Math.round(n/1e3)+'KB';
+let items = [], running = false;
+function render() {
+  $('#tb').innerHTML = items.map((it, i) => \`<tr data-n="\${it.name}"><td class="n"><input type="checkbox" \${it.selected ? 'checked' : ''} \${it.optional && !running ? '' : 'disabled'} data-i="\${i}"></td>
+    <td><div>\${it.label}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || (it.reason === 'update' ? '업데이트' : '새로 설치')}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
+  const total = items.filter((x) => x.selected).reduce((a, x) => a + (x.size || 0), 0);
+  $('#hint').textContent = running ? '' : '선택한 구성요소 합계 ' + human(total) + ' — 네트워크 속도에 따라 수 분~수십 분 걸립니다. 받는 동안 창을 닫아도 계속됩니다.';
+  $('#start').disabled = running || !items.some((x) => x.selected);
+  document.querySelectorAll('input[data-i]').forEach((el) => el.onchange = () => { items[Number(el.dataset.i)].selected = el.checked; render(); });
+}
+S.onEvent((ev) => {
+  if (ev.type === 'plan') { items = ev.items; $('#title').textContent = ev.title || $('#title').textContent; if (ev.desc) $('#desc').textContent = ev.desc; render(); return; }
+  const it = items.find((x) => x.name === ev.name); if (!it) return;
+  if (ev.type === 'start') { running = true; it.status = '받는 중…'; it.pct = 0; }
+  if (ev.type === 'download') { it.pct = ev.total ? Math.round(100 * ev.done / ev.total) : 0; it.status = ev.cached ? '이미 받음' : '받는 중 ' + human(ev.done) + ' / ' + human(ev.total); }
+  if (ev.type === 'install') { it.status = ev.phase === 'extract' ? '푸는 중' + (ev.pct != null ? ' ' + ev.pct + '%' : '') : '교체 중'; it.pct = 100; }
+  if (ev.type === 'done') { it.status = '<span class="ok">완료</span>'; it.pct = 100; }
+  if (ev.type === 'error') { running = false; it.status = '<span class="bad">실패: ' + ev.message + '</span>'; $('#retry').style.display = ''; }
+  render();
+});
+$('#start').onclick = () => { running = true; $('#retry').style.display = 'none'; render(); S.start({ optional: Object.fromEntries(items.filter((x) => x.optional).map((x) => [x.name, !!x.selected])) }); };
+$('#retry').onclick = () => $('#start').onclick();
+$('#logs').onclick = () => S.openLogs();
+S.ready();
+</script>`);
 }
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 980, minHeight: 640,
     backgroundColor: "#0b0a09", title: "clipforge", show: false,
-    icon: path.join(ASSETS, "icon.png"),
-    autoHideMenuBar: true,
+    icon: path.join(ASSETS, "icon.png"), autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.once("ready-to-show", () => win.show());
-  win.loadURL(bootHtml("엔진을 준비하는 중…", "ffmpeg · GPU · 모델을 확인합니다", true));
-  // 외부 링크는 시스템 브라우저로
+  win.loadURL(bootHtml("엔진을 준비하는 중…", "", true));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
   win.on("close", (e) => {
     if (quitting) return;
-    e.preventDefault(); win.hide();               // 닫기 = 트레이로 (작업은 계속)
-    if (!app._hintShown) { app._hintShown = true; notify("트레이에서 계속 실행 중", "작업은 계속됩니다. 트레이 아이콘에서 다시 열거나 종료하세요."); }
+    e.preventDefault(); win.hide();
+    if (!app._hintShown) { app._hintShown = true; notify("트레이에서 계속 실행 중", "작업과 다운로드는 계속됩니다. 트레이 아이콘에서 다시 열거나 종료하세요."); }
   });
   win.on("closed", () => (win = null));
   return win;
 }
-
-function showWindow() {
-  if (!win) createWindow();
-  if (win.isMinimized()) win.restore();
-  win.show(); win.focus();
-}
+function showWindow() { if (!win) createWindow(); if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 
 // ---------- 트레이 ----------
 function createTray() {
@@ -72,13 +120,17 @@ function createTray() {
   tray.setToolTip("clipforge");
   updateTrayMenu("엔진 준비 중");
   tray.on("click", () => showWindow());
-  tray.on("double-click", () => showWindow());
 }
+let trayStatus = "";
 function updateTrayMenu(status) {
+  if (status != null) trayStatus = status;
   if (!tray) return;
+  const upd = pendingUpdates.length ? [{ label: `업데이트 적용 (${pendingUpdates.map((u) => u.name).join(", ")})`, enabled: !jobRunning, click: () => applyUpdates().catch((e) => log(`update: ${e.message}`)) }] : [];
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "clipforge 열기", click: () => showWindow() },
-    { label: status, enabled: false },
+    { label: trayStatus, enabled: false },
+    ...upd,
+    { label: "업데이트 확인", click: () => checkUpdates(true).catch((e) => log(`update: ${e.message}`)) },
     { type: "separator" },
     { label: "로그 폴더 열기", click: () => shell.openPath(app.getPath("userData")) },
     { label: "브라우저에서 열기", click: () => engine?.port && shell.openExternal(engine.url) },
@@ -87,30 +139,134 @@ function updateTrayMenu(status) {
   ]));
 }
 
-// ---------- 알림 ----------
 function notify(title, body) {
   if (!Notification.isSupported()) return;
   try { new Notification({ title, body, icon: path.join(ASSETS, "icon.png") }).show(); } catch (e) { log(`notify 실패 ${e.message}`); }
 }
 
-// ---------- 엔진 이벤트 구독 (작업 완료/오류 알림) ----------
+// ---------- 엔진 이벤트 구독 ----------
 function subscribeEvents() {
   const url = engine.url.replace("http", "ws") + "/ws";
   const connect = () => {
-    if (quitting) return;
+    if (quitting || !engine?.port) return;
     ws = new WebSocket(url);
     ws.on("open", () => log("ws: connected"));
     ws.on("message", (raw) => {
       let ev; try { ev = JSON.parse(String(raw)); } catch { return; }
-      if (ev.type === "progress") updateTrayMenu(`실행 중: ${ev.stage} ${Math.round(ev.pct || 0)}%`);
-      if (ev.type === "done") { updateTrayMenu("대기 중"); if (!win?.isFocused()) notify(ev.status === "cancelled" ? "작업 취소됨" : "작업 완료", `job ${ev.job_id}`); }
-      if (ev.type === "error") { updateTrayMenu(`오류: ${ev.code}`); notify(`작업 오류 ${ev.code}`, `${ev.message || ""}\n${ev.hint || ""}`.trim()); }
+      if (ev.type === "started" || ev.type === "progress") { jobRunning = true; updateTrayMenu(`실행 중: ${ev.stage || ""} ${Math.round(ev.pct || 0)}%`); }
+      if (ev.type === "done") { jobRunning = false; updateTrayMenu("대기 중"); if (!win?.isFocused()) notify(ev.status === "cancelled" ? "작업 취소됨" : "작업 완료", `job ${ev.job_id}`); }
+      if (ev.type === "error") { jobRunning = false; updateTrayMenu(`오류: ${ev.code}`); notify(`작업 오류 ${ev.code}`, `${ev.message || ""}\n${ev.hint || ""}`.trim()); }
     });
     ws.on("close", () => { ws = null; if (!quitting) setTimeout(connect, 2000); });
     ws.on("error", (e) => log(`ws: ${e.message}`));
   };
   connect();
 }
+
+// ---------- 첫 실행 설치 (runtime 모드) ----------
+function sendSetup(ev) { win?.webContents.send("setup:event", ev); }
+
+async function ensureRuntime() {
+  const cfg = engine.cfg;
+  if (cfg.mode !== "runtime") return;
+  fs.mkdirSync(cfg.runtimeDir, { recursive: true });
+  if (!C.present(cfg.runtimeDir, "engine_code")) {
+    const ok = await C.seedFromResources(cfg.runtimeDir, cfg.seedDir);
+    log(`runtime: engine code seed ${ok ? "ok" : "없음"} ← ${cfg.seedDir}`);
+  }
+  const need = ["python-base", "ffmpeg", "whisper"].filter((n) => !C.present(cfg.runtimeDir, n));
+  if (!need.length) return;                      // 구성 완료 → 평소처럼 엔진 시작
+  log(`runtime: 구성요소 필요 ${need.join(",")} → 설치 화면`);
+  await runSetup(cfg);
+}
+
+function hasNvidia() {
+  try { require("node:child_process").execFileSync("nvidia-smi", ["-L"], { stdio: "ignore", windowsHide: true }); return true; } catch { return false; }
+}
+
+function runSetup(cfg) {
+  return new Promise((resolve, reject) => {
+    let manifest = null, abort = null;
+    setupState = { resolve, reject };
+    const sendPlan = async () => {
+      try {
+        manifest = await C.fetchManifest(updateUrl());
+        const gpu = hasNvidia();
+        const items = C.plan(cfg.runtimeDir, manifest, {}).filter((it) => it.kind === "component").map((it) => ({
+          name: it.name, label: it.entry.label || it.name, size: it.entry.size, optional: !!it.entry.optional, reason: it.reason,
+          selected: it.entry.optional ? gpu : true,
+        }));
+        sendSetup({ type: "plan", items, desc: gpu ? "NVIDIA GPU 가 감지되어 GPU 가속을 함께 받습니다." : "NVIDIA GPU 가 없어 GPU 가속은 선택에서 뺐습니다 (CPU 로도 동작, 전사만 느립니다)." });
+      } catch (e) {
+        log(`setup: manifest 실패 ${e.message}`);
+        sendSetup({ type: "plan", items: [], title: "구성요소 목록을 받지 못했습니다", desc: `${e.message}\n서버: ${updateUrl()}\n네트워크를 확인한 뒤 다시 시도하세요.` });
+      }
+    };
+    ipcMain.removeHandler("setup:ready"); ipcMain.removeHandler("setup:start"); ipcMain.removeHandler("setup:cancel");
+    ipcMain.handle("setup:ready", async () => { await sendPlan(); if (AUTO_SETUP && manifest) startInstall({ optional: { cuda: hasNvidia() } }); });
+    ipcMain.handle("setup:cancel", () => { abort?.abort(); });
+    ipcMain.handle("setup:start", (_e, opts) => startInstall(opts));
+    const startInstall = async (opts) => {
+      if (!manifest) { await sendPlan(); if (!manifest) return; }
+      const items = C.plan(cfg.runtimeDir, manifest, { wantOptional: opts.optional || {} }).filter((it) => it.kind === "component");
+      abort = new AbortController();
+      updateTrayMenu("구성요소 내려받는 중");
+      try {
+        await C.apply(cfg.runtimeDir, items, { downloadDir: cfg.downloads, signal: abort.signal, onEvent: (ev) => { sendSetup(ev); if (ev.type === "download" && ev.total) updateTrayMenu(`내려받는 중 ${ev.name} ${Math.round(100 * ev.done / ev.total)}%`); } });
+        log("setup: 완료");
+        setupState = null; resolve();
+      } catch (e) {
+        log(`setup: 실패 ${e.stack || e}`);
+        sendSetup({ type: "error", name: items.find((it) => !C.present(cfg.runtimeDir, it.name))?.name || items[0]?.name, message: e.message });
+        if (SMOKE) { setupState = null; reject(e); }
+      }
+    };
+    win.loadURL(setupHtml());
+    showWindow();
+  });
+}
+
+// ---------- 앱 내 업데이트 (층 A·B) ----------
+async function checkUpdates(interactive = false) {
+  const cfg = engine?.cfg;
+  if (!cfg || cfg.mode !== "runtime") { if (interactive) notify("업데이트", "개발 모드에서는 업데이트를 확인하지 않습니다."); return; }
+  const manifest = await C.fetchManifest(updateUrl());
+  const local = C.readLocalVersion(cfg.runtimeDir) || {};
+  const want = Object.fromEntries(Object.keys(manifest.components || {}).map((n) => [n, C.present(cfg.runtimeDir, n)]));   // 설치된 것만 갱신 (cuda 안 받았으면 계속 안 받음)
+  pendingUpdates = C.plan(cfg.runtimeDir, manifest, { wantOptional: want }).filter((it) => it.reason === "update");
+  log(`update: local ${local.engine_version} → 매니페스트 ${manifest.engine_code?.version}; 대기 ${pendingUpdates.map((u) => `${u.name}@${u.entry.version}`).join(",") || "없음"}`);
+  updateTrayMenu(null);
+  if (pendingUpdates.length) {
+    const size = pendingUpdates.reduce((a, u) => a + (u.entry.size || 0), 0);
+    notify("업데이트 있음", `${pendingUpdates.map((u) => u.name).join(", ")} (${(size / 1e6).toFixed(0)}MB). 트레이 메뉴에서 적용하세요.${jobRunning ? " 작업이 끝난 뒤 적용됩니다." : ""}`);
+  } else if (interactive) notify("업데이트", "최신 상태입니다.");
+  return pendingUpdates;
+}
+
+async function applyUpdates() {
+  if (!pendingUpdates.length || jobRunning) return;
+  const cfg = engine.cfg;
+  const items = pendingUpdates.slice();
+  updateTrayMenu("업데이트 적용 중");
+  win?.loadURL(bootHtml("업데이트를 적용하는 중…", items.map((u) => `${u.name} → ${u.entry.version}`).join("\n"), true));
+  showWindow();
+  await engine.stopAndWait();
+  try {
+    await C.apply(cfg.runtimeDir, items, { downloadDir: cfg.downloads, onEvent: (ev) => { if (ev.type === "download" && ev.total) win?.loadURL(bootHtml("업데이트 내려받는 중…", `${ev.name} ${Math.round(100 * ev.done / ev.total)}%`, true)); } });
+    pendingUpdates = [];
+    notify("업데이트 완료", items.map((u) => `${u.name} ${u.entry.version}`).join(", "));
+  } catch (e) {
+    log(`update: 실패 ${e.stack || e}`);
+    notify("업데이트 실패", e.message);
+  }
+  await engine.start();
+  await win?.loadURL(engine.url);
+  updateTrayMenu("대기 중");
+}
+
+ipcMain.handle("update:check", () => checkUpdates(true));
+ipcMain.handle("update:apply", () => applyUpdates());
+ipcMain.handle("shell:openLogs", () => shell.openPath(app.getPath("userData")));
 
 // ---------- 수명 ----------
 async function boot() {
@@ -119,25 +275,30 @@ async function boot() {
   createWindow();
   createTray();
   engine = new Engine(app, log);
+  log(`engine: mode=${engine.cfg.mode} runtime=${engine.cfg.runtimeDir || "-"} data=${engine.cfg.dataRoot || "-"} update=${updateUrl()}`);
   engine.onExit = (code) => {
     if (quitting) return;
     updateTrayMenu("엔진 종료됨");
     win?.loadURL(bootHtml("엔진이 종료됐습니다", `exit code ${code}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
   };
   try {
+    await ensureRuntime();
+    win?.loadURL(bootHtml("엔진을 시작하는 중…", "ffmpeg · GPU · 모델을 확인합니다", true));
     const h = await engine.start();
     updateTrayMenu(`대기 중 · v${h.engine_version}`);
-    const bad = (h.problems || []).filter((p) => p.level === "error");
-    if (bad.length) log(`engine: problems ${bad.map((p) => p.code).join(",")}`);
     await win.loadURL(engine.url);
     subscribeEvents();
     log(`shell: ui loaded ${engine.url}`);
+    if (engine.cfg.mode === "runtime") {
+      setTimeout(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 10_000);
+      setInterval(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 6 * 3600_000);
+    }
     if (SMOKE) { log("smoke: ok — 5초 뒤 종료"); setTimeout(() => quitApp(), 5000); }
   } catch (e) {
     log(`shell: boot 실패 ${e.stack || e}`);
     updateTrayMenu("엔진 시작 실패");
     win?.loadURL(bootHtml("엔진을 시작하지 못했습니다", `${e.message}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
-    if (SMOKE) { setTimeout(() => { quitApp(1); }, 1000); }
+    if (SMOKE) setTimeout(() => quitApp(1), 1000);
     else dialog.showErrorBox("clipforge", `엔진을 시작하지 못했습니다.\n${e.message}`);
   }
 }
@@ -151,7 +312,7 @@ function quitApp(code = 0) {
 }
 
 app.whenReady().then(boot);
-app.on("window-all-closed", () => { /* 트레이 상주: 창이 다 닫혀도 종료하지 않는다 */ });
+app.on("window-all-closed", () => { /* 트레이 상주 */ });
 app.on("before-quit", () => { quitting = true; engine?.stop(); });
 app.on("activate", () => showWindow());
 process.on("uncaughtException", (e) => log(`uncaught: ${e.stack || e}`));

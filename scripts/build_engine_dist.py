@@ -217,13 +217,22 @@ NOTICE_FILES = {"VERSION.json", "THIRD_PARTY_NOTICES.md"}
 
 
 def component_paths(out: Path, name: str) -> list[str]:
-    """층 B 구성요소의 상대 경로. python = 루트의 파일 전부(고지 제외) + Lib. ffmpeg = bin. whisper = models."""
-    if name == "python":
+    """층 B 구성요소의 상대 경로 (zip 안 경로 = 런타임 루트 기준).
+    python-base = 루트의 파일 전부(고지 제외) + Lib (단, Lib/site-packages/nvidia 제외)  ·  cuda = Lib/site-packages/nvidia (선택: GPU 가속)
+    ffmpeg = bin  ·  whisper = models"""
+    if name == "python-base":
         return sorted(p.name for p in out.iterdir() if p.is_file() and p.name not in NOTICE_FILES and p.name not in DATA_DIRS) + ["Lib"]
-    return {"ffmpeg": ["bin"], "whisper": ["models"]}[name]
+    return {"cuda": ["Lib/site-packages/nvidia"], "ffmpeg": ["bin"], "whisper": ["models"]}[name]
 
 
-COMPONENTS = ("python", "ffmpeg", "whisper")
+COMPONENTS = ("python-base", "cuda", "ffmpeg", "whisper")
+COMPONENT_INFO = {   # 첫 실행 화면에 보여줄 설명. optional 은 사용자가 끌 수 있다.
+    "python-base": {"label": "파이썬 런타임 + 분석 패키지", "optional": False},
+    "cuda": {"label": "GPU 가속 (NVIDIA cuBLAS/cuDNN) — 전사 20배 빠름", "optional": True},
+    "ffmpeg": {"label": "FFmpeg (영상 디코딩·렌더)", "optional": False},
+    "whisper": {"label": "음성 인식 모델 (Whisper large-v3-turbo)", "optional": False},
+}
+EXCLUDE_IN = {"python-base": ["Lib/site-packages/nvidia"]}
 
 
 def sha256_of(p: Path) -> str:
@@ -235,15 +244,16 @@ def sha256_of(p: Path) -> str:
     return h.hexdigest()
 
 
-def zip_paths(out: Path, rel_paths: list[str], dst: Path) -> None:
-    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+def zip_paths(out: Path, rel_paths: list[str], dst: Path, exclude: list[str] | None = None) -> None:
+    ex = [out / e for e in (exclude or [])]
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:      # 속도 우선 (DLL·모델은 거의 안 줄어든다)
         for rel in rel_paths:
             p = out / rel
             if p.is_file():
                 z.write(p, rel)
             elif p.is_dir():
                 for f in sorted(p.rglob("*")):
-                    if f.is_file() and "__pycache__" not in f.parts:
+                    if f.is_file() and "__pycache__" not in f.parts and not any(e in f.parents or e == f for e in ex):
                         z.write(f, f.relative_to(out).as_posix())
 
 
@@ -253,7 +263,8 @@ def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str)
     from clipforge import __version__
     rel_dir.mkdir(parents=True, exist_ok=True)
     ver = json.loads((out / "VERSION.json").read_text(encoding="utf-8"))
-    comp_ver = ver.get("component_versions") or {"python": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
+    comp_ver = ver.get("component_versions") or {"python-base": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "cuda": "12.9+cudnn9.27",
+                                                  "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
     entry = lambda p, v, notes="": {"version": v, "url": f"{base_url.rstrip('/')}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size, **({"notes": notes} if notes else {})}
     code_zip = rel_dir / f"engine-code-{__version__}.zip"
     zip_paths(out, CODE_PATHS, code_zip)
@@ -263,12 +274,13 @@ def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str)
     for name in COMPONENTS:
         zp = rel_dir / f"{name}-{comp_ver[name].replace('+', '_')}.zip"
         if with_components:
-            zip_paths(out, component_paths(out, name), zp)
+            zip_paths(out, component_paths(out, name), zp, EXCLUDE_IN.get(name))
             log(f"release: {zp.name} {human(zp.stat().st_size)}")
+        info = {**COMPONENT_INFO[name], "paths": component_paths(out, name) if name != "python-base" else ["<root files>", "Lib"]}
         if zp.exists():
-            manifest["components"][name] = entry(zp, comp_ver[name])
+            manifest["components"][name] = {**entry(zp, comp_ver[name]), **info}
         else:
-            manifest["components"][name] = {"version": comp_ver[name]}          # zip 없이 버전만 (서버에 이미 있는 경우)
+            manifest["components"][name] = {"version": comp_ver[name], **info}          # zip 없이 버전만 (서버에 이미 있는 경우)
     (rel_dir / "latest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     ver["component_versions"] = comp_ver
     (out / "VERSION.json").write_text(json.dumps(ver, ensure_ascii=False, indent=1), encoding="utf-8")

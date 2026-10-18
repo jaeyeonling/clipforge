@@ -10,11 +10,22 @@ npm run pack                                     # release/win-unpacked/ (설치
 npm run dist                                     # release/clipforge-Setup-<ver>.exe (NSIS, 사용자 설치, UAC 없음)
 set CLIPFORGE_SKIP_ENGINE=1 && npm run pack      # 엔진 없이 빠른 빌드 (툴체인 점검용)
 ```
-설치본 = Electron(~200MB) + `resources/engine/`(= ../engine-dist, `python scripts/build_engine_dist.py --smoke` 로 먼저 구성).
-설치본의 데이터 폴더는 `%APPDATA%\clipforge\data` (껍데기가 `CLIPFORGE_DATA` 로 넘김). 제거해도 데이터는 남긴다.
+설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe ≈ 100MB.
+대용량 구성요소(파이썬 런타임·CUDA·ffmpeg·Whisper)는 첫 실행 때 `latest.json` 을 보고 받아 `%LOCALAPPDATA%\clipforge\runtime\` 에 둔다.
+데이터는 `%LOCALAPPDATA%\clipforge\data`. 제거해도 런타임·데이터는 남긴다.
+
+## 릴리스 아티팩트 · 첫 실행 흐름 점검
+```
+python scripts/build_engine_dist.py --release release-test --release-components --base-url file:///C:/Users/jaeye/source/clipforge/release-test
+set CLIPFORGE_RUNTIME_DIR=%TEMP%\cf-runtime-test
+set CLIPFORGE_UPDATE_URL=file:///C:/Users/jaeye/source/clipforge/release-test
+npm start                                        # 첫 실행 설치 화면 → 구성요소 선택 → 설치 → 엔진 시작
+npx electron . --auto-setup --smoke              # 같은 흐름을 클릭 없이 끝까지 (자동 점검)
+```
+업데이트 주소 우선순위: `CLIPFORGE_UPDATE_URL` → `%LOCALAPPDATA%\clipforge\update-url.txt` → main.js 의 DEFAULT_UPDATE_URL(호스팅 결정 뒤 교체).
 
 ## 파일
-- `main.js` 창·트레이·알림·수명, `engine.js` 엔진 사이드카, `preload.js` 렌더러 노출(정보성), `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).
+- `main.js` 창·트레이·알림·첫 실행 설치·업데이트 적용, `engine.js` 엔진 사이드카(모드: runtime/dist/venv), `components.js` 구성요소 다운로드·설치·롤백, `preload.js` IPC 브리지, `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).
 
 ## electron-builder 가 Windows 비관리자에서 멈출 때
 `winCodeSign` 7z 안의 macOS 심볼릭 링크 때문에 추출이 실패하고 3번 재시도 뒤 멈춘다 (개발자 모드나 관리자 권한이 없으면 심볼릭 링크를 못 만든다).

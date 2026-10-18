@@ -171,6 +171,7 @@
 | models/faster-whisper-large-v3-turbo | HF 캐시 스냅샷 복사. `transcribe` 가 로컬 폴더 우선 → 오프라인(HF_HUB_OFFLINE 에서 검증), GPU 실패 시 CPU/int8 폴백 | 1.6GB |
 | **합계** | | **4.5GB** |
 - 검증: 번들 파이썬만으로(PATH=bin) 엔진 기동 → health 전부 OK(ffmpeg·NVENC·GPU·Whisper GPU·OCR·폰트), Electron `CLIPFORGE_ENGINE_DIST=1 --smoke` 통과, ep59 오디오 오프라인 전사 OK.
+- `engine-dist/` 는 이제 **설치본에 통째로 들어가지 않는다** — 릴리스 아티팩트(층 A zip + 층 B zip 들)의 원본이자 개발 중 번들 점검용. 설치본에는 그중 코드 경로만 동봉(§9.2).
 - 데이터 분리: 껍데기가 설치본에서 `CLIPFORGE_DATA=%APPDATA%/clipforge/data` 를 넘긴다(§6 원칙: 업데이트가 라벨을 지우지 않음).
 - 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 친구 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
 - 주의: 번들 안에서 `ffmpeg_whisper` 폴백(ggml 모델)은 넣지 않았다. 전사 폴백은 faster-whisper CPU 로 충분하다.
@@ -213,7 +214,9 @@
 - 추천: **R2 하나로 통일**(설치본·구성요소·매니페스트 모두). 친구 한 명 배포 규모에선 비용이 거의 0.
 서명: 코드 서명 인증서가 없는 동안은 SmartScreen 경고를 피할 수 없다(설치본 첫 실행 때 "추가 정보 → 실행"). 앱 내 업데이트(A·B 층)는 zip 교체라 SmartScreen 과 무관 — **재설치를 피하는 또 하나의 이유**.
 
-**구현 단위**: (1) 빌드 스크립트에 `--release` : engine-code zip + 구성요소 zip + latest.json 생성(해시·크기 자동) (2) `desktop/updater.js` : 확인·다운로드(재개)·검증·교체·롤백 (3) 화면: 상단 배너 + 설정 탭의 "업데이트" 카드(현재 버전표·확인·적용) (4) electron-updater 로 C 층. 서버 결정이 나면 (1)(2) 부터.
+**설치본은 작게, 대용량은 첫 실행 때 (2026-10-18 밤 결정, 사용자 제안)**: 4.5GB 설치본은 만들지 않는다. 설치본 = Electron + 엔진 코드(층 A, 5MB) + 7za.exe ≈ 100MB. 첫 실행 때 껍데기가 `latest.json` 을 읽어 **구성요소 선택 화면**(python-base 193MB · cuda 1.4GB[선택, NVIDIA 감지 시 기본 켬] · ffmpeg 182MB · whisper 1.5GB)을 보여주고, 받은 것을 `%LOCALAPPDATA%\clipforge\runtime\` 에 풀어 엔진을 띄운다. 첫 설치와 업데이트가 **같은 코드**(`desktop/components.js`)다. 장점: 설치본이 작고, GitHub 2GB 제한 안에 들어가고, CPU 전용 설치가 되고, 런타임이 사용자 폴더라 업데이트에 UAC 가 없다. 단점: 오프라인 첫 설치 불가 → USB 배포는 릴리스 폴더를 통째로 복사하고 `%LOCALAPPDATA%\clipforge\update-url.txt` 에 `file:///E:/...` 를 적는 것으로 해결(또는 `CLIPFORGE_UPDATE_URL`).
+
+**구현 상태**: ✅ (1) `scripts/build_engine_dist.py --release DIR --release-components` : engine-code zip + 구성요소 zip(python-base/cuda/ffmpeg/whisper) + latest.json(sha256·size·label·optional) ✅ (2) `desktop/components.js` : fetchManifest(https/file) · present(파일로 설치 판정) · plan(missing/update) · download(이어받기·sha256) · install(7za → `_staging` → 경로 교체, 실패 시 `_prev` 복원; python-base 교체 시 cuda 폴더 보존) · seedFromResources(동봉 엔진 코드 심기) ✅ (2') `desktop/main.js` : 첫 실행 설치 화면(IPC), 10초 뒤·6시간마다 확인 → 알림 + 트레이 "업데이트 적용"(작업 중이면 비활성) → 엔진 중지·교체·재시작 · ⬜ (3) React 화면의 업데이트 배너/카드 (지금은 트레이·알림) · ⬜ (4) electron-updater 로 C 층 (호스팅 결정 뒤) · ⬜ 호스팅(R2 추천).
 
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 

@@ -1,7 +1,10 @@
-// Python 엔진 사이드카: 찾기 → 띄우기 → 준비될 때까지 기다리기 → 종료.
-// 개발: <repo>/.venv/Scripts/python.exe -m clipforge.app   (cwd = 저장소 루트)
-// 배포: <resources>/engine/python.exe -m clipforge.app      (cwd = resources/engine, 포터블 런타임 — 아직 미구성)
-// 환경변수: CLIPFORGE_ENGINE_PY(파이썬 경로), CLIPFORGE_ENGINE_CWD, CLIPFORGE_PORT
+// Python 엔진 사이드카: 어디서 띄울지 정하고 → 띄우고 → 준비될 때까지 기다리고 → 끝낼 때 정리.
+//
+// 실행 모드 (resolveEngine):
+//   runtime  : <runtimeDir>/python.exe -m clipforge.app   ← 설치본. runtimeDir = %LOCALAPPDATA%\clipforge\runtime (첫 실행 때 구성요소를 받아 채움)
+//   dist     : <repo>/engine-dist/python.exe              ← 개발 중 번들 점검 (CLIPFORGE_ENGINE_DIST=1)
+//   venv     : <repo>/.venv/Scripts/python.exe            ← 개발 기본
+// 환경변수: CLIPFORGE_ENGINE_PY(파이썬 직접 지정) CLIPFORGE_ENGINE_CWD CLIPFORGE_RUNTIME_DIR CLIPFORGE_DATA CLIPFORGE_PORT
 "use strict";
 const { spawn, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -11,20 +14,32 @@ const path = require("node:path");
 
 const REPO = path.resolve(__dirname, "..");
 
+function localAppData() {
+  return process.env.LOCALAPPDATA || path.join(require("node:os").homedir(), "AppData", "Local");
+}
+
+/** 설치본·런타임 모드의 기본 폴더. 데이터(영상 캐시 수 GB)와 런타임(4GB)은 Roaming 이 아니라 Local 에 둔다. */
+function defaultDirs() {
+  const base = path.join(localAppData(), "clipforge");
+  return { runtime: process.env.CLIPFORGE_RUNTIME_DIR || path.join(base, "runtime"), data: process.env.CLIPFORGE_DATA || path.join(base, "data"), downloads: path.join(base, "downloads") };
+}
+
+/** { mode, py, cwd, dataRoot, runtimeDir, seedDir } */
 function resolveEngine(app) {
+  const dirs = defaultDirs();
   if (process.env.CLIPFORGE_ENGINE_PY) {
-    return { py: process.env.CLIPFORGE_ENGINE_PY, cwd: process.env.CLIPFORGE_ENGINE_CWD || REPO };
+    return { mode: "custom", py: process.env.CLIPFORGE_ENGINE_PY, cwd: process.env.CLIPFORGE_ENGINE_CWD || REPO, dataRoot: process.env.CLIPFORGE_DATA };
   }
-  if (app.isPackaged) {
-    const dir = path.join(process.resourcesPath, "engine");
-    return { py: path.join(dir, "python.exe"), cwd: dir, dataRoot: path.join(app.getPath("userData"), "data") };
+  if (app.isPackaged || process.env.CLIPFORGE_RUNTIME_DIR) {
+    const seed = app.isPackaged ? path.join(process.resourcesPath, "engine") : path.join(REPO, "engine-dist");
+    return { mode: "runtime", py: path.join(dirs.runtime, "python.exe"), cwd: dirs.runtime, dataRoot: dirs.data, runtimeDir: dirs.runtime, seedDir: seed, downloads: dirs.downloads };
   }
-  if (process.env.CLIPFORGE_ENGINE_DIST === "1") {                 // 개발 중 번들 런타임 점검: engine-dist/ 로 띄운다
+  if (process.env.CLIPFORGE_ENGINE_DIST === "1") {
     const dir = path.join(REPO, "engine-dist");
-    return { py: path.join(dir, "python.exe"), cwd: dir, dataRoot: REPO };   // 데이터는 저장소(ep59 등), 번들은 깨끗하게
+    return { mode: "dist", py: path.join(dir, "python.exe"), cwd: dir, dataRoot: REPO };   // 데이터는 저장소(ep59 등), 번들은 깨끗하게
   }
   const venv = path.join(REPO, ".venv", "Scripts", "python.exe");
-  return { py: fs.existsSync(venv) ? venv : "python", cwd: REPO };
+  return { mode: "venv", py: fs.existsSync(venv) ? venv : "python", cwd: REPO, dataRoot: process.env.CLIPFORGE_DATA };
 }
 
 function httpJson(url, timeoutMs = 1500) {
@@ -63,6 +78,7 @@ async function pickPort(preferred) {
 class Engine {
   constructor(app, log) {
     this.app = app; this.log = log; this.proc = null; this.port = null; this.external = false; this.health = null;
+    this.cfg = resolveEngine(app);
   }
   get url() { return `http://127.0.0.1:${this.port}`; }
 
@@ -71,12 +87,12 @@ class Engine {
     const pick = await pickPort(preferred);
     this.port = pick.port; this.external = pick.external;
     if (pick.external) { this.log(`engine: 이미 떠 있는 엔진에 연결 ${this.url}`); return this.waitReady(5000); }
-    const { py, cwd, dataRoot } = resolveEngine(this.app);
+    const { py, cwd, dataRoot } = this.cfg;
     if (!fs.existsSync(py) && py !== "python") throw new Error(`엔진 파이썬을 찾지 못했습니다: ${py}`);
     const args = ["-m", "clipforge.app", "--no-browser", "--port", String(this.port)];
     const env = { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" };
-    if (dataRoot && !env.CLIPFORGE_DATA) { fs.mkdirSync(dataRoot, { recursive: true }); env.CLIPFORGE_DATA = dataRoot; }   // 설치본: 사용자 데이터는 앱 폴더 밖
-    this.log(`engine: spawn ${py} ${args.join(" ")} (cwd ${cwd}${env.CLIPFORGE_DATA ? ", data " + env.CLIPFORGE_DATA : ""})`);
+    if (dataRoot) { fs.mkdirSync(dataRoot, { recursive: true }); env.CLIPFORGE_DATA = dataRoot; }      // 사용자 데이터는 앱·런타임 폴더 밖
+    this.log(`engine: spawn [${this.cfg.mode}] ${py} ${args.join(" ")} (cwd ${cwd}${env.CLIPFORGE_DATA ? ", data " + env.CLIPFORGE_DATA : ""})`);
     this.proc = spawn(py, args, { cwd, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     this.proc.stdout.on("data", (d) => this.log(`[engine] ${String(d).trimEnd()}`));
     this.proc.stderr.on("data", (d) => this.log(`[engine] ${String(d).trimEnd()}`));
@@ -97,6 +113,15 @@ class Engine {
     throw new Error("엔진이 시간 안에 준비되지 않았습니다");
   }
 
+  /** 엔진을 멈추고 프로세스가 사라질 때까지 기다린다 (구성요소 교체 전에 필요) */
+  async stopAndWait() {
+    this.stop();
+    for (let i = 0; i < 50; i++) {
+      try { await httpJson(`${this.url}/api/health`, 500); } catch { return; }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
   stop() {
     if (!this.proc) return;
     const pid = this.proc.pid;
@@ -109,4 +134,4 @@ class Engine {
   }
 }
 
-module.exports = { Engine, httpJson };
+module.exports = { Engine, httpJson, resolveEngine, defaultDirs };

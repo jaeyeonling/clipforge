@@ -25,7 +25,7 @@ from ..timeline import Segment, Segments
 from .base import signal
 
 IGNORE_TOKENS = {"준영"}          # 배너 본문이 아닌 고정 텍스트(스트리머 이름 라벨)
-NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%]")
+NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%,]")   # 쉼표는 토큰 경계라 남긴다
 DECOR_RE = re.compile(r"[★츠]")
 HEADER_RE = re.compile(r"^(득템|득렘|득램|특템|특램|독템)")   # OCR 변형 포함
 
@@ -38,7 +38,7 @@ def _engine():
 
 def normalize(txts: list[str]) -> str:
     kept = [t for t in txts if t not in IGNORE_TOKENS]
-    return NORM_RE.sub("", ",".join(kept))
+    return re.sub(r",{2,}", ",", NORM_RE.sub("", ",".join(kept))).strip(",")
 
 
 class BannerOCR:

@@ -10,6 +10,7 @@
   python -m clipforge.run weaklabel foo [--title ...]      # 제목→배너 매칭 약한 정답 labels/foo.shorts.csv
   python -m clipforge.run eval     foo --shorts            # hit@K / MRR
   python -m clipforge.run harvest  foo --shorts            # review/foo/shorts/keep/ → labels (label=keep)
+  python -m clipforge.run lexicon  foo                     # 배너 토큰 사전 매칭률 + 미매칭 → reports/foo_tokens.md
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
@@ -22,6 +23,7 @@ from pathlib import Path
 
 from .candidates import DEFAULT_WEIGHTS, make_candidates
 from .eval_shorts import evaluate_shorts
+from .lexicon import Lexicon, banner_tokens, report_md
 from .evaluate import evaluate
 from .preprocess import preprocess
 from .profiles import load_profile
@@ -186,6 +188,21 @@ def cmd_shorts(a):
     print(shorts_pretty(cands))
 
 
+def cmd_lexicon(a):
+    """배너 append 토큰을 사전(items.json + slang.yaml)에 매칭 → 매칭률 + 미매칭 목록."""
+    meta = load_meta(a.vid)
+    lex = Lexicon(meta.get("game", "d2r"))
+    banner = Segments.load(CACHE / a.vid / "item_banner.json")
+    matches = [(t, lex.lookup(tok)) for t, tok in banner_tokens(banner.items)]
+    ok = sum(1 for _, m in matches if m.head)
+    print(f"[lexicon] {ok}/{len(matches)} tokens matched  (items={len(lex.items)}, slang={len(lex.slang)})")
+    for t, m in matches:
+        print(f"  {fmt_time(t)}  {m.token:<28} -> {m.head or '?':<14} {m.kind or '':<8} {m.source:<12} {m.score:.0f}  {m.option}")
+    out = ROOT / "reports"; out.mkdir(exist_ok=True)
+    (out / f"{a.vid}_tokens.md").write_text(report_md(a.vid, matches), encoding="utf-8")
+    print(f"  -> {out / (a.vid + '_tokens.md')}")
+
+
 def cmd_harvest(a):
     """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프.
     --shorts: review/<vid>/shorts/keep/*.mp4 → labels/<vid>.shorts.csv (label=keep)."""
@@ -244,6 +261,7 @@ def main():
     for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--shorts", action="store_true"); p.set_defaults(f=fn)
     p = sp.add_parser("weaklabel"); p.add_argument("vid"); p.add_argument("--title", default=None); p.set_defaults(f=cmd_weaklabel)
+    p = sp.add_parser("lexicon"); p.add_argument("vid"); p.set_defaults(f=cmd_lexicon)
 
     a = ap.parse_args()
     a.f(a)

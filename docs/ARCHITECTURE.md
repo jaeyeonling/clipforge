@@ -180,7 +180,7 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 | 5 | ✅ 쇼츠 후보 생성기 `shorts.py` (앵커→창→쉼·컷 스냅→5축 점수, short/story variant, `run shorts`) | ep59: short 1위 3:25~3:42(지존참 리액션), story 1위 2:39~3:14(지존참 드랍) = 제목 순간. 스냅샷 `experiments/ep59_shorts.json` |
 | 6 | ✅ `export --shorts`: 1080×1920 초안(상단 훅 텍스트 띠 400 / 게임 정사각 크롭 1080 / 채팅 ROI 440), NVDEC→NVENC, `review/<id>/shorts/index.md` 에 편집 지시표 | ep59 6개 초안 49초(≈8초/개). 크롭 중심·툴팁 추적·사전 기반 자막은 후속 |
 | 7 | ✅ `weaklabel`(episodes.csv 제목 → slang.yaml 키워드 → 배너 append 퍼지 매칭 → `labels/<id>.shorts.csv` title_item ±30s) + `eval --shorts`(hit@K, MRR) + `harvest --shorts`(keep/ → label=keep) | ep59: 지존참 → 2:51 (fuzz 100). story hit@1 = 1/1, short rank 2 (1위는 같은 드랍의 3:25 채팅 줌 리액션) |
-| 8 | 도메인 사전 v0: d2data 조인 → `data/d2r/items.json`, 인벤 약어 → `slang.yaml`, 배너 토큰 매칭률 | 매칭률 숫자 |
+| 8 | ✅ 도메인 사전 v0: `scripts/build_items.py`(d2data 조인 → `items.json` 1,308개, 한글 누락 76), `slang.yaml`(표제어 27 + 공식 id 링크), `lexicon` 명령(토큰 매칭률 + `reports/<id>_tokens.md`), 배너 정규화에 쉼표 유지(토큰 경계, 7:14 말룬 추가 발견) | ep59 13/14 — 단 slang 을 ep59 로 시드했으니 순환. 새 편집본에서 재측정. 친구 패키지 `docs/FRIEND_PACK.md` |
 | 9 | `xml` 쇼츠 시퀀스 + 리뷰 시퀀스(마커+V2) → 친구 Premiere 피드백 | 실사용 1회 |
 | 10 | 편집본 5~10편으로 확장, 가중치 조정 | hit@3 ≥ 0.8 |
 | — | Phase 2: `align`, 음량/발화 신호(원본), `d2_item_label`, `ui_state`, DNF 프로필 | 원본 샘플 확보 후 |

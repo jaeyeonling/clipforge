@@ -1,94 +1,246 @@
 # D2R 한국 커뮤니티·기준 채널 약어 사전 v0 (2026-10-18)
-# 형식: 표제어 → {aliases: [배너/제목/채팅에서 보이는 표기들], kind, note}
-# 출처: 인벤 "지존참(지참) 및 으뜸 참 옵션"(5734/10603), 인벤 "거래 축약어 모음"(wznews 264060), 나무위키 부적(디아블로 2),
-#       기준 채널 제목·득템 배너(ep59). ? 표시는 미확인 — 친구 인터뷰에서 확정.
-# 매칭은 공백·구두점 제거 후 부분 일치 + 퍼지(rapidfuzz partial_ratio ≥ 85). OCR 변형(어레/어래, 템/렘)도 alias 로 적는다.
+# 표제어 → {aliases, kind, item(items.json id), name_ko_official, name_en, note}. '?' = 미확인, 친구 인터뷰로 확정.
+# 매칭: 공백·구두점 제거 후 정확/부분 일치 → rapidfuzz. OCR 변형(어레/어래, 템/렘, 횃/팻)도 alias 로 적는다.
 
 지존참:
   kind: charm
-  aliases: [지참, 지존 참, 3맥20어레20피, 3맥20어래20피, 3/20/20, 320 20, 스몰참, 3맥20어레20피스몰참, 10맥76어레45피, 10맥76어래45피, 그랜드참]
+  aliases:
+  - 지참
+  - 지존 참
+  - 3맥20어레20피
+  - 3맥20어래20피
+  - 3/20/20
+  - 320 20
+  - 스몰참
+  - 3맥20어레20피스몰참
+  - 10맥76어레45피
+  - 10맥76어래45피
+  - 그랜드참
   note: 최상 옵션 참. 스몰 = 3맥/20어레/20피, 그랜드 = 10맥/76어레/45피 (인벤 10603)
+  item: charm:cm1
+  name_ko_official: 스몰 차암
+  name_en: Small Charm
 으뜸참:
   kind: charm
-  aliases: [으뜸 참, 올으뜸, 으뜸스몰참, 으뜸그랜드참, 으뜸 그랜드스킬참, 스킬참]
+  aliases:
+  - 으뜸 참
+  - 올으뜸
+  - 으뜸스몰참
+  - 으뜸그랜드참
+  - 으뜸 그랜드스킬참
+  - 스킬참
+  item: charm:cm3
+  name_ko_official: 그랜드 차암
+  name_en: Grand Charm
 그랜드참:
   kind: charm
-  aliases: [그참, 그랜드 참, 그랜드스킬참, 스킬참]
+  aliases:
+  - 그참
+  - 그랜드 참
+  - 그랜드스킬참
+  - 스킬참
+  item: charm:cm3
+  name_ko_official: 그랜드 차암
+  name_en: Grand Charm
 자룬:
   kind: rune
-  aliases: [Jah, 자 룬, 자]
+  aliases:
+  - Jah
+  - 자 룬
+  - 자
   note: 룬 단위 시세 기준 중 하나
+  item: rune:r31
+  name_ko_official: 조 룬
+  name_en: Jah Rune
 베르룬:
   kind: rune
-  aliases: [Ber, 베르 룬, 베르]
+  aliases:
+  - Ber
+  - 베르 룬
+  - 베르
+  item: rune:r30
+  name_ko_official: 베르 룬
+  name_en: Ber Rune
 조드룬:
   kind: rune
-  aliases: [Zod, 조드]
+  aliases:
+  - Zod
+  - 조드
+  item: rune:r33
+  name_ko_official: 조드 룬
+  name_en: Zod Rune
 오움룬:
   kind: rune
-  aliases: [Ohm, 오움]
+  aliases:
+  - Ohm
+  - 오움
+  item: rune:r27
+  name_ko_official: 오움 룬
+  name_en: Ohm Rune
 수르룬:
   kind: rune
-  aliases: [Sur, 수르]
+  aliases:
+  - Sur
+  - 수르
+  item: rune:r29
+  name_ko_official: 수르 룬
+  name_en: Sur Rune
 로룬:
   kind: rune
-  aliases: [Lo, 로 룬]
+  aliases:
+  - Lo
+  - 로 룬
+  item: rune:r28
+  name_ko_official: 로 룬
+  name_en: Lo Rune
 참룬:
   kind: rune
-  aliases: [Cham, 참 룬]
+  aliases:
+  - Cham
+  - 참 룬
+  item: rune:r32
+  name_ko_official: 차암 룬
+  name_en: Cham Rune
 고급룬:
   kind: rune
-  aliases: [고룬, 고급 룬]
+  aliases:
+  - 고룬
+  - 고급 룬
 조던링:
   kind: unique
-  aliases: [조던, 더 스톤 오브 조던, SoJ, 요르단의 반지]
+  aliases:
+  - 조던
+  - 더 스톤 오브 조던
+  - SoJ
+  - 요르단의 반지
+  item: u:The Stone of Jordan
+  name_ko_official: 더 스톤 오브 조던
+  name_en: The Stone of Jordan
 모너크:
   kind: base
-  aliases: [모나크, 쌍패모너크, 쌍패 모너크]
+  aliases:
+  - 모나크
+  - 쌍패모너크
+  - 쌍패 모너크
+  item: base:uit
+  name_ko_official: 모너크
+  name_en: Monarch
 횃불:
   kind: unique
-  aliases: [으뜸횃불, 으뜸 횃불, 지옥의 횃불, 드루횃불, 드루팻불, 팻불]
+  aliases:
+  - 으뜸횃불
+  - 으뜸 횃불
+  - 지옥의 횃불
+  - 드루횃불
+  - 드루팻불
+  - 팻불
   note: 지옥의 횃불(Hellfire Torch). 배너 OCR 이 횃→팻 로 읽음
+  item: u:Hellfire Torch
+  name_ko_official: 지옥의 횃불
+  name_en: Hellfire Torch
 애니참:
   kind: unique
-  aliases: [애니, 어나이얼러스, 올으뜸 애니참]
+  aliases:
+  - 애니
+  - 어나이얼러스
+  - 올으뜸 애니참
+  item: u:Annihilus
+  name_ko_official: 애니힐러스
+  name_en: Annihilus
 모자이크:
   kind: runeword
-  aliases: [모자이크 재료, 모자이크씬, 지존재료]
+  aliases:
+  - 모자이크 재료
+  - 모자이크씬
+  - 지존재료
+  item: rw:Mosaic
+  name_ko_official: null
+  name_en: Mosaic
 파괴참:
   kind: charm
-  aliases: [냉기 파괴 참, 파괴 참, 냉기파괴참]
+  aliases:
+  - 냉기 파괴 참
+  - 파괴 참
+  - 냉기파괴참
 으뜸주얼:
   kind: jewel
-  aliases: [매직주얼, 초대박 매직주얼, 유니크주얼, 화염5/3주얼, 화염 5/3 주얼]
-  note: "'화염5/3주얼' = 화염 피해 +5 / 3 옵션 주얼 (추정)"
+  aliases:
+  - 매직주얼
+  - 초대박 매직주얼
+  - 유니크주얼
+  - 화염5/3주얼
+  - 화염 5/3 주얼
+  note: '''화염5/3주얼'' = 화염 피해 +5 / 3 옵션 주얼 (추정)'
 레이븐링:
   kind: unique
-  aliases: [레이븐, 레이븐 프로스트]
+  aliases:
+  - 레이븐
+  - 레이븐 프로스트
+  item: u:Raven Frost
+  name_ko_official: 레이븐 프로스트
+  name_en: Raven Frost
 탈라샤갑옷:
   kind: set
-  aliases: [탈라샤 갑옷, 탈셋 갑옷]
+  aliases:
+  - 탈라샤 갑옷
+  - 탈셋 갑옷
 기드참:
   kind: unique
-  aliases: [기드, 기드의 포츈, 기드참(매찬34), 기드참(매찬23)]
+  aliases:
+  - 기드
+  - 기드의 포츈
+  - 기드참(매찬34)
+  - 기드참(매찬23)
   note: 괄호 안 매찬 = 매직 아이템 발견 확률
+  item: u:Gheed's Fortune
+  name_ko_official: 기드의 포츈
+  name_en: Gheed's Fortune
 에테갑옷:
   kind: base
-  aliases: [에테 갑옷, 에테갑옷(방783), 무형 갑옷]
+  aliases:
+  - 에테 갑옷
+  - 에테갑옷(방783)
+  - 무형 갑옷
 강철그늘:
   kind: unique
-  aliases: [에테강철그늘, 강철 그늘, 강철그늘 아메트, 스틸쉐이드]
+  aliases:
+  - 에테강철그늘
+  - 강철 그늘
+  - 강철그늘 아메트
+  - 스틸쉐이드
+  item: u:Steelshade
+  name_ko_official: 스틸 쉐이드
+  name_en: Steelshade
 신타이탄:
   kind: unique
-  aliases: [타이탄, 타이탄의 복수]
+  aliases:
+  - 타이탄
+  - 타이탄의 복수
+  item: u:Titan's Revenge
+  name_ko_official: 타이탄의 리벤지
+  name_en: Titan's Revenge
 슬가:
   kind: unknown
   aliases: []
-  note: "? 친구 약어. 슬픔의 가면? 확인 필요"
+  note: '? 친구 약어. 슬픔의 가면? 확인 필요'
 스웹벨트:
   kind: unknown
-  aliases: [스웹 벨트]
-  note: "? 친구 약어. 확인 필요"
+  aliases:
+  - 스웹 벨트
+  note: '? 친구 약어. 확인 필요'
 말룬:
   kind: rune
-  aliases: [Mal, 말 룬]
+  aliases:
+  - Mal
+  - 말 룬
+  item: rune:r23
+  name_ko_official: 말 룬
+  name_en: Mal Rune
+_ignore:
+  kind: meta
+  aliases:
+  - 템엄
+  - 엄
+  - 츠
+  - S
+  note: OCR 조각. 토큰 매칭에서 제외

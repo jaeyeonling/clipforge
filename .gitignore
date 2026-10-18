@@ -11,3 +11,6 @@ models/
 project.json
 app/node_modules/
 app/dist/
+desktop/node_modules/
+desktop/release/
+engine-dist/

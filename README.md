@@ -108,3 +108,11 @@ set PATH=C:/Users/jaeye/tools/node;%PATH%      # 포터블 Node 22
 cd app && npm install && npm run build         # → app/dist (엔진이 서빙)
 npm run dev                                    # 개발 서버 5173, API 는 8765 로 프록시
 ```
+
+## 데스크톱 (Electron) — `desktop/`
+창 하나에 위 화면을 담고, 엔진을 자식 프로세스로 띄우며, 트레이에 상주한다.
+```
+cd desktop && npm install
+npm start          # 창 + 엔진 (8765 에 엔진이 이미 떠 있으면 그것에 붙음)
+npm run smoke      # 자동 점검: 창·엔진 준비 확인 후 5초 뒤 종료, 로그는 %APPDATA%\clipforge\shell.log
+```

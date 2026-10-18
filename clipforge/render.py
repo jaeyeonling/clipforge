@@ -132,11 +132,14 @@ def chat_messages_for(c: ShortCandidate, chat: list[dict] | None, pre: float = 1
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
                   cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0,
                   transcript: dict | None = None, subs: bool = True, chat: list[dict] | None = None,
-                  top_mode: str = "auto") -> list[dict]:
+                  top_mode: str = "auto", layout: str = "feed", brand: str = "", episode_label: str = "") -> list[dict]:
     """ui = ui_state 구간 목록 — 크롭 중심이 인벤토리/캐릭터창을 따라간다.
     chat = chat_text 메시지 목록 [{t, nick, text}] — 상단 채팅 피드 모드의 입력. top_mode = auto|title|chat."""
     from .topband import CHAT_H_TOP, TITLE_H, chat_band, title_band
     out_dir.mkdir(parents=True, exist_ok=True)
+    if layout == "feed":
+        return render_feed(cands, meta, out_dir, k=k, transcript=transcript, chat=chat, brand=brand,
+                           episode_label=episode_label)
     src = Path(meta["source"])
     index = []
     for rank, c in enumerate(cands, 1):
@@ -208,3 +211,44 @@ def index_md(index: list[dict], meta: dict) -> str:
               "- 판정 열에 keep/no 를 적거나, 쓸 파일을 `keep/` 폴더로 옮기면 `harvest --shorts` 가 정답으로 회수한다 (7단계).",
               "- 훅 모드 `payoff_flash` = 앞 1~2초에 페이오프 장면을 먼저 보여준 뒤 되감기 권장. `cold_open` = 그대로 시작."]
     return "\n".join(lines)
+
+
+def render_feed(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
+                transcript: dict | None = None, chat: list[dict] | None = None, brand: str = "",
+                episode_label: str = "") -> list[dict]:
+    """레이아웃 feed: 16:9 영상 전체 + 발화 자막 + 채팅 하이라이트 + 회차 띠 + 훅 + 채팅 피드 + 인트로. layout_feed.py"""
+    from . import layout_feed as LF
+    src = Path(meta["source"])
+    brand = brand or "디아블로2 하이라이트"
+    episode_label = episode_label or Path(meta["source"]).stem
+    index = []
+    for rank, c in enumerate(cands, 1):
+        if k and rank > k:
+            continue
+        name = f"{rank:02d}_{c.variant}_{fmt_time(c.start).replace(':', '-')}_{c.score:.2f}.mp4"
+        lines = hook_lines(c)
+        hook = lines[-1] if len(lines) > 1 else lines[0]          # 고정 훅 = 아이템 맥락 줄 ("지존참 직득!")
+        intro = [episode_label, hook] if episode_label and hook else lines[:2]   # 인트로: 회차(흰) / 득템 훅(금)
+        static_png = name.replace(".mp4", "_static.png")
+        ass_file = name.replace(".mp4", ".ass")
+        LF.build_static(c, brand, episode_label, hook, out_dir / static_png)
+        (out_dir / ass_file).write_text(LF.build_ass(c, transcript, chat, intro), encoding="utf-8")
+        if transcript:
+            from .subtitles import cues_for_clip, write_srt
+            write_srt(cues_for_clip(transcript, c.start, c.end, max_chars=26), out_dir / name.replace(".mp4", ".srt"), c.start)
+        cmd = LF.build_cmd(src, c, meta, name, static_png, ass_file)
+        try:
+            subprocess.run(cmd, check=True, cwd=out_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as e:
+            print(f"  ! nvenc failed ({e.stderr.decode(errors='ignore')[-300:].strip()}), retry libx264")
+            subprocess.run(LF.build_cmd(src, c, meta, name, static_png, ass_file, nvenc=False), check=True,
+                           cwd=out_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        (out_dir / static_png).unlink(missing_ok=True)
+        print(f"  {name}  (layout=feed, intro {LF.INTRO_SEC}s)")
+        index.append({"file": name, "variant": c.variant, "rank": rank, "start": c.start, "end": c.end,
+                      "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
+                      "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
+                      "layout": "feed", "top_mode": "feed", "top_h": 0})
+    (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
+    return index

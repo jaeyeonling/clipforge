@@ -2,7 +2,7 @@
 
 임계 초과 구간이 아니라 **페이오프 앵커**에서 창을 만든다.
   앵커 = item_banner(append) > edit_emphasis(zoom/note) > chat_burst 피크
-  창   = [anchor - pre, anchor + post] 를 발화 쉼(무음)·장면 컷에 스냅. 두 variant: short(≈15~25s) / story(≈30~45s)
+  창   = [anchor - pre, anchor + post] 의 시작을 말이 시작되는 지점, 끝을 말이 끝나는 지점(+0.3s)에 스냅. 두 variant: short / story
   점수 = Payoff .35 + Reaction .25 + Chat .15 + Completeness .15 + Hook .10 − 감점(컷 수·길이)
 
 출력 후보마다 편집 지시가 붙는다: hook_mode(cold_open | payoff_flash), overlay_text(배너에서 읽은 아이템명), 앵커 시각.
@@ -41,29 +41,72 @@ class ShortCandidate:
         return self.end - self.start
 
 
-# ---------- 오디오: 발화 쉼 ----------
-def speech_pauses(wav: Path, frame: float = 0.05, min_len: float = 0.4, rel_db: float = -15.0) -> list[tuple[float, float]]:
-    """RMS(dB) 가 중앙값보다 rel_db 이상 낮은 상태가 min_len 초 이상 이어지는 구간."""
+# ---------- 오디오: 발화 구간 ----------
+def speech_segments(wav: Path, frame: float = 0.02, on_db: float = 12.0, off_db: float = 8.0,
+                    min_gap: float = 0.25, min_len: float = 0.2) -> list[tuple[float, float]]:
+    """에너지 VAD. 바닥 소음(p10) 대비 on_db 이상이면 발화 시작, off_db 아래로 떨어지면 끝(히스테리시스).
+    min_gap 미만의 끊김은 같은 발화로 합친다. 마스터링된 편집본에서도 문장 사이 쉼(0.4~0.9s)을 잡는다."""
     with wave.open(str(wav), "rb") as w:
         sr, n = w.getframerate(), w.getnframes()
         x = np.frombuffer(w.readframes(n), dtype=np.int16).astype(np.float32) / 32768.0
     hop = int(sr * frame)
     m = len(x) // hop
-    rms = np.sqrt((x[: m * hop].reshape(m, hop) ** 2).mean(axis=1) + 1e-12)
-    db = 20 * np.log10(rms + 1e-9)
-    quiet = db < (np.median(db) + rel_db)
-    out, i = [], 0
-    while i < m:
-        if quiet[i]:
-            j = i
-            while j < m and quiet[j]:
-                j += 1
-            if (j - i) * frame >= min_len:
-                out.append((i * frame, j * frame))
-            i = j
+    db = 20 * np.log10(np.sqrt((x[: m * hop].reshape(m, hop) ** 2).mean(axis=1) + 1e-12) + 1e-9)
+    floor = float(np.percentile(db, 10))
+    raw, on, st = [], False, 0
+    for i, v in enumerate(db):
+        if not on and v > floor + on_db:
+            on, st = True, i
+        elif on and v < floor + off_db:
+            on = False
+            raw.append([st * frame, i * frame])
+    if on:
+        raw.append([st * frame, m * frame])
+    out: list[list[float]] = []
+    for a, b in raw:
+        if out and a - out[-1][1] < min_gap:
+            out[-1][1] = b
         else:
-            i += 1
-    return out
+            out.append([a, b])
+    return [(a, b) for a, b in out if b - a >= min_len]
+
+
+def pauses_from(segs: list[tuple[float, float]], min_pause: float = 0.35) -> list[tuple[float, float]]:
+    return [(segs[i][1], segs[i + 1][0]) for i in range(len(segs) - 1) if segs[i + 1][0] - segs[i][1] >= min_pause]
+
+
+MARGIN = 0.3   # 발화 경계 바깥 여유(초)
+
+
+def snap_end(e0: float, segs: list[tuple[float, float]], max_fwd: float = 8.0, max_back: float = 3.0) -> float:
+    """끝점을 말이 끝나는 지점으로. e0 가 발화 중이면 그 발화의 끝(+MARGIN), 쉼이면 직전 발화 끝(+MARGIN)."""
+    for a, b in segs:
+        if a <= e0 <= b:
+            if b - e0 <= max_fwd:
+                return b + MARGIN
+            if e0 - a <= max_back:            # 너무 긴 발화: 차라리 그 발화 앞에서 끊는다
+                return max(a - MARGIN, 0.0)
+            return e0
+    prev = [b for _, b in segs if b <= e0]
+    if prev and e0 - prev[-1] <= 1.5:
+        return prev[-1] + MARGIN
+    return e0
+
+
+def snap_start(s0: float, segs: list[tuple[float, float]], max_back: float = 4.0, max_fwd: float = 3.0) -> float:
+    """시작점을 말이 시작되는 지점으로. s0 가 발화 중이면 그 발화의 시작(−MARGIN), 쉼이면 다음 발화 시작(−MARGIN)."""
+    for a, b in segs:
+        if a <= s0 <= b:
+            if s0 - a <= max_back:
+                return max(a - MARGIN, 0.0)
+            nxt = [x for x, _ in segs if x > s0]
+            if nxt and nxt[0] - s0 <= max_fwd:
+                return max(nxt[0] - MARGIN, 0.0)
+            return s0
+    nxt = [a for a, _ in segs if a >= s0]
+    if nxt and nxt[0] - s0 <= max_fwd:
+        return max(nxt[0] - MARGIN, 0.0)
+    return s0
 
 
 def snap(t: float, points: list[float], max_shift: float, direction: int) -> float:
@@ -170,9 +213,8 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
     variants = variants or VARIANTS
     cuts_p = cache / "cuts.json"
     cuts = json.loads(cuts_p.read_text()) if cuts_p.exists() else []
-    pauses = speech_pauses(cache / "audio.wav") if (cache / "audio.wav").exists() else []
-    pause_pts = [p0 for p0, _ in pauses] + [p1 for _, p1 in pauses]
-    snap_pts = sorted(set(pause_pts + list(cuts)))
+    segs = speech_segments(cache / "audio.wav") if (cache / "audio.wav").exists() else []
+    pauses = pauses_from(segs)
     chat_ref = float(np.percentile(curves["chat_burst"].as_array(), 99)) if "chat_burst" in curves else 1.0
 
     anchors = collect_anchors(events, curves, duration)
@@ -180,11 +222,16 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
     for a in anchors:
         for vname, v in variants.items():
             s0, e0 = max(0.0, a["t"] - v["pre"]), min(duration, a["t"] + v["post"])
-            s = snap(s0, snap_pts, 4.0, -1); e = snap(e0, snap_pts, 4.0, +1)
-            if e - s < MIN_LEN:
-                e = min(duration, s + MIN_LEN)
-            if e - s > MAX_LEN:
-                e = s + MAX_LEN
+            s = snap_start(s0, segs)
+            s = snap(s, cuts, 1.0, -1)                       # 1초 안에 장면 컷이 있으면 컷에서 시작 (더 깨끗)
+            e = snap_end(e0, segs)
+            if e - s < MIN_LEN:                               # 짧으면 다음 발화 끝까지
+                nxt = [b for _, b in segs if b + MARGIN > s + MIN_LEN]
+                e = min(duration, (nxt[0] + MARGIN) if nxt else s + MIN_LEN)
+            if e - s > MAX_LEN:                               # 길면 MAX 안의 마지막 발화 끝까지
+                prv = [b for _, b in segs if b + MARGIN <= s + MAX_LEN]
+                e = (prv[-1] + MARGIN) if prv and prv[-1] + MARGIN > s + MIN_LEN else s + MAX_LEN
+            e = min(duration, e)
             c = ShortCandidate(round(s, 2), round(e, 2), a["t"], vname)
             score_candidate(c, a, events, curves, cuts, pauses, chat_ref, duration)
             out.append(c)

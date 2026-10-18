@@ -86,8 +86,8 @@ def check(project: Project, vid: str) -> dict:
             "status": worst, "checks": checks}
 
 
-def preview(project: Project, vid: str, t: int | None = None, rois_override: dict | None = None) -> Path:
-    """frames/<t>.jpg 위에 ROI 박스를 그려 cache/<vid>/calib_preview.png 로 저장. rois_override 는 비율 dict (저장 전 미리보기)."""
+def frame_for(project: Project, vid: str, t: int | None = None) -> tuple[Path, int, dict]:
+    """t초(1fps 인덱스)에 해당하는 frames/*.jpg 와 실제 인덱스, meta. t 가 없으면 길이의 30% 지점."""
     cache = project.cache / vid
     meta = load_json(cache / "meta.json", "meta")
     frames = sorted((cache / "frames").glob("*.jpg"))
@@ -95,14 +95,25 @@ def preview(project: Project, vid: str, t: int | None = None, rois_override: dic
         raise FileNotFoundError("frames 없음 — prep 먼저")
     if t is None:
         t = min(len(frames) - 1, max(0, int(meta["duration"] * 0.3)))
-    im = Image.open(frames[min(t, len(frames) - 1)]).convert("RGB")
+    idx = min(max(0, int(t)), len(frames) - 1)
+    return frames[idx], idx, meta
+
+
+def effective_rois(meta: dict) -> dict:
+    """meta 의 픽셀 ROI → 비율 (화면 편집기의 초기값)."""
+    return {k: [v[0] / meta["width"], v[1] / meta["height"], v[2] / meta["width"], v[3] / meta["height"]]
+            for k, v in meta.get("rois", {}).items()}
+
+
+def preview(project: Project, vid: str, t: int | None = None, rois_override: dict | None = None) -> Path:
+    """frames/<t>.jpg 위에 ROI 박스를 그려 cache/<vid>/calib_preview.png 로 저장. rois_override 는 비율 dict (저장 전 미리보기)."""
+    cache = project.cache / vid
+    frame, t, meta = frame_for(project, vid, t)
+    im = Image.open(frame).convert("RGB")
     W, H = im.size
     d = ImageDraw.Draw(im)
     font = FontStack("gothic", "gothic_regular")
-    rois_frac = rois_override
-    if rois_frac is None:                      # meta 의 픽셀 ROI → 비율
-        rois_frac = {k: [v[0] / meta["width"], v[1] / meta["height"], v[2] / meta["width"], v[3] / meta["height"]]
-                     for k, v in meta.get("rois", {}).items()}
+    rois_frac = rois_override if rois_override is not None else effective_rois(meta)
     for name, (fx, fy, fw, fh) in rois_frac.items():
         col = COLORS.get(name, (255, 255, 255))
         x, y, w, h = int(fx * W), int(fy * H), int(fw * W), int(fh * H)

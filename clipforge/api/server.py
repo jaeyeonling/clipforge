@@ -207,6 +207,17 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             clients.discard(websocket)
 
     # ---- UI ----
+    # index.html 은 캐시 금지 (빌드마다 자산 해시가 바뀌므로 오래된 index 가 옛 JS 를 가리키면 안 된다). 해시 붙은 assets/ 는 길게 캐시.
+    @app.middleware("http")
+    async def _ui_cache_headers(request, call_next):
+        resp = await call_next(request)
+        path = request.url.path
+        if path.startswith("/assets/"):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path == "/" or path.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     ui_dir: Path = engine.project.ui_dir
     if ui_dir.exists():
         app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")

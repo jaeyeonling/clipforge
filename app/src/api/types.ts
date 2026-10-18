@@ -134,6 +134,16 @@ export interface CalibResult {
   checks: CalibCheck[];
 }
 
+export interface PreviewResult {
+  url: string;                 // 서버가 박스를 그린 합성 PNG
+  t: number; n_frames: number;
+  frame_url: string;           // 원본 프레임 (화면 편집기용)
+  frame_size: [number, number];
+  rois: Record<string, number[]>;         // 비율 [x, y, w, h]
+  panel_bands: Record<string, number[]>;
+  colors: Record<string, string>;
+}
+
 export interface Profile {
   name?: string;
   rois: Record<string, number[]>;

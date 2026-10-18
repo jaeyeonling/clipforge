@@ -1,5 +1,5 @@
 import type {
-  CalibResult, Candidate, Episode, ErrorInfo, Health, Job, Layout, LogLine, MetricRow, Profile, StageName,
+  CalibResult, Candidate, Episode, ErrorInfo, Health, Job, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -57,7 +57,7 @@ export const api = {
     post<{ ok: boolean; labels: number }>(`/api/episodes/${encodeURIComponent(id)}/decision`, { start: c.start, end: c.end, label, reason, file: c.file || "" }),
   calibrate: (id: string) => request<CalibResult>(`/api/episodes/${encodeURIComponent(id)}/calibrate`),
   calibratePreview: (id: string, t: number, rois: Record<string, number[]> | null) =>
-    post<{ url: string; t: number }>(`/api/episodes/${encodeURIComponent(id)}/calibrate/preview`, { t, rois }),
+    post<PreviewResult>(`/api/episodes/${encodeURIComponent(id)}/calibrate/preview`, { t, rois }),
   profile: (game: string) => request<Profile>(`/api/profiles/${game}`),
   saveProfile: (game: string, rois: Record<string, number[]>) => put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
   metrics: () => request<MetricRow[]>("/api/metrics"),

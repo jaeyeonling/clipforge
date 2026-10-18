@@ -223,3 +223,13 @@ kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid 
 .compare-grid.one { grid-template-columns: 1fr; max-width: 520px; }
 .compare-item video { width: 100%; max-height: 520px; aspect-ratio: 9 / 16; background: #000; border-radius: var(--r-md); object-fit: contain; }
 .compare-item.keep video { outline: 2px solid #5f9a50; } .compare-item.no video { outline: 2px solid #8a3a34; }
+
+/* ---------- ROI 드래그 편집 ---------- */
+.roi-canvas { position: relative; width: 100%; user-select: none; touch-action: none; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: #000; }
+.roi-canvas img { width: 100%; display: block; pointer-events: none; }
+.roi-box { position: absolute; border: 2px solid; box-sizing: border-box; cursor: move; background: rgba(255,255,255,0.03); }
+.roi-box:hover { background: rgba(255,255,255,0.08); }
+.roi-box .tag { position: absolute; left: 0; top: 0; transform: translateY(-100%); font: 700 11px/1.4 var(--mono); color: #1a1a10; padding: 0 5px; border-radius: 3px 3px 0 0; }
+.roi-box .handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; cursor: nwse-resize; border: 2px solid #000; }
+.roi-band { position: absolute; border: 1px dashed rgba(200,160,255,0.8); box-sizing: border-box; pointer-events: none; }
+.roi-band span { position: absolute; left: 2px; top: -16px; font: 10px/1.4 var(--mono); color: rgba(200,160,255,0.9); }

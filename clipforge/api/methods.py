@@ -224,9 +224,17 @@ class Engine:
         from .. import calibrate
         try:
             out = calibrate.preview(self.project, vid, t, rois)
+            frame, idx, meta = calibrate.frame_for(self.project, vid, t)
         except FileNotFoundError as e:
             raise ApiError("E_NO_FRAMES", str(e), "prep 단계를 먼저 실행하세요")
-        return {"path": str(out), "url": f"/media/cache/{vid}/calib_preview.png?ts={int(out.stat().st_mtime)}"}
+        from PIL import Image
+        with Image.open(frame) as im:
+            fw, fh = im.size
+        return {"path": str(out), "url": f"/media/cache/{vid}/calib_preview.png?ts={int(out.stat().st_mtime)}",
+                "t": idx, "n_frames": len(sorted((self.project.cache / vid / "frames").glob("*.jpg"))),
+                "frame_url": f"/media/cache/{vid}/frames/{frame.name}", "frame_size": [fw, fh],       # 화면 편집기: 원본 프레임 + 비율 박스
+                "rois": rois if rois is not None else calibrate.effective_rois(meta),
+                "panel_bands": meta.get("panel_bands") or calibrate.DEFAULT_BANDS, "colors": {k: "#%02x%02x%02x" % v for k, v in calibrate.COLORS.items()}}
 
     def profile_get(self, game: str) -> dict:
         from .. import calibrate

@@ -49,7 +49,7 @@ function Main() {
   return (
     <div className="main">
       <div className="main-head">
-        <h1>{selected ? selected.id : "회차를 선택하세요"}</h1>
+        <h1>{selected ? selected.id : episodes.length ? "회차를 골라 주세요" : "시작해 볼까요"}</h1>
         {selected?.title && <span className="sub" title={selected.title}>{selected.title}</span>}
       </div>
       <UpdateBanner onSettings={() => setTab("settings")} />

@@ -1,47 +1,52 @@
-/* clipforge 디자인 토큰 — 다크 기본, 브랜드 노랑 포인트. 모든 색·간격·글자는 여기서만 정의한다. */
+/* clipforge 디자인 토큰 — 토스 다크 모드 결을 따른다: 중성 회색 면, 파란 주요 버튼, 테두리 대신 면과 여백으로 위계.
+   브랜드 노랑(--brand)은 워드마크·순위처럼 '브랜드'에만 쓴다. 모든 색·간격·글자는 여기서만 정의한다. */
 :root {
   color-scheme: dark;
 
-  /* 표면 */
-  --bg: #0b0a09;
-  --bg-elev: #12110f;
-  --panel: #1a1816;
-  --panel-2: #211e1b;
-  --line: #2c2925;
-  --line-strong: #3a3631;
+  /* 표면 (어두운 순) */
+  --bg: #17171c;
+  --bg-elev: #1b1b21;
+  --panel: #202027;
+  --panel-2: #2a2a33;
+  --panel-3: #34343e;
+  --line: #2a2a32;
+  --line-strong: #3c3c47;
 
   /* 글자 */
-  --ink: #f5f2e8;
-  --ink-2: #c9c3b4;
-  --muted: #8f8979;
-  --muted-2: #6b665b;
+  --ink: #e8e8ea;
+  --ink-2: #c5c5ca;
+  --muted: #8b95a1;
+  --muted-2: #6b7684;
 
   /* 브랜드·의미색 */
-  --accent: #f0f660;
-  --accent-ink: #1a1a10;
-  --accent-dim: #4a4c22;
-  --ok: #9be28a;
-  --ok-bg: #243a22;
-  --warn: #f0d36a;
-  --warn-bg: #3a3322;
-  --bad: #ff7b70;
-  --bad-bg: #3a2222;
-  --info: #8ec5ff;
+  --accent: #4593fc;          /* 토스 블루(다크) */
+  --accent-strong: #3182f6;
+  --accent-ink: #ffffff;
+  --accent-dim: rgba(69, 147, 252, 0.16);
+  --brand: #f0f660;           /* 브랜드 노랑 */
+  --brand-ink: #1a1a10;
+  --ok: #4fd58b;
+  --ok-bg: rgba(48, 195, 107, 0.14);
+  --warn: #ffb331;
+  --warn-bg: rgba(255, 179, 49, 0.14);
+  --bad: #ff5a66;
+  --bad-bg: rgba(240, 68, 82, 0.14);
+  --info: #4593fc;
 
   /* 모양 */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 
-  /* 간격·글자 */
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
-  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13.5px; --fs-lg: 16px; --fs-xl: 20px;
-  --font: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* 간격(8 그리드)·글자 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 22px; --fs-2xl: 26px;
+  --font: "Pretendard Variable", Pretendard, "Toss Product Sans", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: Consolas, "Cascadia Mono", "D2Coding", "Malgun Gothic", monospace;
 
-  --sidebar-w: 292px;
-  --header-h: 52px;
+  --sidebar-w: 300px;
+  --header-h: 56px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -50,14 +55,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: var(--fs-md) / 1.5 var(--font);
+  font: var(--fs-md) / 1.55 var(--font);
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.3; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.3; letter-spacing: -0.02em; }
 p { margin: 0; }
 a { color: var(--accent); }
-button, input, select, textarea { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
 ::selection { background: var(--accent-dim); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }

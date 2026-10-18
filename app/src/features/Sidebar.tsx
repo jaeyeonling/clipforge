@@ -22,7 +22,7 @@ export function Sidebar() {
 
   /** 여러 파일 등록. 제목은 파일이 하나일 때만 적용. 복사하지 않는다(같은 드라이브면 하드링크, 아니면 원본 경로 참조). */
   const register = useCallback(async (paths: string[], titleForSingle = "") => {
-    if (!paths.some((p) => VIDEO_RE.test(p))) { toast("영상 파일(mp4/mkv/mov)이 아닙니다", true); return; }
+    if (!paths.some((p) => VIDEO_RE.test(p))) { toast("영상 파일(mp4/mkv/mov)이 아니에요", true); return; }
     try { await registerVideos(paths, { title: titleForSingle, kind, game }, setBusy); } finally { setBusy(null); }
   }, [toast, registerVideos, kind, game]);
 
@@ -33,7 +33,7 @@ export function Sidebar() {
     e.preventDefault(); dragDepth.current = 0; setDrag(false);
     const files = Array.from(e.dataTransfer.files);
     if (!files.length) return;
-    if (!shell) { toast("브라우저에서는 파일 경로를 알 수 없습니다. 경로를 입력하거나 데스크톱 앱을 쓰세요.", true); return; }
+    if (!shell) { toast("브라우저에서는 파일 경로를 알 수 없어요. 경로를 입력하거나 데스크톱 앱을 쓰세요.", true); return; }
     const sh = shell;
     register(files.map((f) => sh.shell.pathForFile(f)), title.trim());
   };
@@ -61,10 +61,10 @@ export function Sidebar() {
             </li>
           );
         })}
-        {!episodes.length && <li className="muted small" style={{ padding: 12 }}>영상을 여기에 끌어다 놓거나 아래에서 선택하세요.</li>}
+        {!episodes.length && <li className="muted small" style={{ padding: 12 }}>아직 넣은 영상이 없어요. 아래 버튼을 누르거나 여기에 끌어다 놓으세요.</li>}
       </ul>
       <form className="add-form" onSubmit={(ev) => { ev.preventDefault(); submit(); }}>
-        {drag && <div className="dropzone">영상을 놓으면 등록됩니다</div>}
+        {drag && <div className="dropzone">영상을 놓으면 등록돼요</div>}
         {games.length > 1 && (
           <select className="field" value={game} onChange={(e) => setGame(e.target.value)} disabled={!!busy} title="게임 프로필 (화면 영역·사전)">
             {games.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
@@ -75,14 +75,14 @@ export function Sidebar() {
         </select>
         <input className="field" placeholder="유튜브 제목 (선택)" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!busy} data-tip={TIP.titleInput} />
         {inShell ? (
-          <Button type="button" variant="primary" onClick={pick} disabled={!!busy}>{busy || "영상 파일 선택…"}</Button>
+          <Button type="button" variant="primary" onClick={pick} disabled={!!busy}>{busy || "영상 넣기"}</Button>
         ) : (
           <>
             <input className="field" placeholder="영상 파일 경로 (C:\...\ep60.mp4)" value={path} onChange={(e) => setPath(e.target.value)} disabled={!!busy} />
             <Button type="submit" disabled={!!busy || !path.trim()}>{busy || "회차 등록"}</Button>
           </>
         )}
-        <div className="muted xs">복사하지 않습니다. 같은 드라이브면 링크, 아니면 원본 경로를 참조합니다. videos/ 폴더의 영상은 자동으로 뜹니다.</div>
+        <div className="muted xs">영상을 복사하지 않아요. 창에 끌어다 놓아도 돼요.</div>
       </form>
     </aside>
   );

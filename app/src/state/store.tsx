@@ -97,7 +97,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const registerVideos = useCallback(async (paths: string[], opts: { title?: string; kind?: "edited" | "original"; game?: string }, onProgress?: (msg: string) => void) => {
     const list = paths.filter((p) => /\.(mp4|mkv|mov|m4v|ts|flv|webm)$/i.test(p));
-    if (!list.length) { toast("영상 파일(mp4/mkv/mov)이 아닙니다", true); return 0; }
+    if (!list.length) { toast("영상 파일(mp4/mkv/mov)이 아니에요", true); return 0; }
     let lastId: string | null = null, ok = 0;
     for (const [i, p] of list.entries()) {
       onProgress?.(`${i + 1}/${list.length} 등록 중…`);

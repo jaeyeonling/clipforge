@@ -30,7 +30,7 @@ export function UpdateBanner({ onSettings }: { onSettings: () => void }) {
         {st.pending.length > 0 && st.shell && " · "}
         {st.shell && <>앱 {st.shell.version} 준비됨 <span className="muted">(설치하려면 다시 시작)</span></>}
       </span>
-      {running && <span className="muted xs">작업이 끝나면 적용할 수 있습니다</span>}
+      {running && <span className="muted xs">작업이 끝나면 적용할 수 있어요</span>}
       {st.pending.length > 0 && <Button size="sm" variant="primary" disabled={running} onClick={() => sh.update.apply().catch(fail)}>지금 적용</Button>}
       {st.shell && <Button size="sm" disabled={running} onClick={() => sh.update.applyShell().catch(fail)}>설치하고 다시 시작</Button>}
       <Button size="sm" variant="ghost" onClick={onSettings}>자세히</Button>

@@ -95,7 +95,7 @@ export function EditPoints() {
 
   if (!selected) return <Empty title="회차를 선택하세요" />;
   if (!data) return <div className="row"><Spinner /> <span className="muted">편집 포인트 읽는 중…</span></div>;
-  if (!data.candidates.length && !kept.length) return <Empty title="편집 포인트 후보가 없습니다">원본 회차에서 파이프라인(신호 → candidates)을 실행하면 여기 뜹니다. 편집본(최종본)이 있으면 align 으로 정답을 만들어 recall 을 봅니다.</Empty>;
+  if (!data.candidates.length && !kept.length) return <Empty title="편집 포인트 후보가 없어요">원본 회차에서 파이프라인(신호 → candidates)을 실행하면 여기 떠요. 편집본(최종본)이 있으면 align 으로 정답을 만들어 recall 을 봐요.</Empty>;
 
   const rep = data.report; const al = data.align;
   const total = data.candidates.reduce((a, c) => a + (c.end - c.start), 0);
@@ -104,7 +104,7 @@ export function EditPoints() {
     <div className="ep-layout">
       <div>
         <Card title="원본 재생" right={<span className="muted xs">{fmtTime(data.duration)} · 후보 {data.candidates.length}개 · 검토량 {fmtTime(total)} ({data.duration ? Math.round(100 * total / data.duration) : 0}%)</span>}>
-          {data.video_url ? <video ref={video} className="ep-video" src={data.video_url} controls preload="metadata" /> : <div className="novideo" style={{ aspectRatio: "16/9" }}>영상 파일을 찾을 수 없습니다</div>}
+          {data.video_url ? <video ref={video} className="ep-video" src={data.video_url} controls preload="metadata" /> : <div className="novideo" style={{ aspectRatio: "16/9" }}>영상 파일을 찾을 수 없어요</div>}
           <div className="row small" style={{ marginTop: 8, gap: 10 }}>
             <span className="keys"><kbd>Tab</kbd> 패널 전환 · <kbd>I</kbd>/<kbd>O</kbd> 시작/끝 찍기 · <kbd>A</kbd> 구간 추가 · <kbd>Esc</kbd> 정지</span>
             <span className="grow" style={{ flex: 1 }} />
@@ -118,7 +118,7 @@ export function EditPoints() {
 
         <Card title={<span data-tip={TIP.category}>{`정답 구간 · ${kept.length}개${unlabeled ? ` (종류 없음 ${unlabeled})` : ""}`}</span>} className={cx(pane === "kept" && "pane-active")}
           right={<span className="keys"><kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>1</kbd>~<kbd>{cats.length}</kbd> 종류 · <kbd>Enter</kbd> 재생 · <kbd>Del</kbd> 삭제</span>}>
-          {!kept.length ? <p className="muted small">아직 정답이 없습니다. 파이프라인에서 최종본 파일로 align 을 돌리거나, 재생하면서 I/O 로 구간을 찍어 추가하세요.</p> : (
+          {!kept.length ? <p className="muted small">아직 정답이 없어요. 파이프라인에서 최종본 파일로 align 을 돌리거나, 재생하면서 I/O 로 구간을 찍어 추가하세요.</p> : (
             <ul className="kept-list" onClick={() => setPane("kept")}>
               {kept.map((k, i) => {
                 const c = catOf(k.label);
@@ -164,9 +164,9 @@ export function EditPoints() {
                   })}
                 </div>
               )}
-              <p className="muted xs" style={{ marginTop: 8 }}>찾은 비율이 낮은 종류가 다음에 보강할 신호를 알려줍니다 (예: 득템이 낮으면 배너·드랍음, 리액션이 낮으면 음량·발화).</p>
+              <p className="muted xs" style={{ marginTop: 8 }}>찾은 비율이 낮은 종류가 다음에 보강할 신호를 알려줘요 (예: 득템이 낮으면 배너·드랍음, 리액션이 낮으면 음량·발화).</p>
             </>
-          ) : <p className="muted small">정답(kept)이 아직 없습니다. 파이프라인에서 최종본 파일을 지정해 align 을 실행하거나, 위에서 직접 구간을 추가하세요.</p>}
+          ) : <p className="muted small">정답(kept)이 아직 없어요. 파이프라인에서 최종본 파일을 지정해 align 을 실행하거나, 위에서 직접 구간을 추가하세요.</p>}
           {al && <p className="muted xs" style={{ marginTop: 8 }}>align: 최종본 {al.final} 의 {Math.round((al.matched_frac || 0) * 100)}% 매칭, {al.n_segments}구간{al.unmatched?.length ? ` · 미매칭 ${al.unmatched.length}곳(인트로·카드)` : ""}</p>}
           {data.signals.length > 0 && <p className="muted xs" style={{ marginTop: 4 }}>신호: {data.signals.join(", ")}</p>}
         </Card>
@@ -190,7 +190,7 @@ export function EditPoints() {
               </span>
             </li>
           ))}
-          {!rows.length && <li className="muted small" style={{ padding: 10 }}>이 필터에 해당하는 후보가 없습니다</li>}
+          {!rows.length && <li className="muted small" style={{ padding: 10 }}>이 필터에 해당하는 후보가 없어요</li>}
         </ul>
       </Card>
     </div>

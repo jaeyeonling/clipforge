@@ -8,8 +8,8 @@ import { TIP } from "../api/tips";
 type Rois = Record<string, number[]>;
 const ROI_LABEL: Record<string, string> = { banner: "득템 배너", chat: "채팅", zone: "지역명", hud_red_orb: "체력 구슬", hud_blue_orb: "마나 구슬" };
 const STATUS_LABEL: Record<string, string> = { pass: "통과", warn: "주의", fail: "실패", skip: "건너뜀" };
-const STATUS_TIP: Record<string, string> = { pass: TIP.roiPass, warn: TIP.roiWarn, fail: TIP.roiFail, skip: "점검할 자료가 아직 없습니다 (분석을 먼저)." };
-const ROI_TIP: Record<string, string> = { banner: "좌상단 '득템 :' 배너. 새 아이템이 적히는 순간이 쇼츠 1순위 근거입니다.", chat: "채팅 오버레이. 채팅이 터지는 순간과 하이라이트 자막에 씁니다.", zone: "우상단 지역·난이도 글자.", hud_red_orb: "체력 구슬. 둘 다 안 보이면 게임 화면이 아닌 것(줌·카드)으로 봅니다.", hud_blue_orb: "마나 구슬." };
+const STATUS_TIP: Record<string, string> = { pass: TIP.roiPass, warn: TIP.roiWarn, fail: TIP.roiFail, skip: "점검할 자료가 아직 없어요 (분석을 먼저)." };
+const ROI_TIP: Record<string, string> = { banner: "좌상단 '득템 :' 배너. 새 아이템이 적히는 순간이 쇼츠 1순위 근거예요.", chat: "채팅 오버레이. 채팅이 터지는 순간과 하이라이트 자막에 써요.", zone: "우상단 지역·난이도 글자.", hud_red_orb: "체력 구슬. 둘 다 안 보이면 게임 화면이 아닌 것(줌·카드)으로 봐요.", hud_blue_orb: "마나 구슬." };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const r4 = (v: number) => Math.round(v * 10000) / 10000;
 
@@ -65,7 +65,7 @@ export function Calibration() {
     <div className="calib">
       <div>
         <Card title="화면 영역 점검" right={<Button size="sm" variant="primary" onClick={check} disabled={checking} data-tip={TIP.roiCheck}>{checking ? "점검 중…" : "점검"}</Button>}>
-          {!result && <p className="muted small">득템 배너·창 제목·채팅·체력/마나 구슬이 이 회차 화면의 어디에 있는지 프로그램이 제대로 보고 있는지 확인합니다. 분석을 한 번 돌린 뒤에 눌러 주세요. 방송 화면 배치를 바꾼 회차라면 꼭 보세요.</p>}
+          {!result && <p className="muted small">득템 배너·창 제목·채팅·체력/마나 구슬이 이 회차 화면의 어디에 있는지 프로그램이 제대로 보고 있는지 확인해요. 분석을 한 번 돌린 뒤에 눌러 주세요. 방송 화면 배치를 바꾼 회차라면 꼭 보세요.</p>}
           {result && !result.ok && <p className="muted small">{result.error}</p>}
           {result?.ok && (
             <>
@@ -82,7 +82,7 @@ export function Calibration() {
           )}
         </Card>
         <Card title={<span data-tip={TIP.roiEdit}>영역 위치 고치기</span>} right={editing ? <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setRois(null); setDirty(false); }}>닫기</Button> : <Button size="sm" onClick={openEditor}>열기</Button>}>
-          {!editing && <p className="muted small">열면 오른쪽 화면 위에서 박스를 끌어 옮기고 모서리로 크기를 바꿀 수 있습니다. 저장하면 이 게임 설정({game})에 기록돼 다음 회차부터 적용됩니다.</p>}
+          {!editing && <p className="muted small">열면 오른쪽 화면 위에서 박스를 끌어 옮기고 모서리로 크기를 바꿀 수 있어요. 저장하면 이 게임 설정({game})에 기록돼 다음 회차부터 적용돼요.</p>}
           {editing && rois && (
             <>
               <table className="roi-table">
@@ -97,7 +97,7 @@ export function Calibration() {
                 <Button size="sm" variant="primary" onClick={save} disabled={!dirty}>프로필 저장{dirty ? " *" : ""}</Button>
                 <Button size="sm" variant="ghost" onClick={openEditor}>되돌리기</Button>
               </div>
-              <p className="muted xs" style={{ marginTop: 8 }}>수치는 화면 전체를 1로 본 비율입니다. 배너·채팅 영역을 바꿨으면 실행 탭 고급 설정에서 '처음부터 다시'로 한 번 돌려야 반영됩니다. 점선(창 제목 띠)은 자동입니다.</p>
+              <p className="muted xs" style={{ marginTop: 8 }}>수치는 화면 전체를 1로 본 비율이에요. 배너·채팅 영역을 바꿨으면 실행 탭 고급 설정에서 '처음부터 다시'로 한 번 돌려야 반영돼요. 점선(창 제목 띠)은 자동이에요.</p>
             </>
           )}
         </Card>
@@ -110,7 +110,7 @@ export function Calibration() {
           <Button size="sm" onClick={() => preview(rois)}>보기</Button>
         </span>}>
         <div className="preview">
-          {!prev ? <div className="empty" style={{ aspectRatio: "16/9" }}>{checking ? <Spinner /> : <span className="small">점검 또는 보기를 누르면 영역 박스를 그린 화면이 나옵니다.</span>}</div>
+          {!prev ? <div className="empty" style={{ aspectRatio: "16/9" }}>{checking ? <Spinner /> : <span className="small">점검 또는 보기를 누르면 영역 박스를 그린 화면이 나와요.</span>}</div>
             : editing && rois ? <RoiCanvas frameUrl={prev.frame_url} rois={rois} bands={prev.panel_bands} colors={prev.colors} onChange={setBox} />
             : <img src={prev.url} alt="ROI 미리보기" />}
           {prev && <div className="muted xs" style={{ marginTop: 6 }}>{prev.t}초 지점 (0~{prev.n_frames - 1}) · 원본 {prev.frame_size[0]}×{prev.frame_size[1]}</div>}

@@ -45,8 +45,8 @@ export function Pipeline() {
   const start = async () => {
     if (!selected) return;
     if (!ordered.length) return fail(new Error("단계를 하나 이상 선택하세요"));
-    if (needsFinal && !finalPath.trim()) { toast("align 에는 최종본(편집본) 파일이 필요합니다", true); return; }
-    if (needsShorts && !shortsPaths.length) { toast("쇼츠 역매핑에는 친구 쇼츠 파일이 필요합니다", true); return; }
+    if (needsFinal && !finalPath.trim()) { toast("align 에는 최종본(편집본) 파일이 필요해요", true); return; }
+    if (needsShorts && !shortsPaths.length) { toast("쇼츠 역매핑에는 친구 쇼츠 파일이 필요해요", true); return; }
     try { await runJob(selected.id, ordered, { layout, k, force, kind, threshold, final: needsFinal ? finalPath.trim() : undefined, shorts: needsShorts ? shortsPaths : undefined }); } catch (e) { fail(e); }
   };
   const retry = async () => {
@@ -61,9 +61,9 @@ export function Pipeline() {
     : kind === "edited" ? ["shorts", "export", "xml", "eval"] : ["candidates", "eval"];
   const quickLabel = kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기";
   const quickDesc = !selected?.stages?.prep
-    ? (kind === "edited" ? "영상을 읽고(준비) → 말을 글로(전사) → 득템 배너·채팅·소리 신호 → 쇼츠 후보 → 세로 초안 렌더 → Premiere XML. 4K 10분 기준 약 10분."
-       : "영상을 읽고 → 전사 → 신호 → 편집 포인트 후보 → 평가. 원본 길이의 약 1/8 시간이 걸립니다.")
-    : (kind === "edited" ? "이미 읽어 둔 결과를 써서 후보·초안·XML 만 다시 만듭니다. 1~2분." : "이미 읽어 둔 신호로 편집 포인트만 다시 뽑습니다. 수 초.");
+    ? (kind === "edited" ? "영상을 읽고, 말을 글로 바꾸고, 득템·채팅·소리가 겹치는 순간을 찾아 세로 초안까지 만들어요. 4K 10분이면 약 10분 걸려요."
+       : "영상을 읽고 신호를 찾아 편집할 구간 후보를 뽑아요. 원본 길이의 약 1/8 시간이 걸려요.")
+    : (kind === "edited" ? "이미 읽어 둔 결과로 초안만 다시 만들어요. 1~2분이면 돼요." : "이미 읽어 둔 신호로 편집 포인트만 다시 뽑아요. 몇 초면 돼요.");
   const quickStart = async () => {
     if (!selected) return;
     try { await runJob(selected.id, quickStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
@@ -73,16 +73,16 @@ export function Pipeline() {
 
   return (
     <>
-      <Card title={`실행 · ${KIND_LABEL[kind]}`} right={selected && <span className="muted xs">{selected.id}</span>}>
+      <Card title={kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기"} right={selected && <span className="muted xs">{selected.id} · {KIND_LABEL[kind]}</span>}>
         <div className="quick">
           <div className="grow">
-            <div className="quick-title">{quickLabel}</div>
+            <div className="quick-title">{!selected?.stages?.prep ? "버튼 하나면 돼요" : "다시 만들 준비가 됐어요"}</div>
             <div className="muted small">{quickDesc}</div>
           </div>
-          {running ? <Button variant="danger" onClick={() => cancelJob().catch(fail)}>취소</Button>
-            : <Button variant="primary" onClick={quickStart} disabled={!selected} data-tip={TIP.quickRun}>{quickLabel}</Button>}
+          {running ? <Button variant="danger" className="cta" onClick={() => cancelJob().catch(fail)}>취소</Button>
+            : <Button variant="primary" className="cta" onClick={quickStart} disabled={!selected} data-tip={TIP.quickRun}>{quickLabel}</Button>}
         </div>
-        <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "▾ 고급 설정 닫기" : "▸ 고급 설정 (단계 골라 돌리기 · 레이아웃 · 처음부터 다시)"}</button>
+        <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "고급 설정 닫기 ▴" : "직접 단계를 고르거나 처음부터 다시 돌리기 ▾"}</button>
         <div hidden={!advanced}>
         <div className="stage-grid">
           {visible.map((s) => (
@@ -96,7 +96,7 @@ export function Pipeline() {
         {needsShorts && (
           <div className="shorts-pick">
             <div className="row">
-              <span className="small">친구 쇼츠 파일 — 이 회차에서 잘라 올린 쇼츠를 주면 어느 구간인지 찾아 정답(keep)으로 기록합니다</span>
+              <span className="small">친구 쇼츠 파일 — 이 회차에서 잘라 올린 쇼츠를 주면 어느 구간인지 찾아 정답(keep)으로 기록해요</span>
               <span className="grow" style={{ flex: 1 }} />
               {inShell ? <Button size="sm" onClick={pickShorts} disabled={running}>쇼츠 추가…</Button>
                 : <input className="field sm" style={{ minWidth: 260 }} placeholder="경로 입력 후 Enter (폴더도 됨)" disabled={running} onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { setShortsPaths((cur) => [...new Set([...cur, v])]); (e.target as HTMLInputElement).value = ""; } } }} />}
@@ -107,7 +107,7 @@ export function Pipeline() {
         {needsFinal && (
           <div className="row" style={{ marginTop: 12 }}>
             <span className="small">최종본(편집본) 파일</span>
-            <input className="field" style={{ flex: 1, minWidth: 240 }} placeholder="친구 편집본 mp4 경로 — 원본의 어느 구간이 살아남았는지 정답을 만듭니다" value={finalPath} onChange={(e) => setFinalPath(e.target.value)} disabled={running} />
+            <input className="field" style={{ flex: 1, minWidth: 240 }} placeholder="친구 편집본 mp4 경로 — 원본의 어느 구간이 살아남았는지 정답을 만들어요" value={finalPath} onChange={(e) => setFinalPath(e.target.value)} disabled={running} />
             {inShell && <Button size="sm" onClick={pickFinal} disabled={running}>찾기…</Button>}
           </div>
         )}
@@ -134,9 +134,12 @@ export function Pipeline() {
             : <Button variant="primary" onClick={start} disabled={!selected || !ordered.length}>선택한 단계 실행 {ordered.length ? `(${ordered.length})` : ""}</Button>}
         </div>
         </div>
-        {kind === "original" && <p className="muted xs" style={{ marginTop: 8 }}>원본은 길어서 OCR 이 무거운 신호(채팅 텍스트)와 편집본 전용 신호(컷 밀도·줌 강조)는 돌리지 않습니다. 득템 배너는 화면이 바뀔 때만 읽습니다.</p>}
+        {kind === "original" && <p className="muted xs" style={{ marginTop: 8 }}>원본은 길어서 OCR 이 무거운 신호(채팅 텍스트)와 편집본 전용 신호(컷 밀도·줌 강조)는 돌리지 않아요. 득템 배너는 화면이 바뀔 때만 읽어요.</p>}
         <div className="runbar" style={{ marginTop: 14 }}>
           <div>
+            {running && activeJob.status === "running" && (
+              <div className="bigpct">{Math.round(activeJob.pct)}%<small>{STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage}{activeJob.eta_s != null && activeJob.eta_s > 0 ? ` · 약 ${fmtDur(activeJob.eta_s)} 남았어요` : ""}</small></div>
+            )}
             <Progress pct={activeJob?.pct ?? 0} state={state} indeterminate={activeJob?.status === "queued"} />
             <div className="status" style={{ marginTop: 6 }}>
               {running && <Spinner />}
@@ -144,9 +147,9 @@ export function Pipeline() {
                 <><b>{STATUS_KO[activeJob.status] || activeJob.status}</b>
                   <span>{activeJob.stage && activeJob.status === "running" ? `${STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
                   {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}
-                  {running && activeJob.eta_s != null && activeJob.eta_s > 0 && <span className="eta">· 약 {fmtDur(activeJob.eta_s)} 남음</span>}
+                  {!running && activeJob.status === "done" && <span className="ok">· 끝났어요</span>}
                   {!running && activeJob.status === "queued" && activeJob.eta_s != null && <span className="muted">· 예상 {fmtDur(activeJob.eta_s)}</span>}</>
-              ) : <span className="muted">대기 중 — 회차를 고르고 실행을 누르세요.</span>}
+              ) : <span className="muted">아직 실행한 적이 없어요. 위 버튼 하나면 돼요.</span>}
             </div>
           </div>
         </div>
@@ -161,7 +164,7 @@ export function Pipeline() {
       {runError && (
         <div className="errbox" role="alert">
           <div className="head"><span className="code">{runError.info.code}</span><span className="msg">{runError.info.message}</span></div>
-          <div className="hint">{runError.info.hint || (runError.info.kind === "internal" ? "내부 오류입니다. 로그를 확인하세요." : "")}</div>
+          <div className="hint">{runError.info.hint || (runError.info.kind === "internal" ? "내부 오류예요. 로그를 확인하세요." : "")}</div>
           <div className="btns">
             {runError.job && <Button variant="primary" size="sm" onClick={retry}>같은 설정으로 다시 실행</Button>}
             <Button variant="ghost" size="sm" onClick={dismissError}>닫기</Button>
@@ -188,7 +191,7 @@ export function LogPane() {
       </div>
       <div ref={box} className={cx("log", errOnly && "err-only")}>
         {log.length ? log.map((l, i) => <div key={i} className={cx("line", l.level)}>{l.stage && <span className="st">{l.stage}</span>}{l.message}</div>)
-          : <div className="nothing">실행하면 진행 기록이 여기 쌓입니다. 기록 탭에서 이전 작업을 눌러도 볼 수 있습니다.</div>}
+          : <div className="nothing">실행하면 진행 기록이 여기 쌓여요. 기록 탭에서 이전 작업을 눌러도 볼 수 있어요.</div>}
       </div>
     </div>
   );

@@ -38,8 +38,8 @@ export function Live() {
     setBusy(true);
     try {
       const config: Record<string, unknown> = { source, interval, approval, grades, game: selected?.game || "d2r" };
-      if (source === "frames") { if (!selected) throw new Error("프레임 재생은 회차를 선택해야 합니다"); config.episode = selected.id; config.realtime = true; }
-      if (source === "video") { if (!videoPath.trim()) throw new Error("영상 파일 경로가 필요합니다"); config.path = videoPath.trim(); config.realtime = true; }
+      if (source === "frames") { if (!selected) throw new Error("프레임 재생은 회차를 선택해야 해요"); config.episode = selected.id; config.realtime = true; }
+      if (source === "video") { if (!videoPath.trim()) throw new Error("영상 파일 경로가 필요해요"); config.path = videoPath.trim(); config.realtime = true; }
       if (obsOn) config.obs = { url: obsUrl, password: obsPw, text_source: obsSource };
       await api.liveStart(config); toast("라이브 시작"); await refreshLive();
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -98,7 +98,7 @@ export function Live() {
           {active && (
             <div className="live-preview">
               {st?.preview_url ? <img src={`${st.preview_url}&t=${previewTick}`} alt="캡처 미리보기" /> : <div className="novideo" style={{ aspectRatio: "16/9" }}>첫 프레임 기다리는 중…</div>}
-              <div className="muted xs" style={{ marginTop: 4 }}>지금 캡처되는 화면입니다. <b>게임이 보이지 않으면</b>(검은 화면·바탕화면) 게임을 창 모드/테두리 없는 전체화면으로 바꾸거나, 캡처 영역을 조정해야 합니다.</div>
+              <div className="muted xs" style={{ marginTop: 4 }}>지금 캡처되는 화면이에요. <b>게임이 보이지 않으면</b>(검은 화면·바탕화면) 게임을 창 모드/테두리 없는 전체화면으로 바꾸거나, 캡처 영역을 조정해야 해요.</div>
             </div>
           )}
           {sess && (
@@ -109,8 +109,8 @@ export function Live() {
         </Card>
 
         <Card title={`배너 제안 · 대기 ${pending.length}`}>
-          <div className="keys" style={{ marginBottom: 6 }}>게임 중엔 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd> 최근 제안 추가 · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> 무시 (데스크톱 앱, 알림으로도 알려줍니다)</div>
-          {!pending.length ? <p className="muted small">{active ? "세트·유니크 아이템 라벨이 화면에 뜨면 여기 제안이 올라옵니다." : "라이브를 시작하면 감지된 아이템이 여기 뜹니다. 승인하면 배너 텍스트와 OBS 소스에 추가됩니다."}</p> : (
+          <div className="keys" style={{ marginBottom: 6 }}>게임 중엔 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd> 최근 제안 추가 · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> 무시 (데스크톱 앱, 알림으로도 알려줘요)</div>
+          {!pending.length ? <p className="muted small">{active ? "세트·유니크 아이템 라벨이 화면에 뜨면 여기 제안이 올라와요." : "라이브를 시작하면 감지된 아이템이 여기 떠요. 승인하면 배너 텍스트와 OBS 소스에 추가돼요."}</p> : (
             <ul className="sug-list">
               {pending.map((s) => (
                 <li key={s.id} className={cx("sug", s.grade)}>
@@ -118,7 +118,7 @@ export function Live() {
                     <b>{s.head || s.text}</b> <Badge tone={s.grade === "set" ? "ok" : s.grade === "unique" ? "warn" : ""}>{({ set: "세트", unique: "유니크", rare: "희귀", magic: "매직" } as Record<string, string>)[s.grade] || s.grade}</Badge>
                     <div className="muted xs">화면에서 읽은 글자 "{s.text}" (확신 {Math.round(s.score * 100)}%) · {new Date(s.t_wall * 1000).toLocaleTimeString("ko-KR")}{s.t_rec != null ? ` · 녹화 ${fmtTime(s.t_rec)}` : ""}</div>
                   </div>
-                  <input className="field sm" style={{ width: 150 }} placeholder={s.head || s.text} value={editText[s.id] ?? ""} onChange={(e) => setEditText((m) => ({ ...m, [s.id]: e.target.value }))} title="배너에 넣을 이름을 고쳐 쓸 수 있습니다 (예: 기드참(매찬34))" onKeyDown={(e) => { if (e.key === "Enter") approve(s.id, editText[s.id]); }} />
+                  <input className="field sm" style={{ width: 150 }} placeholder={s.head || s.text} value={editText[s.id] ?? ""} onChange={(e) => setEditText((m) => ({ ...m, [s.id]: e.target.value }))} title="배너에 넣을 이름을 고쳐 쓸 수 있어요 (예: 기드참(매찬34))" onKeyDown={(e) => { if (e.key === "Enter") approve(s.id, editText[s.id]); }} />
                   <Button size="sm" variant="primary" onClick={() => approve(s.id, editText[s.id])}>배너에 추가</Button>
                   <Button size="sm" variant="ghost" onClick={() => dismiss(s.id)}>무시</Button>
                 </li>
@@ -131,7 +131,7 @@ export function Live() {
         <Card title="득템 배너" right={bannerEdit == null ? <Button size="sm" variant="ghost" onClick={() => setBannerEdit((sess?.banner || "").replace(/^득템\s*:\s*/, ""))} disabled={!active}>편집</Button> : <span className="row"><Button size="sm" variant="primary" onClick={saveBanner}>저장</Button><Button size="sm" variant="ghost" onClick={() => setBannerEdit(null)}>취소</Button></span>}>
           {bannerEdit == null ? <div className="banner-text">{sess?.banner || <span className="muted">비어 있음</span>}</div>
             : <input className="field" value={bannerEdit} onChange={(e) => setBannerEdit(e.target.value)} placeholder="항목을 쉼표로 (예: 슬가,지존참)" />}
-          <p className="muted xs" style={{ marginTop: 6 }}>승인한 아이템이 뒤에 붙습니다. 별표 강조(★)는 직접 넣으세요. OBS 연동이 켜져 있으면 텍스트 소스도 함께 바뀝니다.</p>
+          <p className="muted xs" style={{ marginTop: 6 }}>승인한 아이템이 뒤에 붙어요. 별표 강조(★)는 직접 넣으세요. OBS 연동이 켜져 있으면 텍스트 소스도 함께 바뀌어요.</p>
         </Card>
       </div>
 
@@ -145,11 +145,11 @@ export function Live() {
             {(st?.bookmarks || []).slice().reverse().slice(0, 12).map((b) => (
               <li key={b.id}><span className="mono xs">{new Date(b.t_wall * 1000).toLocaleTimeString("ko-KR")}{b.t_rec != null ? ` · 녹화 ${fmtTime(b.t_rec)}` : ""}</span><Badge tone={b.kind === "drop" ? "ok" : b.kind === "chat" ? "accent" : ""}>{b.kind}</Badge><span className="small">{b.note}</span></li>
             ))}
-            {!st?.bookmarks?.length && <li className="muted small">방송이 끝난 뒤 원본에서 편집 포인트를 찾을 때 이 시각들을 먼저 봅니다. 득템 승인·채팅 폭주·단축키가 북마크를 만듭니다.</li>}
+            {!st?.bookmarks?.length && <li className="muted small">방송이 끝난 뒤 원본에서 편집 포인트를 찾을 때 이 시각들을 먼저 봐요. 득템 승인·채팅 폭주·단축키가 북마크를 만들어요.</li>}
           </ul>
         </Card>
         <Card title="이벤트">
-          {!liveEvents.length ? <Empty title="아직 이벤트가 없습니다" /> : (
+          {!liveEvents.length ? <Empty title="아직 이벤트가 없어요" /> : (
             <ul className="ev-list">
               {liveEvents.slice(-40).reverse().map((e: LiveEvent, i) => (
                 <li key={i} className={cx("ev", e.type)}><span className="mono xs muted">{new Date(e.t * 1000).toLocaleTimeString("ko-KR")}</span><span className="type">{e.type}</span><span className="small">{describe(e)}</span></li>

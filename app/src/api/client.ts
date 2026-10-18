@@ -31,7 +31,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
   } catch {
-    throw new ApiError({ code: "E_OFFLINE", message: "엔진에 연결할 수 없습니다", hint: "python -m clipforge.app 이 떠 있는지 확인하세요.", kind: "user" }, 0);
+    throw new ApiError({ code: "E_OFFLINE", message: "엔진에 연결할 수 없어요", hint: "python -m clipforge.app 이 떠 있는지 확인하세요.", kind: "user" }, 0);
   }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new ApiError(body.error || { message: body.detail || r.statusText }, r.status);

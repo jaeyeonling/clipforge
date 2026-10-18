@@ -32,7 +32,7 @@ export function Candidates() {
   useEffect(() => { load(); }, [load, tick]);
   useEffect(() => { if (selected) api.episodePaths(selected.id).then(setPaths).catch(() => setPaths(null)); }, [selected, tick]);
   useEffect(() => { setCompare([]); setFocus(0); }, [selected?.id]);
-  const open = (p: string) => { if (shell) shell.shell.openPath(p).catch(fail); else { navigator.clipboard?.writeText(p).catch(() => {}); toast(`경로를 복사했습니다: ${p}`); } };
+  const open = (p: string) => { if (shell) shell.shell.openPath(p).catch(fail); else { navigator.clipboard?.writeText(p).catch(() => {}); toast(`경로를 복사했어요: ${p}`); } };
 
   const shown = useMemo(() => (items || []).filter((c) => filter === "all" || (filter === "undecided" ? !c.decision : c.decision === filter)), [items, filter]);
   useEffect(() => { if (focus >= shown.length) setFocus(Math.max(0, shown.length - 1)); }, [shown.length, focus]);
@@ -85,14 +85,14 @@ export function Candidates() {
 
   if (!selected) return <Empty title="회차를 선택하세요" />;
   if (items === null) return <div className="row"><Spinner /> <span className="muted">후보 읽는 중…</span></div>;
-  if (!items.length) return <Empty title="아직 초안이 없습니다">실행 탭에서 '쇼츠 초안 만들기'를 누르면 세로 초안이 순위대로 여기 뜹니다.</Empty>;
+  if (!items.length) return <Empty title="아직 초안이 없어요">실행 탭에서 '쇼츠 초안 만들기'를 누르면 세로 초안이 순위대로 여기에 떠요.</Empty>;
   const outputs = paths && (
     <div className="outputs">
       <span className="muted xs" data-tip={TIP.outputs}>결과물</span>
       <Button size="sm" onClick={() => open(paths.shorts_dir.path)} disabled={!paths.shorts_dir.exists} title={paths.shorts_dir.path}>초안 폴더{paths.shorts_count ? ` (${paths.shorts_count})` : ""}</Button>
       <Button size="sm" onClick={() => open(paths.premiere_shorts.exists ? paths.premiere_shorts.path : paths.premiere_dir.path)} disabled={!paths.premiere_dir.exists} title={paths.premiere_shorts.path}>Premiere XML</Button>
       <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>
-      {!inShell && <span className="muted xs">브라우저에서는 경로를 복사합니다</span>}
+      {!inShell && <span className="muted xs">브라우저에서는 경로를 복사해요</span>}
     </div>
   );
 
@@ -105,38 +105,40 @@ export function Candidates() {
       <div className="filters">
         {(["all", "undecided", "keep", "no"] as Filter[]).map((f) => (
           <Button key={f} variant="ghost" size="sm" className={cx(filter === f && "active")} onClick={() => { setFilter(f); setFocus(0); }}>
-            {{ all: "전체", undecided: "아직 안 봄", keep: "쓸 만함", no: "안 씀" }[f]} {counts[f]}
+            {{ all: "전체", undecided: "아직 안 봄", keep: "쓸 만함", no: "안 씀" }[f]} <span className="count">{counts[f]}</span>
           </Button>
         ))}
         <span className="keys" title="키보드 단축키">
           <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>K</kbd> 쓸 만함 · <kbd>N</kbd>+<kbd>1~6</kbd> 안 씀(사유) · <kbd>Space</kbd> 재생 · <kbd>C</kbd> 비교 · <kbd>Esc</kbd> 닫기
         </span>
       </div>
-      {reasonPrompt && (
-        <div className="reason-prompt">
-          <b>안 쓰는 이유</b> {REASONS.map((r, i) => <button key={r} className="btn sm" onClick={() => { setReasonPrompt(false); decide(shown[focus], "no", r); }}><kbd>{i + 1}</kbd> {r}</button>)}
-          <Button size="sm" variant="ghost" onClick={() => setReasonPrompt(false)}>취소 (Esc)</Button>
+      {reasonPrompt && shown[focus] && (
+        <div className="sheet" role="dialog" aria-label="안 쓰는 이유">
+          <h3>#{shown[focus].rank} 초안, 왜 안 쓰나요?</h3>
+          <div className="sub">이유를 하나 고르면 다음 회차부터 같은 실수를 줄여요. 숫자키로도 고를 수 있어요.</div>
+          <div className="opts">
+            {REASONS.map((r, i) => <button key={r} className="btn" onClick={() => { setReasonPrompt(false); decide(shown[focus], "no", r); }}><kbd>{i + 1}</kbd> {r}</button>)}
+          </div>
+          <div className="foot"><Button size="sm" variant="ghost" onClick={() => setReasonPrompt(false)}>취소 (Esc)</Button></div>
         </div>
       )}
       {cmpItems.length > 0 && <ComparePanel items={cmpItems} onDecide={decide} onClose={() => setCompare([])} onRemove={toggleCompare} />}
       <div className="cands">
         {shown.map((c, i) => (
           <CandidateCard key={keyOf(c)} c={c} focused={i === focus} inCompare={compare.includes(keyOf(c))} busy={busy === keyOf(c)}
-            onFocus={() => setFocus(i)} onDecide={decide} onCompare={() => toggleCompare(c)}
+            onFocus={() => setFocus(i)} onDecide={decide} onCompare={() => toggleCompare(c)} onAskReason={() => { setFocus(i); setReasonPrompt(true); }}
             videoRef={(el) => { if (el) videos.current.set(keyOf(c), el); else videos.current.delete(keyOf(c)); }} />
         ))}
-        {!shown.length && <Empty title="이 필터에 해당하는 후보가 없습니다" />}
+        {!shown.length && <Empty title="이 필터에 해당하는 후보가 없어요" />}
       </div>
     </>
   );
 }
 
-function CandidateCard({ c, focused, inCompare, busy, onFocus, onDecide, onCompare, videoRef }: {
+function CandidateCard({ c, focused, inCompare, busy, onFocus, onDecide, onCompare, onAskReason, videoRef }: {
   c: Candidate; focused: boolean; inCompare: boolean; busy: boolean; onFocus: () => void;
-  onDecide: (c: Candidate, label: "keep" | "no", reason: string) => void; onCompare: () => void; videoRef: (el: HTMLVideoElement | null) => void;
+  onDecide: (c: Candidate, label: "keep" | "no", reason: string) => void; onCompare: () => void; onAskReason: () => void; videoRef: (el: HTMLVideoElement | null) => void;
 }) {
-  const [reason, setReason] = useState(c.reason || "");
-  useEffect(() => setReason(c.reason || ""), [c.reason]);
   const ev = c.evidence || {};
   const len = Math.round(c.end - c.start);
   return (
@@ -149,11 +151,9 @@ function CandidateCard({ c, focused, inCompare, busy, onFocus, onDecide, onCompa
         {c.hook_lines?.length ? <div className="hook">{c.hook_lines.join(" / ")}</div> : null}
         <div className="meta"><span data-tip={TIP.score}>점수 {Number(c.score).toFixed(2)}</span> · <span data-tip={TIP.anchor}>핵심 순간 {fmtTime(c.anchor)} {(ev.anchor_kinds || []).map((k) => ANCHOR_LABEL[k] || k).join("·")}</span> · <span data-tip={TIP.cuts}>컷 {ev.n_cuts ?? "-"}개</span> · <span data-tip={TIP.subs}>자막 {c.subtitle_cues ?? "-"}줄</span></div>
         <div className="dec">
-          <Button size="sm" className={cx(c.decision === "keep" && "on-keep")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "keep", reason); }} data-tip={TIP.keep}>쓸 만함</Button>
-          <Button size="sm" className={cx(c.decision === "no" && "on-no")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "no", reason); }} data-tip={TIP.no}>안 씀</Button>
-          <select className="field sm" value={reason} onChange={(e) => setReason(e.target.value)} onClick={(e) => e.stopPropagation()} title="안 쓰는 이유">
-            <option value="">이유</option>{REASONS.map((r, i) => <option key={r} value={r}>{i + 1} {r}</option>)}
-          </select>
+          <Button className={cx(c.decision === "keep" && "on-keep")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDecide(c, "keep", ""); }} data-tip={TIP.keep}>{c.decision === "keep" ? "✓ 쓸 만함" : "쓸 만함"}</Button>
+          <Button className={cx(c.decision === "no" && "on-no")} disabled={busy} onClick={(e) => { e.stopPropagation(); if (c.decision === "no") onDecide(c, "no", c.reason || ""); else onAskReason(); }} data-tip={TIP.no}>{c.decision === "no" ? "✓ 안 씀" : "안 씀"}</Button>
+          {c.decision === "no" && c.reason && <span className="reason-chip">이유: {c.reason}</span>}
         </div>
       </div>
     </article>
@@ -167,7 +167,7 @@ function ComparePanel({ items, onDecide, onClose, onRemove }: { items: Candidate
   return (
     <section className="compare">
       <div className="compare-head">
-        <b>비교</b><span className="muted small">{items.length < 2 ? "하나 더 담으면 나란히 봅니다 (카드의 ⇄ 또는 C)" : "같은 순간을 두 번 자른 중복인지 확인하세요"}</span>
+        <b>비교</b><span className="muted small">{items.length < 2 ? "하나 더 담으면 나란히 봐요 (카드의 ⇄ 또는 C)" : "같은 순간을 두 번 자른 중복인지 확인하세요"}</span>
         <span style={{ flex: 1 }} />
         <Button size="sm" onClick={playAll}>둘 다 처음부터</Button><Button size="sm" variant="ghost" onClick={pauseAll}>정지</Button><Button size="sm" variant="ghost" onClick={onClose}>닫기 (Esc)</Button>
       </div>

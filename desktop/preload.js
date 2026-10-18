@@ -1,20 +1,31 @@
-// 렌더러에 노출하는 최소 API.
-//   - React 화면은 HTTP/WS 로 엔진과 직접 대화하므로 정보성 값만.
-//   - 첫 실행 설치 화면(setup page, main.js 가 만드는 data: URL)은 IPC 로 진행 상황을 받고 시작/취소를 보낸다.
+// 렌더러에 노출하는 최소 API (contextIsolation + sandbox).
+//   - React 화면은 HTTP/WS 로 엔진과 직접 대화한다. 껍데기에만 있는 정보/동작(버전·업데이트·폴더 열기)만 여기로.
+//   - 첫 실행 설치 화면(main.js 의 data: URL)도 같은 preload 를 쓴다 (setup.*).
+//   - 브라우저로 열면 window.clipforgeShell 이 없다 → 화면은 그 부분을 숨긴다.
 const { contextBridge, ipcRenderer } = require("electron");
+
+const on = (channel) => (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on(channel, h); return () => ipcRenderer.removeListener(channel, h); };
 
 contextBridge.exposeInMainWorld("clipforgeShell", {
   platform: process.platform,
   versions: { electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
   setup: {
-    onEvent: (cb) => { ipcRenderer.on("setup:event", (_e, ev) => cb(ev)); },
+    onEvent: on("setup:event"),
     ready: () => ipcRenderer.invoke("setup:ready"),
     start: (opts) => ipcRenderer.invoke("setup:start", opts || {}),
     cancel: () => ipcRenderer.invoke("setup:cancel"),
     openLogs: () => ipcRenderer.invoke("shell:openLogs"),
   },
   update: {
+    state: () => ipcRenderer.invoke("update:state"),           // {checking, pending:[{name,version,size,reason}], shell:{version}|null, applying, lastCheck, error}
+    onState: on("update:state"),
     check: () => ipcRenderer.invoke("update:check"),
-    apply: () => ipcRenderer.invoke("update:apply"),
+    apply: () => ipcRenderer.invoke("update:apply"),           // 층 A·B (엔진 재시작)
+    applyShell: () => ipcRenderer.invoke("update:applyShell"), // 층 C (앱 재시작)
+  },
+  shell: {
+    info: () => ipcRenderer.invoke("shell:info"),              // {mode, runtimeDir, dataRoot, logDir, updateUrl, isPrivate, hasToken, versions:{engine, components}, shellVersion}
+    openLogs: () => ipcRenderer.invoke("shell:openLogs"),
+    openPath: (p) => ipcRenderer.invoke("shell:openPath", p),
   },
 });

@@ -21,6 +21,13 @@ const DEFAULT_UPDATE_URL = RELEASE.updateUrl;      // GitHub Releases: <owner>/<
 let win = null, tray = null, engine = null, ws = null, quitting = false, logStream = null;
 let pendingUpdates = [];           // plan() 결과 중 아직 적용 안 한 것 (층 A·B)
 let shellUpdate = null;            // electron-updater 가 내려받아 둔 껍데기 새 버전 (층 C) {version}
+const updateState = { checking: false, applying: false, lastCheck: null, error: null, progress: null };
+function broadcastUpdate() {
+  const st = { ...updateState, shell: shellUpdate,
+    pending: pendingUpdates.map((u) => ({ name: u.name, version: u.entry.version, size: u.entry.size || 0, reason: u.reason, notes: u.entry.notes || "" })) };
+  try { win?.webContents.send("update:state", st); } catch { /* 창 없음 */ }
+  return st;
+}
 let setupState = null;             // 첫 실행 설치 진행 상태
 let jobRunning = false;
 
@@ -250,7 +257,7 @@ function setupShellUpdater() {
   autoUpdater.on("error", (e) => log(`shell-update: error ${e?.message || e}`));
   autoUpdater.on("update-downloaded", (info) => {
     shellUpdate = { version: info.version };
-    updateTrayMenu(null);
+    updateTrayMenu(null); broadcastUpdate();
     notify(`앱 ${info.version} 준비됨`, "다음에 종료할 때 자동으로 설치됩니다. 지금 설치하려면 트레이 메뉴에서 선택하세요.");
   });
 }
@@ -269,13 +276,17 @@ function installShellUpdate() {
 // ---------- 앱 내 업데이트 (층 A·B) ----------
 async function checkUpdates(interactive = false) {
   const cfg = engine?.cfg;
-  if (!cfg || cfg.mode !== "runtime") { if (interactive) notify("업데이트", "개발 모드에서는 업데이트를 확인하지 않습니다."); return; }
-  const manifest = await C.fetchManifest(updateUrl());
+  if (!cfg || cfg.mode !== "runtime") { if (interactive) notify("업데이트", "개발 모드에서는 업데이트를 확인하지 않습니다."); updateState.error = "dev"; broadcastUpdate(); return; }
+  updateState.checking = true; updateState.error = null; broadcastUpdate();
+  let manifest;
+  try { manifest = await C.fetchManifest(updateUrl()); }
+  catch (e) { updateState.checking = false; updateState.error = e.message; updateState.lastCheck = Date.now(); broadcastUpdate(); throw e; }
   const local = C.readLocalVersion(cfg.runtimeDir) || {};
   const want = Object.fromEntries(Object.keys(manifest.components || {}).map((n) => [n, C.present(cfg.runtimeDir, n)]));   // 설치된 것만 갱신 (cuda 안 받았으면 계속 안 받음)
   pendingUpdates = C.plan(cfg.runtimeDir, manifest, { wantOptional: want }).filter((it) => it.reason === "update");
   log(`update: local ${local.engine_version} → 매니페스트 ${manifest.engine_code?.version}; 대기 ${pendingUpdates.map((u) => `${u.name}@${u.entry.version}`).join(",") || "없음"}`);
-  updateTrayMenu(null);
+  updateState.checking = false; updateState.lastCheck = Date.now();
+  updateTrayMenu(null); broadcastUpdate();
   if (pendingUpdates.length) {
     const size = pendingUpdates.reduce((a, u) => a + (u.entry.size || 0), 0);
     notify("업데이트 있음", `${pendingUpdates.map((u) => u.name).join(", ")} (${(size / 1e6).toFixed(0)}MB). 트레이 메뉴에서 적용하세요.${jobRunning ? " 작업이 끝난 뒤 적용됩니다." : ""}`);
@@ -288,25 +299,51 @@ async function applyUpdates() {
   const cfg = engine.cfg;
   const items = pendingUpdates.slice();
   updateTrayMenu("업데이트 적용 중");
+  updateState.applying = true; updateState.error = null; broadcastUpdate();
+  // 1) 먼저 내려받는다 (엔진은 계속 떠 있음 → 화면이 진행률을 보여준다)
+  const zips = {};
+  try {
+    for (const u of items) {
+      const zip = path.join(cfg.downloads, path.basename(new URL(u.entry.url).pathname));
+      await C.download(u.entry, zip, (pr) => { updateState.progress = { name: u.name, done: pr.done, total: pr.total }; broadcastUpdate(); });
+      zips[u.name] = zip;
+    }
+  } catch (e) {
+    log(`update: 다운로드 실패 ${e.stack || e}`);
+    updateState.applying = false; updateState.progress = null; updateState.error = e.message; broadcastUpdate();
+    notify("업데이트 실패", e.message); updateTrayMenu("대기 중"); return;
+  }
+  // 2) 엔진을 멈추고 교체 → 재시작 (수 초)
   win?.loadURL(bootHtml("업데이트를 적용하는 중…", items.map((u) => `${u.name} → ${u.entry.version}`).join("\n"), true));
-  showWindow();
   await engine.stopAndWait();
   try {
-    await C.apply(cfg.runtimeDir, items, { downloadDir: cfg.downloads, onEvent: (ev) => { if (ev.type === "download" && ev.total) win?.loadURL(bootHtml("업데이트 내려받는 중…", `${ev.name} ${Math.round(100 * ev.done / ev.total)}%`, true)); } });
+    for (const u of items) { await C.install(cfg.runtimeDir, u, zips[u.name], () => {}); try { fs.unlinkSync(zips[u.name]); } catch { /* keep */ } }
     pendingUpdates = [];
     notify("업데이트 완료", items.map((u) => `${u.name} ${u.entry.version}`).join(", "));
   } catch (e) {
     log(`update: 실패 ${e.stack || e}`);
+    updateState.error = e.message;
     notify("업데이트 실패", e.message);
   }
   await engine.start();
   await win?.loadURL(engine.url);
-  updateTrayMenu("대기 중");
+  updateState.applying = false; updateState.progress = null;
+  updateTrayMenu("대기 중"); broadcastUpdate();
 }
 
 ipcMain.handle("update:check", async () => { const a = await checkUpdates(true); const c = await checkShellUpdate(); return { components: a, shell: c }; });
 ipcMain.handle("update:apply", () => applyUpdates());
+ipcMain.handle("update:applyShell", () => installShellUpdate());
+ipcMain.handle("update:state", () => broadcastUpdate());
 ipcMain.handle("shell:openLogs", () => shell.openPath(app.getPath("userData")));
+ipcMain.handle("shell:openPath", (_e, p) => (typeof p === "string" && p ? shell.openPath(p) : undefined));
+ipcMain.handle("shell:info", () => {
+  const cfg = engine?.cfg || {};
+  const v = cfg.runtimeDir ? (C.readLocalVersion(cfg.runtimeDir) || {}) : {};
+  return { mode: cfg.mode || "-", runtimeDir: cfg.runtimeDir || null, dataRoot: cfg.dataRoot || null, logDir: app.getPath("userData"),
+           updateUrl: updateUrl(), isPrivate: RELEASE.isPrivate, hasToken: !!C.githubToken(), shellVersion: app.getVersion(),
+           versions: { engine: v.engine_version || null, components: v.component_versions || {} }, packaged: app.isPackaged };
+});
 
 // ---------- 수명 ----------
 async function boot() {
@@ -339,7 +376,19 @@ async function boot() {
       setTimeout(tick, 10_000);
       setInterval(tick, 6 * 3600_000);
     }
-    if (SMOKE) { log("smoke: ok — 5초 뒤 종료"); setTimeout(() => quitApp(), 5000); }
+    if (SMOKE) {
+      log("smoke: ok — 5초 뒤 종료");
+      setTimeout(async () => {
+        try {
+          const hash = process.argv.find((a) => a.startsWith("--smoke-tab="))?.split("=")[1];
+          if (hash) { await win.loadURL(`${engine.url}/#${hash}`); await new Promise((r) => setTimeout(r, 1500)); }
+          const img = await win.webContents.capturePage();
+          const out = path.join(app.getPath("userData"), "smoke.png");
+          fs.writeFileSync(out, img.toPNG()); log(`smoke: 캡처 ${out}`);
+        } catch (e) { log(`smoke: 캡처 실패 ${e.message}`); }
+        quitApp();
+      }, 3500);
+    }
   } catch (e) {
     log(`shell: boot 실패 ${e.stack || e}`);
     updateTrayMenu("엔진 시작 실패");

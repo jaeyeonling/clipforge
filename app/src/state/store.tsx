@@ -3,7 +3,8 @@ import { api, toErrorInfo } from "../api/client";
 import { useEngineEvents } from "../api/ws";
 import type { EngineEvent, Episode, ErrorInfo, Health, Job, LiveEvent, LiveStatus, LogLine, StageName } from "../api/types";
 
-export interface Toast { id: number; text: string; bad: boolean }
+export interface Toast { id: number; text: string; bad: boolean; action?: { label: string; onClick: () => void } }
+export interface DoneSignal { episode: string; stages: string[]; warnings: { code: string; message: string; hint: string }[]; at: number }
 export type JobParams = Parameters<typeof api.runJob>[2];
 export interface RunError { info: ErrorInfo; job: Pick<Job, "id" | "episode" | "stages" | "params"> | null }
 
@@ -25,7 +26,9 @@ interface Store {
   liveEvents: LiveEvent[];
   refreshLive: () => Promise<void>;
   toasts: Toast[];
-  toast: (text: string, bad?: boolean) => void;
+  toast: (text: string, bad?: boolean, action?: { label: string; onClick: () => void }) => void;
+  lastDone: DoneSignal | null;
+  candCount: number;
   fail: (e: unknown) => void;
   refreshHealth: () => Promise<void>;
   refreshEpisodes: () => Promise<void>;
@@ -59,11 +62,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeq = useRef(0);
 
-  const toast = useCallback((text: string, bad = false) => {
+  const toast = useCallback((text: string, bad = false, action?: { label: string; onClick: () => void }) => {
     const id = ++toastSeq.current;
-    setToasts((ts) => [...ts.slice(-3), { id, text, bad }]);
-    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), bad ? 6000 : 3200);
+    setToasts((ts) => [...ts.slice(-3), { id, text, bad, action }]);
+    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), action ? 9000 : bad ? 6000 : 3200);
   }, []);
+  const [lastDone, setLastDone] = useState<DoneSignal | null>(null);
+  const [candCount, setCandCount] = useState(0);
   const fail = useCallback((e: unknown) => {
     console.error(e);
     const info = toErrorInfo(e);
@@ -142,7 +147,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast(`오류 ${info.code}: ${info.message}`, true);
       } else if (mine) {
         setLog((l) => [...l, { t: ev.t, type: "done", stage: "", level: "done", message: ev.status === "cancelled" ? "취소됨" : "완료" }]);
-        toast(ev.status === "cancelled" ? "취소됨" : "완료");
+        const warns = ev.warnings || [];
+        if (ev.status === "cancelled") toast("취소됨");
+        else if (warns.length) toast(`완료 — 주의 ${warns.length}건: ${warns[0].message}`, true);
+        else toast("완료");
+        if (ev.status === "done") {
+          const j = jobs.find((x) => x.id === ev.job_id);
+          setLastDone({ episode: j?.episode || "", stages: (ev.stages || j?.stages || []) as string[], warnings: warns, at: Date.now() });
+        }
       }
       setTick((n) => n + 1);
       refreshJobs().catch(() => {});
@@ -162,13 +174,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (wsConnected) { refreshJobs().catch(() => {}); refreshHealth().catch(() => {}); }
   }, [wsConnected, refreshJobs, refreshHealth]);
   useEffect(() => {
+    // 선택 회차의 후보 개수 (탭 배지)
+    if (!selected) { setCandCount(0); return; }
+    api.candidates(selected.id).then((c) => setCandCount(c.length)).catch(() => setCandCount(0));
+  }, [selected, tick]);
+  useEffect(() => {
     // 새로고침 직후 돌고 있는 작업이 있으면 그걸 활성으로
     if (!activeJobId) { const r = jobs.find((j) => j.status === "running" || j.status === "queued"); if (r) setActiveJobId(r.id); }
   }, [jobs, activeJobId]);
 
   const value: Store = {
     health, episodes, selected, selectEpisode, jobs, activeJob, viewJobId, log, logTitle, logPath, runError, wsConnected, tick, toasts, liveStatus, liveEvents, refreshLive,
-    toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, runJob, cancelJob, viewJob, clearLog, dismissError,
+    toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, runJob, cancelJob, viewJob, clearLog, dismissError, lastDone, candCount,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

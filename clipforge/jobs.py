@@ -89,6 +89,9 @@ class Job:
     error: str | None = None
     error_info: dict | None = None     # classify() 결과 {code, message, hint, kind}
     stage_durations: dict = field(default_factory=dict)
+    eta_s: float | None = None         # 남은 예상 시간(초). 과거 매니페스트의 단계별 소요 × 이 회차 길이로 추정
+    stage_eta: dict = field(default_factory=dict)   # 단계별 예상 소요
+    warnings: list = field(default_factory=list)    # [{code, message, hint}] — 완료했지만 사람이 볼 것 (캘리브레이션 등)
     events: list[dict] = field(default_factory=list)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     log_path: Path | None = None
@@ -108,7 +111,7 @@ class Job:
 
     def progress(self, stage: str, pct: float, message: str = "") -> None:
         self.stage, self.pct, self.message = stage, round(pct, 1), message
-        self.emit({"type": "progress", "stage": stage, "pct": self.pct, "message": message})
+        self.emit({"type": "progress", "stage": stage, "pct": self.pct, "message": message, "eta_s": self.eta_s})
 
     def log(self, message: str) -> None:
         self.emit({"type": "log", "stage": self.stage, "message": message})
@@ -122,7 +125,8 @@ class Job:
         """run 매니페스트: 무엇을 어떤 파라미터로 돌렸고 얼마나 걸렸고 어떻게 끝났는지. 재현·대시보드용."""
         return {"id": self.id, "episode": self.episode, "stages": self.stages, "params": self.params,
                 "status": self.status, "started": self.started, "finished": self.finished,
-                "stage_durations": self.stage_durations, "error": self.error_info,
+                "stage_durations": self.stage_durations, "error": self.error_info, "warnings": self.warnings,
+                "media_duration": self.params.get("_media_duration"),
                 "engine_version": ENGINE_VERSION, "schema": dict(SCHEMA),
                 "log_path": str(self.log_path) if self.log_path else None}
 
@@ -153,6 +157,11 @@ class JobRunner:
     def submit(self, episode: str, stages: list[str], params: dict | None = None) -> Job:
         job = Job(id=uuid.uuid4().hex[:8], episode=episode, stages=[s for s in STAGES if s in (stages or STAGES)],
                   params=params or {})
+        try:
+            job.stage_eta = estimate_stage_eta(self.project, episode, job.stages, job.params)
+            job.eta_s = round(sum(job.stage_eta.values()), 1)
+        except Exception:  # noqa: BLE001 — 추정 실패는 조용히
+            pass
         (self.project.reports / "jobs").mkdir(parents=True, exist_ok=True)
         job.log_path = self.project.reports / "jobs" / f"{job.id}_{episode}.jsonl"
         job.manifest_path = self.project.reports / "jobs" / f"{job.id}_{episode}.manifest.json"
@@ -198,12 +207,21 @@ class JobRunner:
                 span = 100.0 / len(job.stages)
                 job.progress(stage, base, f"{stage} 시작")
                 t0 = time.time()
-                run_stage(self.project, job, stage, lambda frac, msg="": job.progress(stage, base + span * frac, msg))
+                remaining_after = sum(job.stage_eta.get(s, 0) for s in job.stages[i + 1:])
+                est_this = job.stage_eta.get(stage, 0)
+
+                def _prog(frac, msg="", _t0=t0, _base=base, _span=span, _stage=stage, _after=remaining_after, _est=est_this):
+                    job.eta_s = round(max(0.0, _est * (1 - frac)) + _after, 1) if _est else job.eta_s
+                    job.progress(_stage, _base + _span * frac, msg)
+
+                run_stage(self.project, job, stage, _prog)
                 job.stage_durations[stage] = round(time.time() - t0, 1)
+                job.eta_s = round(sum(job.stage_eta.get(s, 0) for s in job.stages[i + 1:]), 1)
                 job.log(f"{stage} 완료 ({time.time() - t0:.0f}s)")
             job.status, job.finished = "done", time.time()
+            job.eta_s = 0.0
             job.progress("done", 100.0, "완료")
-            job.emit({"type": "done", "status": "done"})
+            job.emit({"type": "done", "status": "done", "warnings": job.warnings, "stages": job.stages})
         except (Exception, SystemExit) as e:  # noqa: BLE001
             job.status, job.finished = "error", time.time()
             info = classify(e)
@@ -212,6 +230,52 @@ class JobRunner:
             job.emit({"type": "error", "stage": job.stage, **info})
         finally:
             job.write_manifest()
+
+
+# 단계별 기본 소요 (초 / 영상 1분). 4K60 11.7분 ep59 실측 기준. 매니페스트가 쌓이면 그 평균으로 대체.
+DEFAULT_RATE = {"prep": 15.0, "transcribe": 3.0, "signals": 32.0, "candidates": 0.3, "align": 1.0, "shorts": 0.5, "export": 6.0, "xml": 0.2, "weaklabel": 0.2, "eval": 0.2}
+
+
+def estimate_stage_eta(project: Project, vid: str, stages: list[str], params: dict | None = None) -> dict[str, float]:
+    """단계별 예상 소요(초). 과거 매니페스트(같은 종류 회차)의 '초/영상분' 평균 → 없으면 DEFAULT_RATE. 캐시가 있는 단계는 짧게."""
+    import glob
+    minutes = None
+    try:
+        minutes = float(_meta(project, vid)["duration"]) / 60.0
+    except Exception:  # noqa: BLE001
+        vp = project.video_path(vid)
+        if vp:
+            try:
+                from .preprocess import probe
+                minutes = float(probe(vp)["duration"]) / 60.0
+            except Exception:  # noqa: BLE001
+                minutes = None
+    minutes = minutes or 10.0
+    (params or {}).__setitem__("_media_duration", round(minutes * 60, 1)) if isinstance(params, dict) else None
+    rates: dict[str, list[float]] = {}
+    for mp in glob.glob(str(project.reports / "jobs" / "*.manifest.json")):
+        try:
+            m = json.loads(Path(mp).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        md = m.get("media_duration")
+        if m.get("status") != "done" or not md:
+            continue
+        for st, sec in (m.get("stage_durations") or {}).items():
+            if sec and sec > 1.0:                                   # 캐시 적중(수 초)은 제외
+                rates.setdefault(st, []).append(float(sec) / (md / 60.0))
+    cache = project.cache / vid
+    cached = {"prep": (cache / "frames").exists(), "transcribe": (cache / "transcript.json").exists(),
+              "signals": (cache / "item_banner.json").exists() or (cache / "audio_loudness.json").exists()}
+    force = bool((params or {}).get("force"))
+    out = {}
+    for st in stages:
+        if cached.get(st) and not force:
+            out[st] = 2.0
+            continue
+        r = (sum(rates[st]) / len(rates[st])) if rates.get(st) else DEFAULT_RATE.get(st, 1.0)
+        out[st] = round(r * minutes, 1)
+    return out
 
 
 def hint_for(e: Exception) -> str:   # 하위 호환
@@ -287,6 +351,19 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 return
             prog(i / len(names), f"signal {name}")
             run_signal(name, cache, bool(job.params.get("force")))
+        # 신호가 끝나면 ROI 적중률을 자동 점검 — 화면 레이아웃이 바뀐 회차를 사람이 모르고 지나가지 않게
+        try:
+            from .calibrate import check as calib_check
+            rep = calib_check(project, vid)
+            bad = [c for c in rep.get("checks", []) if c.get("status") in ("fail", "warn")]
+            if rep.get("ok") and bad:
+                job.warnings.append({"code": "W_CALIBRATION", "message": "화면 영역(ROI) 점검에서 경고: " + ", ".join(f"{c['name']} {c['status']}" for c in bad),
+                                     "hint": "캘리브레이션 탭에서 미리보기를 확인하세요. 오버레이 위치가 바뀐 회차면 ROI 를 조정하고 prep 을 다시 실행합니다."})
+                job.emit({"type": "log", "stage": "signals", "level": "warn", "message": job.warnings[-1]["message"]})
+            else:
+                job.log("캘리브레이션 점검 통과" if rep.get("ok") else f"캘리브레이션 점검 생략: {rep.get('error', '')}")
+        except Exception as e:  # noqa: BLE001
+            job.log(f"캘리브레이션 점검 실패(무시): {str(e)[:120]}")
         prog(1.0, f"{len(names)} signals")
     elif stage == "candidates":
         # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터

@@ -95,6 +95,9 @@ export interface Job {
   error: string | null;
   error_info?: ErrorInfo | null;
   stage_durations?: Record<string, number>;
+  eta_s?: number | null;
+  stage_eta?: Record<string, number>;
+  warnings?: { code: string; message: string; hint: string }[];
   log_path?: string | null;
   manifest_path?: string | null;
   from_manifest?: boolean;
@@ -113,6 +116,14 @@ export interface EngineEvent {
   hint?: string;
   kind?: ErrorInfo["kind"];
   stages?: string[];
+  eta_s?: number | null;
+  warnings?: { code: string; message: string; hint: string }[];
+}
+
+export interface PathInfo { path: string; exists: boolean }
+export interface EpisodePaths {
+  shorts_dir: PathInfo; premiere_review: PathInfo; premiere_shorts: PathInfo; premiere_dir: PathInfo; cache_dir: PathInfo;
+  labels_shorts: PathInfo; labels_editpoints: PathInfo; data_dir: PathInfo; shorts_count: number; video: string;
 }
 
 export interface LogLine {

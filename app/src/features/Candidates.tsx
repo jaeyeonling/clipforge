@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import { REASONS, type Candidate } from "../api/types";
+import { REASONS, type Candidate, type EpisodePaths } from "../api/types";
+import { inShell, shell } from "../shell";
 import { Button, Empty, Spinner, cx, fmtTime } from "../components/ui";
 import { useApp } from "../state/store";
 
@@ -17,6 +18,7 @@ export function Candidates() {
   const [items, setItems] = useState<Candidate[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
+  const [paths, setPaths] = useState<EpisodePaths | null>(null);
   const [focus, setFocus] = useState(0);
   const [reasonPrompt, setReasonPrompt] = useState(false);
   const [compare, setCompare] = useState<string[]>([]);          // keyOf 목록 (최대 2)
@@ -27,7 +29,9 @@ export function Candidates() {
     try { setItems(await api.candidates(selected.id)); } catch (e) { fail(e); setItems([]); }
   }, [selected, fail]);
   useEffect(() => { load(); }, [load, tick]);
+  useEffect(() => { if (selected) api.episodePaths(selected.id).then(setPaths).catch(() => setPaths(null)); }, [selected, tick]);
   useEffect(() => { setCompare([]); setFocus(0); }, [selected?.id]);
+  const open = (p: string) => { if (shell) shell.shell.openPath(p).catch(fail); else { navigator.clipboard?.writeText(p).catch(() => {}); toast(`경로를 복사했습니다: ${p}`); } };
 
   const shown = useMemo(() => (items || []).filter((c) => filter === "all" || (filter === "undecided" ? !c.decision : c.decision === filter)), [items, filter]);
   useEffect(() => { if (focus >= shown.length) setFocus(Math.max(0, shown.length - 1)); }, [shown.length, focus]);
@@ -81,12 +85,22 @@ export function Candidates() {
   if (!selected) return <Empty title="회차를 선택하세요" />;
   if (items === null) return <div className="row"><Spinner /> <span className="muted">후보 읽는 중…</span></div>;
   if (!items.length) return <Empty title="후보가 없습니다">파이프라인 탭에서 실행하면 순간 순위가 여기 뜹니다.</Empty>;
+  const outputs = paths && (
+    <div className="outputs">
+      <span className="muted xs">결과물</span>
+      <Button size="sm" onClick={() => open(paths.shorts_dir.path)} disabled={!paths.shorts_dir.exists} title={paths.shorts_dir.path}>초안 폴더{paths.shorts_count ? ` (${paths.shorts_count})` : ""}</Button>
+      <Button size="sm" onClick={() => open(paths.premiere_shorts.exists ? paths.premiere_shorts.path : paths.premiere_dir.path)} disabled={!paths.premiere_dir.exists} title={paths.premiere_shorts.path}>Premiere XML</Button>
+      <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>
+      {!inShell && <span className="muted xs">브라우저에서는 경로를 복사합니다</span>}
+    </div>
+  );
 
   const counts = { all: items.length, undecided: items.filter((c) => !c.decision).length, keep: items.filter((c) => c.decision === "keep").length, no: items.filter((c) => c.decision === "no").length };
   const cmpItems = compare.map((k) => items.find((c) => keyOf(c) === k)).filter((c): c is Candidate => !!c);
 
   return (
     <>
+      {outputs}
       <div className="filters">
         {(["all", "undecided", "keep", "no"] as Filter[]).map((f) => (
           <Button key={f} variant="ghost" size="sm" className={cx(filter === f && "active")} onClick={() => { setFilter(f); setFocus(0); }}>

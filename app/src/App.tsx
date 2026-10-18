@@ -18,12 +18,18 @@ const TAB_KEY = "cf.tab";
 const hashTab = (): Tab | null => { const h = location.hash.replace("#", "") as Tab; return TABS.includes(h) ? h : null; };
 
 function Main() {
-  const { selected, activeJob, toasts, viewJobId, runError, liveStatus } = useApp();
+  const { selected, activeJob, toasts, viewJobId, runError, liveStatus, lastDone, candCount } = useApp();
   const [tab, setTab] = useState<Tab>(() => hashTab() || (localStorage.getItem(TAB_KEY) as Tab) || "pipeline");
   useEffect(() => { localStorage.setItem(TAB_KEY, tab); if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`); }, [tab]);
   useEffect(() => { const h = () => { const t = hashTab(); if (t) setTab(t); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   // 작업 이력을 눌렀거나 오류가 나면 파이프라인 탭(로그·오류 카드)으로
   useEffect(() => { if (viewJobId && runError) setTab("pipeline"); }, [runError, viewJobId]);
+  // 초안이 나오면 후보 탭으로, 편집 포인트가 나오면 편집 포인트 탭으로 — "완료" 뒤 뭘 할지 화면이 말한다
+  useEffect(() => {
+    if (!lastDone || lastDone.episode !== selected?.id) return;
+    if (lastDone.stages.includes("export")) setTab("candidates");
+    else if (lastDone.stages.includes("candidates") || lastDone.stages.includes("align")) setTab("editpoints");
+  }, [lastDone, selected?.id]);
 
   const running = !!activeJob && (activeJob.status === "running" || activeJob.status === "queued");
   return (
@@ -36,8 +42,8 @@ function Main() {
       <Tabs<Tab> value={tab} onChange={setTab} items={[
         { key: "pipeline", label: "파이프라인" },
         ...(selected?.kind === "original"
-          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 후보" }]
-          : [{ key: "candidates" as Tab, label: "후보" }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
+          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 후보", count: candCount || undefined }]
+          : [{ key: "candidates" as Tab, label: "후보", count: candCount || undefined }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
         { key: "calibration", label: "캘리브레이션" },
         { key: "metrics", label: "지표 · 작업" },
         { key: "live", label: "라이브", count: liveStatus?.active ? "●" : undefined },

@@ -31,6 +31,8 @@ export function Pipeline() {
   useEffect(() => { if (lastKind.current !== kind) { lastKind.current = kind; setStages(new Set(DEFAULT_STAGES[kind])); } }, [kind]);
 
   const running = !!activeJob && (activeJob.status === "running" || activeJob.status === "queued");
+  const [, tickNow] = useState(0);
+  useEffect(() => { if (!running) return; const id = window.setInterval(() => tickNow((n) => n + 1), 1000); return () => window.clearInterval(id); }, [running]);   // 경과 시간·ETA 가 1초마다 움직이게
   const visible = STAGES_FOR[kind];
   const toggle = (s: StageName) => setStages((cur) => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n; });
   const ordered = STAGES.filter((s) => stages.has(s) && visible.includes(s));
@@ -116,12 +118,20 @@ export function Pipeline() {
               {activeJob ? (
                 <><b>{STATUS_KO[activeJob.status] || activeJob.status}</b>
                   <span>{activeJob.stage && activeJob.status === "running" ? `${activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
-                  {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}</>
+                  {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}
+                  {running && activeJob.eta_s != null && activeJob.eta_s > 0 && <span className="eta">· 약 {fmtDur(activeJob.eta_s)} 남음</span>}
+                  {!running && activeJob.status === "queued" && activeJob.eta_s != null && <span className="muted">· 예상 {fmtDur(activeJob.eta_s)}</span>}</>
               ) : <span className="muted">대기 중 — 회차를 고르고 실행을 누르세요.</span>}
             </div>
           </div>
         </div>
       </Card>
+
+      {activeJob?.status === "done" && (activeJob.warnings?.length ?? 0) > 0 && (
+        <div className="warnbox" role="status">
+          {activeJob.warnings!.map((w) => <div key={w.code}><b>{w.message}</b><div className="hint">{w.hint}</div></div>)}
+        </div>
+      )}
 
       {runError && (
         <div className="errbox" role="alert">

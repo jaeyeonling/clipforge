@@ -200,6 +200,14 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     def editpoints(vid: str):
         return engine.editpoints_list(vid)
 
+    @app.get("/api/episodes/{vid}/paths")
+    def episode_paths(vid: str):
+        return engine.episode_paths(vid)
+
+    @app.post("/api/feedback/export")
+    def feedback_export():
+        return engine.feedback_export()
+
     @app.get("/api/episodes/{vid}/kept")
     def kept_list(vid: str):
         return engine.kept_list(vid)

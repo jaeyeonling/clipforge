@@ -1,5 +1,5 @@
 import type {
-  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, KeptSeg, LabelCategory, Layout, LiveBookmark, LiveSession, LiveStatus, LiveSuggestion, LogLine, MetricRow, PreviewResult, Profile, StageName,
+  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, EpisodePaths, ErrorInfo, Health, Job, KeptSeg, LabelCategory, Layout, LiveBookmark, LiveSession, LiveStatus, LiveSuggestion, LogLine, MetricRow, PreviewResult, Profile, StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -72,6 +72,8 @@ export const api = {
   profile: (game: string) => request<Profile>(`/api/profiles/${game}`),
   saveProfile: (game: string, rois: Record<string, number[]>) => put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
   metrics: () => request<MetricRow[]>("/api/metrics"),
+  episodePaths: (id: string) => request<EpisodePaths>(`/api/episodes/${encodeURIComponent(id)}/paths`),
+  feedbackExport: () => post<{ path: string; dir: string; files: number; size: number }>("/api/feedback/export", {}),
   live: () => request<LiveStatus>("/api/live"),
   liveStart: (config: Record<string, unknown>) => post<LiveSession>("/api/live/start", { config }),
   liveStop: () => post<LiveSession>("/api/live/stop", {}),

@@ -25,6 +25,8 @@ METHODS = {
     "kept.add": lambda e, p: e.kept_add(p["vid"], p["start"], p["end"], p.get("label", "kept"), p.get("note", "")),
     "kept.delete": lambda e, p: e.kept_delete(p["vid"], p["start"], p["end"]),
     "labels.categories": lambda e, p: e.label_categories(),
+    "episode.paths": lambda e, p: e.episode_paths(p["vid"]),
+    "feedback.export": lambda e, p: e.feedback_export(),
     "live.status": lambda e, p: e.live_status(),
     "live.start": lambda e, p: e.live_start(p.get("config")),
     "live.stop": lambda e, p: e.live_stop(),

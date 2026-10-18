@@ -39,8 +39,17 @@ export function Progress({ pct, state, indeterminate }: { pct: number; state?: "
 
 export function Spinner() { return <span className="spinner" aria-label="loading" />; }
 
-export function Toasts({ items }: { items: { id: number; text: string; bad: boolean }[] }) {
-  return <div className="toasts">{items.map((t) => <div key={t.id} className={cx("toast", t.bad && "bad")}>{t.text}</div>)}</div>;
+export function Toasts({ items }: { items: { id: number; text: string; bad: boolean; action?: { label: string; onClick: () => void } }[] }) {
+  return (
+    <div className="toasts">
+      {items.map((t) => (
+        <div key={t.id} className={cx("toast", t.bad && "bad", t.action && "with-action")}>
+          <span>{t.text}</span>
+          {t.action && <button className="btn sm primary" onClick={t.action.onClick}>{t.action.label}</button>}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { key: T; label: string; count?: number | string }[] }) {

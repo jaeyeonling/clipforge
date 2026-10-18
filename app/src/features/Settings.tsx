@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api } from "../api/client";
 import pkg from "../../package.json";
 import { Badge, Button, Card, Empty, cx } from "../components/ui";
 import { useApp } from "../state/store";
@@ -83,6 +84,14 @@ export function Settings() {
           <p className="muted xs" style={{ marginTop: 10 }}>영상·캐시·라벨은 데이터 폴더에, 파이썬·모델은 런타임 폴더에 있습니다. 앱을 지워도 둘 다 남습니다.</p>
         </Card>
 
+        <Card title="피드백 보내기">
+          <p className="small">판정(keep/no)·작업 기록·로그를 zip 하나로 묶습니다. 영상과 캐시는 들어가지 않습니다 (보통 1MB 미만). 만든 파일을 카톡으로 보내 주세요.</p>
+          <div className="row" style={{ marginTop: 8 }}>
+            <Button size="sm" variant="primary" onClick={() => api.feedbackExport().then((r) => {
+              toast(`피드백 파일 생성: ${r.files}개 항목, ${Math.round(r.size / 1024)}KB`, false, shell ? { label: "폴더 열기", onClick: () => shell!.shell.openPath(r.dir) } : undefined);
+            }).catch(fail)}>피드백 zip 만들기</Button>
+          </div>
+        </Card>
         <Card title="환경 진단" right={<Button size="sm" variant="ghost" onClick={() => refreshHealth().catch(fail)}>↻</Button>}>
           {!health ? <span className="muted small">읽는 중…</span> : (
             <>

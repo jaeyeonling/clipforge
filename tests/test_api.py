@@ -174,3 +174,23 @@ def test_candidates_show_shorts_ground_truth(engine):
         engine.job_run(vid, ["align"], {})
     assert ei.value.code == "E_BAD_PARAMS"
     assert engine.job_run(vid, ["eval"], {"shorts": ["x"]})["status"] in ("queued", "running", "done")
+
+
+def test_paths_eta_and_feedback_export(engine, tmp_path):
+    from clipforge.jobs import estimate_stage_eta
+    vid = _fake_episode(engine)
+    paths = engine.episode_paths(vid)
+    assert paths["shorts_dir"]["exists"] is False and paths["data_dir"]["exists"] is True and paths["shorts_count"] == 0
+    eta = estimate_stage_eta(engine.project, vid, ["prep", "transcribe", "export"], {})
+    assert eta["prep"] == pytest.approx(15.0 * 100 / 60, rel=0.01) and eta["export"] > 0     # 기본 비율 × 영상 분
+    # 매니페스트가 있으면 그 비율을 쓴다 (prep 60초/100초 영상 = 36초/분)
+    (engine.project.reports / "jobs").mkdir(parents=True, exist_ok=True)
+    (engine.project.reports / "jobs" / "x_ep.manifest.json").write_text(json.dumps({"status": "done", "media_duration": 100.0, "stage_durations": {"prep": 60.0}}), encoding="utf-8")
+    assert estimate_stage_eta(engine.project, vid, ["prep"], {})["prep"] == pytest.approx(60.0, rel=0.01)
+    j = engine.job_run(vid, ["eval"], {})
+    assert "eta_s" in j and j["eta_s"] is not None
+    (engine.project.labels / f"{vid}.shorts.csv").write_text("start,end,label,note\n1,2,keep,x\n", encoding="utf-8")
+    r = engine.feedback_export()
+    import zipfile
+    names = zipfile.ZipFile(r["path"]).namelist()
+    assert f"labels/{vid}.shorts.csv" in names and "health.json" in names and r["files"] >= 3

@@ -221,6 +221,63 @@ class Engine:
                         out[(f"{float(r['start']):.1f}", f"{float(r['end']):.1f}")] = {"label": r["label"], "reason": reason}
         return out
 
+    # ---- 결과물 위치 (화면의 '폴더 열기' 버튼) ----
+    def episode_paths(self, vid: str) -> dict:
+        p = self.project
+        items = {
+            "shorts_dir": p.review / vid / "shorts",
+            "premiere_review": p.premiere / f"{vid}_review.xml",
+            "premiere_shorts": p.premiere / f"{vid}_shorts.xml",
+            "premiere_dir": p.premiere,
+            "cache_dir": p.cache / vid,
+            "labels_shorts": p.labels / f"{vid}.shorts.csv",
+            "labels_editpoints": p.labels / f"{vid}.csv",
+            "data_dir": p.data_root,
+        }
+        out = {k: {"path": str(v), "exists": v.exists()} for k, v in items.items()}
+        sd = p.review / vid / "shorts"
+        out["shorts_count"] = len(list(sd.glob("*.mp4"))) if sd.exists() else 0
+        out["video"] = str(p.video_path(vid) or "")
+        return out
+
+    def feedback_export(self) -> dict:
+        """친구 PC 의 판정·매니페스트·로그를 zip 하나로 (카톡으로 보내는 용도). 영상·캐시는 넣지 않는다."""
+        import io
+        import time
+        import zipfile
+        p = self.project
+        out_dir = p.data_root / "exports"; out_dir.mkdir(parents=True, exist_ok=True)
+        name = f"clipforge-feedback-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+        dst = out_dir / name
+        n = 0
+        with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(p.labels.glob("*.csv")):
+                z.write(f, f"labels/{f.name}"); n += 1
+            if p.episodes_csv.exists():
+                z.write(p.episodes_csv, "episodes.csv"); n += 1
+            for f in sorted((p.reports / "jobs").glob("*.manifest.json")) if (p.reports / "jobs").exists() else []:
+                z.write(f, f"reports/jobs/{f.name}"); n += 1
+            for f in sorted(p.reports.glob("*_eval.json")):
+                z.write(f, f"reports/{f.name}"); n += 1
+            for vid in p.episode_ids():
+                for nm in ("align.json", "align_shorts.json", "meta.json"):
+                    f = p.cache / vid / nm
+                    if f.exists():
+                        z.write(f, f"cache/{vid}/{nm}"); n += 1
+                idx = p.review / vid / "shorts" / "index.json"
+                if idx.exists():
+                    z.write(idx, f"review/{vid}/shorts/index.json"); n += 1
+            if p.log_path.exists():
+                tail = p.log_path.read_text(encoding="utf-8", errors="replace")[-200_000:]
+                z.writestr("engine.log", tail); n += 1
+            live = p.data_root / "live"
+            if live.exists():
+                for f in sorted(live.rglob("*.json")):
+                    z.write(f, f"live/{f.relative_to(live)}"); n += 1
+            h = {k: v for k, v in self.health().items() if k != "problems"}
+            z.writestr("health.json", json.dumps(h, ensure_ascii=False, indent=1)); n += 1
+        return {"path": str(dst), "dir": str(out_dir), "files": n, "size": dst.stat().st_size}
+
     # ---- Phase 2: 정답 구간(kept) 과 범주 ----
     def label_categories(self) -> list[dict]:
         import yaml

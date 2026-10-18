@@ -253,7 +253,7 @@ def cmd_xml(a):
 
 
 def cmd_transcribe(a):
-    """Whisper 전사 → cache/<vid>/transcript.json. 백엔드: faster_whisper(GPU) → ffmpeg_whisper(CPU) 순 자동."""
+    """Whisper 전사 → cache/<vid>/transcript.json (faster-whisper GPU, 실패 시 CPU)."""
     tr = transcribe(CACHE / a.vid, backend=a.backend, force=a.force)
     segs = tr.get("segments", [])
     print(f"[transcribe] {tr.get('backend')} {tr.get('model')}  segments={len(segs)}  elapsed={tr.get('elapsed_s', '?')}s")

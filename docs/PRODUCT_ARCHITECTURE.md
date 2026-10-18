@@ -174,7 +174,7 @@
 - `engine-dist/` 는 이제 **설치본에 통째로 들어가지 않는다** — 릴리스 아티팩트(층 A zip + 층 B zip 들)의 원본이자 개발 중 번들 점검용. 설치본에는 그중 코드 경로만 동봉(§9.2).
 - 데이터 분리: 껍데기가 설치본에서 `CLIPFORGE_DATA=%APPDATA%/clipforge/data` 를 넘긴다(§6 원칙: 업데이트가 라벨을 지우지 않음).
 - 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 친구 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
-- 주의: 번들 안에서 `ffmpeg_whisper` 폴백(ggml 모델)은 넣지 않았다. 전사 폴백은 faster-whisper CPU 로 충분하다.
+- 전사 백엔드는 faster-whisper 하나(CUDA 실패 시 CPU/int8 자동 폴백). 예전 ffmpeg whisper 필터(ggml 모델) 경로는 제거했다 — 번들에 없는 파일을 가리켰고 CPU 폴백과 역할이 겹쳤다. `models/ggml-*.bin` 은 더 이상 쓰지 않는다.
 
 ### 9.2 앱 내 업데이트 설계 (2026-10-18 밤) — 재설치 없이, 작은 것만, 승인 뒤 적용
 

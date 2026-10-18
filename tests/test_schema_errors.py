@@ -124,3 +124,13 @@ def test_find_ffmpeg_prefers_bundle_bin(tmp_path, monkeypatch):
     other = tmp_path / "x"; other.mkdir(); (other / "ffmpeg.exe").write_bytes(b"")
     monkeypatch.setenv("CLIPFORGE_FFMPEG", str(other))
     assert project.find_ffmpeg() == other
+
+
+def test_health_problems_levels():
+    from clipforge.project import health_problems
+    h = {"ffmpeg_ok": True, "fonts_ok": True, "rapidocr": True, "nvenc": True, "whisper_gpu": True, "whisper_model": True, "disk_free_gb": 100}
+    assert health_problems(h) == []
+    h2 = {**h, "ffmpeg_ok": False, "whisper_model": False, "disk_free_gb": 3}
+    codes = {p["code"]: p["level"] for p in health_problems(h2)}
+    assert codes == {"E_FFMPEG_MISSING": "error", "W_NO_WHISPER_MODEL": "warn", "W_DISK_LOW": "warn"}
+    assert all(p["hint"] for p in health_problems(h2))

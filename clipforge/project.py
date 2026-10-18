@@ -99,7 +99,7 @@ class Project:
                "app_root": str(self.app_root), "data_root": str(self.data_root),
                "ffmpeg": str(self.ffmpeg_dir) if self.ffmpeg_dir else None, "ffmpeg_ok": False, "nvenc": False,
                "gpu": None, "whisper_gpu": False, "fonts_ok": (self.fonts / "NanumPenScript-Regular.ttf").exists(),
-               "rapidocr": False}
+               "rapidocr": False, "whisper_model": False}
         try:
             r = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=20)
             out["ffmpeg_ok"] = r.returncode == 0
@@ -120,6 +120,12 @@ class Project:
         try:
             import rapidocr  # noqa: F401
             out["rapidocr"] = True
+        except Exception:
+            pass
+        try:
+            local = self.models / "faster-whisper-large-v3-turbo" / "model.bin"
+            hf = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub" / "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo"
+            out["whisper_model"] = local.exists() or hf.exists()
         except Exception:
             pass
         try:
@@ -200,6 +206,9 @@ def health_problems(h: dict) -> list[dict]:
     if h.get("ffmpeg_ok") and not h.get("nvenc"):
         out.append({"level": "warn", "code": "W_NO_NVENC", "message": "NVENC 인코더가 없어 CPU 로 렌더합니다 (느림)",
                     "hint": "NVIDIA GPU 와 최신 드라이버가 있으면 자동으로 NVENC 를 씁니다."})
+    if not h.get("whisper_model"):
+        out.append({"level": "warn", "code": "W_NO_WHISPER_MODEL", "message": "음성 인식 모델이 아직 없습니다 (첫 전사 때 1.6GB 를 내려받습니다)",
+                    "hint": "설치본이라면 설정 → 업데이트에서 구성요소 whisper 를 받으세요. 개발 환경은 첫 transcribe 때 자동 다운로드."})
     if not h.get("whisper_gpu"):
         out.append({"level": "warn", "code": "W_NO_GPU_WHISPER", "message": "전사가 CPU 로 돌아갑니다 (12분 영상 약 20분)",
                     "hint": "CUDA 런타임(nvidia-cublas-cu12, nvidia-cudnn-cu12)을 확인하세요."})

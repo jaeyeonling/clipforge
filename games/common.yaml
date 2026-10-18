@@ -17,9 +17,7 @@ chat_keywords:
 
 speech_kernel: {pre: 20, post: 6, cooldown: 8}   # 키워드 시각 t 를 [t-pre, t+post] 로 펼침 (Auto-clipper 의 [t-30,t+5] 보다 짧게)
 
-# 전사 백엔드 우선순위. 설치된 것 중 첫 번째를 쓴다.
+# 전사: faster-whisper(CTranslate2). CUDA 실패 시 자동으로 CPU/int8. 모델은 번들 models/ 우선.
 transcribe:
-  backends: [faster_whisper, ffmpeg_whisper]
   language: ko
   faster_whisper: {model: large-v3-turbo, device: cuda, compute_type: int8_float16, vad: true, word_timestamps: true}
-  ffmpeg_whisper: {model: models/ggml-large-v3-turbo-q8_0.bin, vad_model: models/ggml-silero-v5.1.2.bin, queue: 20}

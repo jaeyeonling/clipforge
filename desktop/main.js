@@ -13,7 +13,8 @@ const { Engine } = require("./engine");
 const C = require("./components");
 
 const SMOKE = process.argv.includes("--smoke");
-const AUTO_SETUP = process.argv.includes("--auto-setup");   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
+const AUTO_SETUP = process.argv.includes("--auto-setup");
+const AUTO_UPDATE = process.argv.includes("--auto-update");   // 시작 직후 업데이트를 확인해 있으면 바로 적용 (자동 점검용)   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
 const ASSETS = path.join(__dirname, "assets");
 const DEFAULT_UPDATE_URL = "https://updates.example.invalid/clipforge/stable";   // 호스팅 결정 뒤 교체 (R2 추천)
 let win = null, tray = null, engine = null, ws = null, quitting = false, logStream = null;
@@ -289,6 +290,10 @@ async function boot() {
     await win.loadURL(engine.url);
     subscribeEvents();
     log(`shell: ui loaded ${engine.url}`);
+    if (engine.cfg.mode === "runtime" && AUTO_UPDATE) {
+      const upd = await checkUpdates();
+      if (upd?.length) { await applyUpdates(); log(`auto-update: applied; VERSION=${JSON.stringify(C.readLocalVersion(engine.cfg.runtimeDir))}`); }
+    }
     if (engine.cfg.mode === "runtime") {
       setTimeout(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 10_000);
       setInterval(() => checkUpdates().catch((e) => log(`update: ${e.message}`)), 6 * 3600_000);

@@ -210,9 +210,77 @@ def step_smoke(out: Path) -> dict:
     return health
 
 
+# ---------- 8. 릴리스 아티팩트 (앱 내 업데이트용, PRODUCT_ARCHITECTURE §9.2) ----------
+CODE_PATHS = ["clipforge", "games", "data", "assets", "app"]       # 층 A
+DATA_DIRS = {"cache", "labels", "review", "premiere", "reports", "videos", "project.json", "episodes.csv"}   # 번들에 들어가면 안 되는 것
+NOTICE_FILES = {"VERSION.json", "THIRD_PARTY_NOTICES.md"}
+
+
+def component_paths(out: Path, name: str) -> list[str]:
+    """층 B 구성요소의 상대 경로. python = 루트의 파일 전부(고지 제외) + Lib. ffmpeg = bin. whisper = models."""
+    if name == "python":
+        return sorted(p.name for p in out.iterdir() if p.is_file() and p.name not in NOTICE_FILES and p.name not in DATA_DIRS) + ["Lib"]
+    return {"ffmpeg": ["bin"], "whisper": ["models"]}[name]
+
+
+COMPONENTS = ("python", "ffmpeg", "whisper")
+
+
+def sha256_of(p: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def zip_paths(out: Path, rel_paths: list[str], dst: Path) -> None:
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for rel in rel_paths:
+            p = out / rel
+            if p.is_file():
+                z.write(p, rel)
+            elif p.is_dir():
+                for f in sorted(p.rglob("*")):
+                    if f.is_file() and "__pycache__" not in f.parts:
+                        z.write(f, f.relative_to(out).as_posix())
+
+
+def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str) -> None:
+    """engine-code-<ver>.zip (+ 구성요소 zip) 과 latest.json. 서버에는 이 폴더를 그대로 올린다."""
+    sys.path.insert(0, str(ROOT))
+    from clipforge import __version__
+    rel_dir.mkdir(parents=True, exist_ok=True)
+    ver = json.loads((out / "VERSION.json").read_text(encoding="utf-8"))
+    comp_ver = ver.get("component_versions") or {"python": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
+    entry = lambda p, v, notes="": {"version": v, "url": f"{base_url.rstrip('/')}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size, **({"notes": notes} if notes else {})}
+    code_zip = rel_dir / f"engine-code-{__version__}.zip"
+    zip_paths(out, CODE_PATHS, code_zip)
+    manifest = {"published": time.strftime("%Y-%m-%dT%H:%M:%S"), "shell": {"version": __version__, "min_engine_code": __version__},
+                "engine_code": entry(code_zip, __version__), "components": {}, "compat": {}}
+    log(f"release: {code_zip.name} {human(code_zip.stat().st_size)}")
+    for name in COMPONENTS:
+        zp = rel_dir / f"{name}-{comp_ver[name].replace('+', '_')}.zip"
+        if with_components:
+            zip_paths(out, component_paths(out, name), zp)
+            log(f"release: {zp.name} {human(zp.stat().st_size)}")
+        if zp.exists():
+            manifest["components"][name] = entry(zp, comp_ver[name])
+        else:
+            manifest["components"][name] = {"version": comp_ver[name]}          # zip 없이 버전만 (서버에 이미 있는 경우)
+    (rel_dir / "latest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    ver["component_versions"] = comp_ver
+    (out / "VERSION.json").write_text(json.dumps(ver, ensure_ascii=False, indent=1), encoding="utf-8")
+    log(f"release: latest.json → {rel_dir}  (base_url={base_url})")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "engine-dist"))
+    ap.add_argument("--release", metavar="DIR", help="앱 내 업데이트용 아티팩트(engine-code zip + latest.json)를 DIR 에 생성")
+    ap.add_argument("--release-components", action="store_true", help="--release 에 구성요소 zip(python/ffmpeg/whisper, 4GB)도 포함")
+    ap.add_argument("--base-url", default="https://updates.example.invalid/clipforge/stable", help="latest.json 의 url 접두 (서버 결정 뒤 바꿈)")
     ap.add_argument("--skip-packages", action="store_true"); ap.add_argument("--force-packages", action="store_true")
     ap.add_argument("--skip-ffmpeg", action="store_true"); ap.add_argument("--skip-models", action="store_true")
     ap.add_argument("--smoke", action="store_true", help="구성 뒤 번들 파이썬으로 엔진을 띄워 health 확인")
@@ -233,6 +301,8 @@ def main() -> None:
         log(f"  {k:<28} {human(du(out / k))}")
     if a.smoke:
         step_smoke(out)
+    if a.release:
+        step_release(out, Path(a.release).resolve(), a.release_components, a.base_url)
 
 
 if __name__ == "__main__":

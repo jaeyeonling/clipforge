@@ -175,6 +175,46 @@
 - 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 친구 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
 - 주의: 번들 안에서 `ffmpeg_whisper` 폴백(ggml 모델)은 넣지 않았다. 전사 폴백은 faster-whisper CPU 로 충분하다.
 
+### 9.2 앱 내 업데이트 설계 (2026-10-18 밤) — 재설치 없이, 작은 것만, 승인 뒤 적용
+
+원칙: 설치본 4.5GB 를 매번 다시 받게 하면 아무도 업데이트하지 않는다. **바뀐 층만 받는다.** 그래서 설치본을 세 층으로 나눠 각각 버전을 매긴다.
+
+| 층 | 내용 | 크기 | 바뀌는 빈도 | 적용 방법 |
+|---|---|---|---|---|
+| **A. 앱 코드** | `engine/clipforge/`, `engine/games/`, `engine/data/`, `engine/app/dist/` (파이썬 코드 + 프로필·사전 + 화면) | 1~5MB zip | 자주 (규칙·화면 수정마다) | 껍데기가 zip 을 받아 해시 검증 → `engine/_staging/` 에 풀기 → 엔진 중지 → 폴더 교체(이전본은 `_prev/` 로 보관, 실패 시 복원) → 엔진 재시작 → 화면 새로고침. **앱 재시작 불필요, 수 초.** |
+| **B. 런타임 구성요소** | `python+site-packages`, `bin/ffmpeg`, `models/whisper` — 각각 독립 버전 | 0.4~2GB 씩 | 드묾 (분기에 한 번 이하) | 구성요소 단위로만 받는다(바뀐 것만). 백그라운드 다운로드(재개 가능) → 검증 → 엔진 중지 → 폴더 교체 → 재시작 |
+| **C. 껍데기** | Electron 실행 파일 자체 | ~100MB | 아주 드묾 | electron-updater(NSIS, blockmap 차등) — 종료 시 설치. 한 번 깔리면 거의 안 바뀜 |
+
+**매니페스트** (서버의 `channels/stable/latest.json`, 서명 없는 대신 sha256 + HTTPS):
+```json
+{"published": "2026-10-18T22:00:00+09:00",
+ "shell":  {"version": "0.2.0", "min_engine_code": "0.2.0"},
+ "engine_code": {"version": "0.2.3", "url": "…/engine-code-0.2.3.zip", "sha256": "…", "size": 3123456, "notes": "득템 배너 reset 규칙 수정"},
+ "components": {
+   "python":  {"version": "3.12.10+pkg2026.10", "url": "…/python-….zip", "sha256": "…", "size": 2100000000},
+   "ffmpeg":  {"version": "9.0.2",  "url": "…", "sha256": "…", "size": 434000000},
+   "whisper": {"version": "large-v3-turbo-ct2-1", "url": "…", "sha256": "…", "size": 1600000000}},
+ "compat": {"engine_code>=0.3": {"python": ">=3.12.10+pkg2026.10"}}}
+```
+로컬은 `engine/VERSION.json`(빌드 스크립트가 이미 씀)에 같은 키로 현재 버전을 둔다. 비교는 문자열 동등이 아니라 semver(앱 코드)·명시 버전(구성요소).
+
+**흐름 (껍데기 `updater.js`)**
+1. 시작 10초 뒤 + 6시간마다 `latest.json` 을 받는다 (실패는 조용히; 오프라인이면 아무 일도 없음).
+2. 차이가 있으면 화면 상단에 한 줄: "업데이트 있음 — 앱 코드 0.2.3 (3MB) · 모델 (1.6GB)". **자동으로 받는 것은 A 층만**(작으므로 백그라운드 다운로드). B 는 사용자가 "받기"를 눌러야 받는다(용량·시간 표시, 재개 가능).
+3. 적용은 항상 **사용자 승인**: "지금 적용" 버튼. 단, 작업(Job)이 돌고 있으면 버튼을 비활성화하고 "작업이 끝나면 적용"을 제안(방송 중 끊지 않는다 §2-7).
+4. 적용 = 엔진 중지 → 교체 → 재시작 → 화면 reload. 실패하면 `_prev/` 로 되돌리고 알림. 성공하면 `VERSION.json` 갱신, 변경 내역(notes) 토스트.
+5. C 층은 electron-updater 기본 흐름(다운로드 완료 → "다음 종료 때 설치"). 강제하지 않는다.
+
+**호환성 규칙**: 매니페스트의 `compat` 로 "이 앱 코드는 이 런타임 이상이 필요"를 선언. 껍데기는 A 를 적용하기 전에 B 가 충족되는지 보고, 아니면 B 를 먼저 받게 안내한다. 데이터 스키마는 §10-8 의 `schema.py` 가 메모리 마이그레이션으로 처리하므로 A 업데이트가 라벨·캐시를 깨지 않는다(새 버전이 더 높은 schema 를 쓰면 이전 앱은 E_SCHEMA_NEWER 로 거부 — 롤백 시 캐시만 재생성).
+
+**서버 (결정 필요)**: 정적 HTTPS 폴더면 충분하다 — `latest.json` + zip 들. 후보:
+- GitHub Releases: 무료, 간단. **단일 파일 2GB 제한**이라 설치본 4.5GB 는 못 올리고(설치본은 다른 곳), 구성요소 zip 은 전부 2GB 미만이라 가능(python 층은 cublas/cudnn 을 나누면 안전). electron-updater 의 GitHub provider 가 C 층을 바로 지원.
+- Cloudflare R2 / S3 + 정적 호스팅: 용량 제한 없음, 다운로드 속도 좋음, 소액 비용. electron-updater `generic` provider.
+- 추천: **R2 하나로 통일**(설치본·구성요소·매니페스트 모두). 친구 한 명 배포 규모에선 비용이 거의 0.
+서명: 코드 서명 인증서가 없는 동안은 SmartScreen 경고를 피할 수 없다(설치본 첫 실행 때 "추가 정보 → 실행"). 앱 내 업데이트(A·B 층)는 zip 교체라 SmartScreen 과 무관 — **재설치를 피하는 또 하나의 이유**.
+
+**구현 단위**: (1) 빌드 스크립트에 `--release` : engine-code zip + 구성요소 zip + latest.json 생성(해시·크기 자동) (2) `desktop/updater.js` : 확인·다운로드(재개)·검증·교체·롤백 (3) 화면: 상단 배너 + 설정 탭의 "업데이트" 카드(현재 버전표·확인·적용) (4) electron-updater 로 C 층. 서버 결정이 나면 (1)(2) 부터.
+
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 
 진행 (2026-10-18 밤): ✅ 1 설정 객체(`project.py`: 앱/데이터 폴더 분리, ffmpeg 자동 탐색, health 진단) · ✅ 2 Job 러너(`jobs.py`: 단계 큐, 진행률[prep 는 프레임 수 폴링, export 는 클립 단위], 취소, 작업 로그 파일, 오류 코드+힌트) · ✅ 3 API(`api/methods.py` 전송 무관, `api/server.py` HTTP+WebSocket+미디어 Range, `api/stdio.py` JSON Lines) · ✅ 4 판정 I/O(`decision.set` → labels.csv) · ◐ UI v0(`ui/`: 빌드 없는 로컬 웹 화면 — 회차·실행·후보 리뷰·판정·지표). **UI 스택 결정**: 1차는 엔진이 직접 서빙하는 로컬 웹 UI. 데스크톱 껍데기(Tauri/WPF)는 stdio 또는 HTTP 로 같은 API 를 쓴다. ✅ 5 캘리브레이션(`calibrate.py`: 배너 OCR·패널 제목·채팅·HUD 적중률 점검 + ROI 박스 미리보기 + ROI 수치 편집/프로필 저장, UI 패널) · ✅ 7 테스트 뼈대(`tests/`: pytest 17개 — timeline/adapters/candidates/배너 전이/lexicon/weaklabel/subtitles/textdraw/발화 경계/채팅 교정 + API: Engine·HTTP·판정·프로필 검증). ✅ 6 오류·로그(`errors.py`: 모든 예외 → {code, message, hint, kind=user|internal}, 단계 전제조건은 EngineError 로 명시[E_NO_PREP/E_NO_SHORTS/…]; Job 은 끝날 때 run 매니페스트(reports/jobs/<id>.manifest.json: 파라미터·단계별 소요·오류·엔진/스키마 버전)를 쓰고 재시작 후에도 job.list 가 이력을 보여줌; `job.log` 메서드/`/api/jobs/{id}/log`; HTTP 오류는 검증 실패·미처리 예외까지 전부 {"error":{…}} 한 형태(404=E_NOT_FOUND, 400=사용자 오류, 500=내부); reports/engine.log 회전 로그; UI: 상단 문제 배너(health.problems), 오류 카드(코드·힌트·같은 설정으로 다시 실행·로그 보기), 레벨별 색 로그+오류만 필터, 작업 이력 클릭→로그, WS 끊김 표시) · ✅ 8 스키마 버전(`schema.py`: project.json(데이터 루트)·meta·shorts·index·게임 프로필에 schema_version, v0(키 없음/맨 리스트)→v1 마이그레이션은 메모리에서, 엔진보다 새 파일은 E_SCHEMA_NEWER 로 거부하고 job.run 차단; labels.csv 는 열 구조가 스키마라 project.json 의 labels_schema 로 관리). **§10 리팩터링 8개 전부 완료 → 로드맵 1단계(엔진화) 닫힘.** ep59 캘리브레이션 결과: 배너 68% / 패널 40% / 채팅 92% / HUD 99% → 전부 pass.

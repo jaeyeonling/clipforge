@@ -9,24 +9,14 @@
   "scripts": {
     "start": "electron .",
     "smoke": "electron . --smoke",
-    "dist": "electron-builder --win nsis"
+    "pack": "electron-builder --win --dir --config electron-builder.config.js",
+    "dist": "electron-builder --win nsis --config electron-builder.config.js"
   },
   "devDependencies": {
-    "electron": "^35.1.5"
+    "electron": "^35.1.5",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "ws": "^8.18.1"
-  },
-  "build": {
-    "appId": "kr.clipforge.app",
-    "productName": "clipforge",
-    "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "engine.js", "assets/**"],
-    "extraResources": [
-      { "from": "../app/dist", "to": "ui" },
-      { "from": "../engine-dist", "to": "engine", "filter": ["**/*"] }
-    ],
-    "win": { "target": ["nsis"], "icon": "assets/icon.ico" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false }
   }
 }

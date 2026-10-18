@@ -21,7 +21,7 @@ function resolveEngine(app) {
   }
   if (process.env.CLIPFORGE_ENGINE_DIST === "1") {                 // 개발 중 번들 런타임 점검: engine-dist/ 로 띄운다
     const dir = path.join(REPO, "engine-dist");
-    return { py: path.join(dir, "python.exe"), cwd: dir };
+    return { py: path.join(dir, "python.exe"), cwd: dir, dataRoot: REPO };   // 데이터는 저장소(ep59 등), 번들은 깨끗하게
   }
   const venv = path.join(REPO, ".venv", "Scripts", "python.exe");
   return { py: fs.existsSync(venv) ? venv : "python", cwd: REPO };

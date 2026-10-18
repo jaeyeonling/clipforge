@@ -11,6 +11,7 @@
   python -m clipforge.run eval     foo --shorts            # hit@K / MRR
   python -m clipforge.run harvest  foo --shorts            # review/foo/shorts/keep/ → labels (label=keep)
   python -m clipforge.run lexicon  foo                     # 배너 토큰 사전 매칭률 + 미매칭 → reports/foo_tokens.md
+  python -m clipforge.run xml      foo [--k 3]             # Premiere xmeml: premiere/foo_review.xml, foo_shorts.xml
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
@@ -25,6 +26,7 @@ from .candidates import DEFAULT_WEIGHTS, make_candidates
 from .eval_shorts import evaluate_shorts
 from .lexicon import Lexicon, banner_tokens, report_md
 from .evaluate import evaluate
+from .export_xml import export_xml
 from .preprocess import preprocess
 from .profiles import load_profile
 from .render import render_shorts
@@ -207,6 +209,20 @@ def cmd_lexicon(a):
     print(f"  -> {out / (a.vid + '_tokens.md')}")
 
 
+def cmd_xml(a):
+    """Premiere xmeml: premiere/<vid>_review.xml (V1 원본 + V2 후보 + 마커), premiere/<vid>_shorts.xml (세로 시퀀스)."""
+    meta = load_meta(a.vid)
+    cands_p = CACHE / a.vid / "candidates.json"
+    cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
+    shorts = load_shorts(a.vid)
+    ui_p = CACHE / a.vid / "ui_state.json"
+    ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
+    out = ROOT / "premiere"
+    for p in export_xml(meta, cands, shorts, ui, out, a.vid, k=a.k):
+        print(f"  {p}")
+    print(f"[xml] review: V1 원본 + V2 후보 {len(cands.items)}개 + 마커 {len(shorts)}개 / shorts: 세로 시퀀스 (variant 별 {a.k}개)")
+
+
 def cmd_harvest(a):
     """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프.
     --shorts: review/<vid>/shorts/keep/*.mp4 → labels/<vid>.shorts.csv (label=keep)."""
@@ -267,6 +283,7 @@ def main():
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--shorts", action="store_true"); p.set_defaults(f=fn)
     p = sp.add_parser("weaklabel"); p.add_argument("vid"); p.add_argument("--title", default=None); p.set_defaults(f=cmd_weaklabel)
     p = sp.add_parser("lexicon"); p.add_argument("vid"); p.set_defaults(f=cmd_lexicon)
+    p = sp.add_parser("xml"); p.add_argument("vid"); p.add_argument("--k", type=int, default=3); p.set_defaults(f=cmd_xml)
 
     a = ap.parse_args()
     a.f(a)

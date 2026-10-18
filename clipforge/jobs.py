@@ -23,7 +23,55 @@ from .errors import EngineError, classify
 from .project import Project
 from .schema import SCHEMA
 
-STAGES = ["prep", "transcribe", "signals", "shorts", "export", "xml", "weaklabel", "eval"]
+STAGES = ["prep", "transcribe", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"]
+# 회차 종류별 기본 단계. edited = Phase 1 (쇼츠), original = Phase 2 (편집 포인트)
+DEFAULT_STAGES = {"edited": ["prep", "transcribe", "signals", "shorts", "export", "xml"],
+                  "original": ["prep", "transcribe", "signals", "candidates", "align", "eval"]}
+
+
+def episode_kind(project: Project, vid: str, params: dict | None = None) -> str:
+    k = (params or {}).get("kind") or project.episode_rows().get(vid, {}).get("kind") or ""
+    if not k:
+        try:
+            import json as _json
+            k = _json.loads((project.cache / vid / "meta.json").read_text(encoding="utf-8")).get("kind", "")
+        except OSError:
+            k = ""
+    return k if k in ("edited", "original") else "edited"
+
+
+def pipeline_cfg(project: Project, kind: str) -> dict:
+    import yaml
+    p = project.games / "common.yaml"
+    cfg = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("pipelines", {}) if p.exists() else {}
+    return cfg.get(kind) or {"signals": "all", "scene_cuts": kind != "original"}
+
+
+# ---- 캐시 로더 (run.py 의 CACHE 전역은 저장소 기준이라 데이터 폴더가 분리된 설치본에서는 쓰면 안 된다) ----
+def _meta(project: Project, vid: str) -> dict:
+    from .schema import load_json
+    return load_json(project.cache / vid / "meta.json", "meta")
+
+
+def _signals(project: Project, vid: str):
+    from .signals import REGISTRY
+    from .timeline import Curve, Segments
+    curves, events = {}, {}
+    for name in REGISTRY:
+        p = project.cache / vid / f"{name}.json"
+        if not p.exists():
+            continue
+        try:
+            curves[name] = Curve.load(p)
+        except TypeError:
+            events[name] = Segments.load(p)
+    return curves, events
+
+
+def _shorts(project: Project, vid: str):
+    from .schema import load_json
+    from .shorts import ShortCandidate
+    return [ShortCandidate(**d) for d in load_json(project.cache / vid / "shorts.json", "shorts")]
 
 
 @dataclass
@@ -187,7 +235,9 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         video = project.video_path(vid)
         if video is None:
             raise EngineError("E_FILE_MISSING", f"회차 {vid} 의 영상을 찾지 못했습니다", "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.")
-        prog(0.02, "ffprobe / 단일 패스 디코딩")
+        kind = episode_kind(project, vid, job.params)
+        pcfg = pipeline_cfg(project, kind)
+        prog(0.02, f"ffprobe / 단일 패스 디코딩 ({kind})")
         # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
         done_flag = threading.Event()
         err: list[BaseException] = []
@@ -195,7 +245,8 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         def work():
             try:
                 preprocess(video, project.cache, force=bool(job.params.get("force")), game=job.params.get("game"),
-                           proxy=bool(job.params.get("proxy")), vid=vid)
+                           proxy=bool(job.params.get("proxy")), vid=vid, kind=kind,
+                           scene_cuts=job.params.get("scene_cuts", pcfg.get("scene_cuts")))
             except BaseException as e:  # noqa: BLE001
                 err.append(e)
             finally:
@@ -227,29 +278,68 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
     elif stage == "signals":
         from .signals import REGISTRY, run_signal
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
-        names = list(REGISTRY)
+        kind = episode_kind(project, vid, job.params)
+        want = job.params.get("signals") or pipeline_cfg(project, kind).get("signals", "all")
+        names = list(REGISTRY) if want == "all" else [n for n in want if n in REGISTRY]
+        job.log(f"signals [{kind}]: {', '.join(names)}")
         for i, name in enumerate(names):
             if job.cancel_event.is_set():
                 return
             prog(i / len(names), f"signal {name}")
             run_signal(name, cache, bool(job.params.get("force")))
         prog(1.0, f"{len(names)} signals")
+    elif stage == "candidates":
+        # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터
+        from .candidates import make_candidates
+        from .profiles import load_profile
+        from .run import DEFAULT_WEIGHTS
+        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+        meta = _meta(project, vid)
+        curves, events = _signals(project, vid)
+        if not curves and not events:
+            raise EngineError("E_NO_SIGNALS", "신호 결과가 없습니다", "signals 단계를 먼저 실행하세요.")
+        weights = dict(DEFAULT_WEIGHTS); weights.update(job.params.get("weights") or {})
+        kernels = load_profile(meta.get("game", "d2r")).get("events", {}) or {}
+        segs = make_candidates(curves, meta["duration"], weights, events, kernels, threshold=float(job.params.get("threshold", 1.5)))
+        segs.save(cache / "candidates.json")
+        cov = segs.total_duration() / max(1.0, meta["duration"])
+        job.log(f"candidates: {len(segs.items)}개, coverage {cov:.1%}, signals={segs.meta.get('signals')}")
+        prog(1.0, f"{len(segs.items)} candidates · coverage {cov:.0%}")
+    elif stage == "align":
+        # Phase 2 정답: 최종본 ↔ 원본 정렬 → labels/<vid>.csv kept
+        from .align import align_files, extract_audio, pretty, write_labels
+        final = job.params.get("final")
+        if not final:
+            raise EngineError("E_BAD_PARAMS", "align 에는 최종본(편집본) 파일이 필요합니다", "파라미터 final 에 영상 경로 또는 prep 된 회차 id 를 주세요.")
+        _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
+        fp = Path(str(final))
+        if (project.cache / str(final) / "audio.wav").exists():
+            final_wav, final_name = project.cache / str(final) / "audio.wav", str(final)
+        elif fp.is_file():
+            prog(0.02, "최종본 오디오 추출")
+            final_wav, final_name = extract_audio(fp, cache / "align" / f"{fp.stem}.wav"), fp.name
+        else:
+            raise EngineError("E_FILE_MISSING", f"최종본을 찾지 못했습니다: {final}", "영상 파일 경로 또는 prep 된 회차 id 를 확인하세요.")
+        segs, diag = align_files(cache / "audio.wav", final_wav, cache_dir=cache, progress=lambda f, m="": prog(0.05 + 0.9 * f, m))
+        (cache / "align.json").write_text(json.dumps({"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1), encoding="utf-8")
+        n = write_labels(project.labels / f"{vid}.csv", segs, final_name)
+        job.log(pretty(segs, diag))
+        prog(1.0, f"{n} kept 구간 · 최종본 {diag['matched_frac'] * 100:.0f}% 매칭")
     elif stage == "shorts":
-        from .run import load_kernels, load_meta, load_signals  # 기존 로더 재사용
         from .shorts import make_shorts, save_shorts
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
         _require(cache / "item_banner.json", "E_NO_SIGNALS", "신호 결과", "signals 단계를 먼저 실행하세요.")
-        meta = load_meta(vid)
-        curves, events = load_signals(vid)
+        meta = _meta(project, vid)
+        curves, events = _signals(project, vid)
         cands = make_shorts(cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)))
         save_shorts(cands, cache / "shorts.json")
         prog(1.0, f"{len(cands)} candidates")
     elif stage == "export":
         from .render import render_shorts
-        from .run import load_episode, load_meta, load_shorts, short_episode_label
+        from .run import load_episode, short_episode_label
         _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
-        meta = load_meta(vid)
-        cands = load_shorts(vid)
+        meta = _meta(project, vid)
+        cands = _shorts(project, vid)
         tr_p = cache / "transcript.json"
         tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
         chat_p = cache / "chat_text.json"
@@ -268,19 +358,19 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, f"{len(idx)} drafts")
     elif stage == "xml":
         from .export_xml import export_xml
-        from .run import load_meta, load_shorts
-        _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
-        meta = load_meta(vid)
+        meta = _meta(project, vid)
         cands_p = cache / "candidates.json"
         cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
         ui_p = cache / "ui_state.json"
         ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
-        export_xml(meta, cands, load_shorts(vid), ui, project.premiere, vid, k=int(job.params.get("k", 5)))
+        shorts = _shorts(project, vid) if (cache / "shorts.json").exists() else []
+        if not shorts and not cands.items:
+            raise EngineError("E_NO_SHORTS", "후보가 없습니다 (shorts.json / candidates.json)", "shorts 또는 candidates 단계를 먼저 실행하세요.")
+        export_xml(meta, cands, shorts, ui, project.premiere, vid, k=int(job.params.get("k", 5)))
         prog(1.0, "xml")
     elif stage == "weaklabel":
-        from .run import load_meta
         from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
-        meta = load_meta(vid)
+        meta = _meta(project, vid)
         ep = load_episode(vid, project.episodes_csv)
         title = job.params.get("title") or (ep or {}).get("title")
         if title and (cache / "item_banner.json").exists():
@@ -292,12 +382,22 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             prog(1.0, "제목 없음 — 건너뜀")
     elif stage == "eval":
         from .eval_shorts import evaluate_shorts
-        from .run import load_shorts
+        from .evaluate import evaluate
+        done = []
         lab_p = project.labels / f"{vid}.shorts.csv"
-        if lab_p.exists():
-            _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
-            reps = evaluate_shorts(load_shorts(vid), Segments.from_csv(lab_p))
-            job.log("\n".join(r.pretty() for r in reps))
-        prog(1.0, "eval")
+        if lab_p.exists() and (cache / "shorts.json").exists():
+            reps = evaluate_shorts(_shorts(project, vid), Segments.from_csv(lab_p))
+            job.log("[shorts]\n" + "\n".join(r.pretty() for r in reps)); done.append("shorts")
+        lab2 = project.labels / f"{vid}.csv"
+        if lab2.exists() and (cache / "candidates.json").exists():
+            meta = _meta(project, vid)
+            rep = evaluate(Segments.load(cache / "candidates.json"), Segments.from_csv(lab2), meta["duration"])
+            job.log("[editpoints]\n" + rep.pretty()); done.append("editpoints")
+            (project.reports / f"{vid}_editpoints_eval.json").write_text(json.dumps(
+                {"recall": rep.recall, "precision": rep.precision, "coverage": rep.coverage, "n_labels": rep.n_labels, "n_candidates": rep.n_candidates,
+                 "missed": [{"start": m.start, "end": m.end, "label": m.label} for m in rep.missed]}, ensure_ascii=False, indent=1), encoding="utf-8")
+        if not done:
+            job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없습니다")
+        prog(1.0, "eval " + ("·".join(done) or "건너뜀"))
     else:
         raise EngineError("E_BAD_STAGE", f"알 수 없는 단계: {stage}", f"가능: {STAGES}")

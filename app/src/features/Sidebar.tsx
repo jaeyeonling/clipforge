@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { api } from "../api/client";
-import { STAGES } from "../api/types";
+import { DEFAULT_STAGES, KIND_LABEL, type EpisodeKind } from "../api/types";
 import { Button, cx, fmtTime } from "../components/ui";
 import { inShell, shell } from "../shell";
 import { useApp } from "../state/store";
@@ -11,6 +11,7 @@ export function Sidebar() {
   const { episodes, selected, selectEpisode, refreshEpisodes, toast, fail } = useApp();
   const [path, setPath] = useState("");
   const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<EpisodeKind>("edited");
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const dragDepth = useRef(0);
@@ -22,12 +23,12 @@ export function Sidebar() {
     let lastId: string | null = null, ok = 0;
     for (const [i, p] of list.entries()) {
       setBusy(`${i + 1}/${list.length} 등록 중…`);
-      try { const ep = await api.addEpisode(p, list.length === 1 ? titleForSingle : ""); lastId = ep.id; ok++; }
+      try { const ep = await api.addEpisode(p, list.length === 1 ? titleForSingle : "", "d2r", undefined, kind); lastId = ep.id; ok++; }
       catch (e) { fail(e); }
     }
     setBusy(null);
     if (ok) { toast(`${ok}개 등록됨`); await refreshEpisodes(); if (lastId) selectEpisode(lastId); }
-  }, [toast, fail, refreshEpisodes, selectEpisode]);
+  }, [toast, fail, refreshEpisodes, selectEpisode, kind]);
 
   const submit = async () => { if (path.trim()) { await register([path.trim()], title.trim()); setPath(""); setTitle(""); } };
   const pick = async () => { if (!shell) return; try { const ps = await shell.shell.pickVideos(); if (ps.length) await register(ps, title.trim()); } catch (e) { fail(e); } };
@@ -51,14 +52,15 @@ export function Sidebar() {
       </div>
       <ul className="episodes">
         {episodes.map((e) => {
-          const done = STAGES.filter((s) => e.stages?.[s]).length;
+          const want = DEFAULT_STAGES[e.kind || "edited"];
+          const done = want.filter((s) => e.stages?.[s]).length;
           return (
             <li key={e.id} className={cx("ep", selected?.id === e.id && "active")} onClick={() => selectEpisode(e.id)}>
-              <div className="id">{e.id}{e.linked === false && <span className="badge xs" title={`원본 경로 참조: ${e.source}`}>참조</span>}</div>
+              <div className="id">{e.id}{e.kind === "original" && <span className="badge xs accent" title="원본 녹화 → 편집 포인트 (Phase 2)">원본</span>}{e.linked === false && <span className="badge xs" title={`원본 경로 참조: ${e.source}`}>참조</span>}</div>
               {e.title && <div className="title" title={e.title}>{e.title}</div>}
-              <div className="meta">{e.duration ? `${fmtTime(e.duration)} · ${e.width}×${e.height} · ${e.game || ""}` : "아직 처리 전"}{done ? ` · ${done}/${STAGES.length} 단계` : ""}</div>
-              <div className="stage-dots" title={STAGES.map((s) => `${s}: ${e.stages?.[s] ? "완료" : "-"}`).join("\n")}>
-                {STAGES.map((s) => <i key={s} className={cx(e.stages?.[s] && "on")} />)}
+              <div className="meta">{e.duration ? `${fmtTime(e.duration)} · ${e.width}×${e.height} · ${e.game || ""}` : "아직 처리 전"}{done ? ` · ${done}/${want.length} 단계` : ""}</div>
+              <div className="stage-dots" title={want.map((s) => `${s}: ${e.stages?.[s] ? "완료" : "-"}`).join("\n")}>
+                {want.map((s) => <i key={s} className={cx(e.stages?.[s] && "on")} />)}
               </div>
             </li>
           );
@@ -67,6 +69,9 @@ export function Sidebar() {
       </ul>
       <form className="add-form" onSubmit={(ev) => { ev.preventDefault(); submit(); }}>
         {drag && <div className="dropzone">영상을 놓으면 등록됩니다</div>}
+        <select className="field" value={kind} onChange={(e) => setKind(e.target.value as EpisodeKind)} disabled={!!busy} title="편집본이면 쇼츠 후보를, 원본 녹화면 편집 포인트를 뽑습니다">
+          {(Object.keys(KIND_LABEL) as EpisodeKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+        </select>
         <input className="field" placeholder="유튜브 제목 (약한 정답용, 선택)" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!busy} />
         {inShell ? (
           <Button type="button" variant="primary" onClick={pick} disabled={!!busy}>{busy || "영상 파일 선택…"}</Button>

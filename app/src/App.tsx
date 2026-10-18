@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Progress, Tabs, Toasts } from "./components/ui";
 import { Calibration } from "./features/Calibration";
 import { Candidates } from "./features/Candidates";
+import { EditPoints } from "./features/EditPoints";
 import { Alerts, Header } from "./features/Header";
 import { Metrics } from "./features/Metrics";
 import { Pipeline } from "./features/Pipeline";
@@ -10,8 +11,8 @@ import { Sidebar } from "./features/Sidebar";
 import { UpdateBanner } from "./features/UpdateBanner";
 import { AppProvider, useApp } from "./state/store";
 
-type Tab = "candidates" | "pipeline" | "calibration" | "metrics" | "settings";
-const TABS: Tab[] = ["pipeline", "candidates", "calibration", "metrics", "settings"];
+type Tab = "candidates" | "editpoints" | "pipeline" | "calibration" | "metrics" | "settings";
+const TABS: Tab[] = ["pipeline", "candidates", "editpoints", "calibration", "metrics", "settings"];
 const TAB_KEY = "cf.tab";
 const hashTab = (): Tab | null => { const h = location.hash.replace("#", "") as Tab; return TABS.includes(h) ? h : null; };
 
@@ -33,7 +34,9 @@ function Main() {
       <UpdateBanner onSettings={() => setTab("settings")} />
       <Tabs<Tab> value={tab} onChange={setTab} items={[
         { key: "pipeline", label: "파이프라인" },
-        { key: "candidates", label: "후보" },
+        ...(selected?.kind === "original"
+          ? [{ key: "editpoints" as Tab, label: "편집 포인트" }, { key: "candidates" as Tab, label: "쇼츠 후보" }]
+          : [{ key: "candidates" as Tab, label: "후보" }, { key: "editpoints" as Tab, label: "편집 포인트" }]),
         { key: "calibration", label: "캘리브레이션" },
         { key: "metrics", label: "지표 · 작업" },
         { key: "settings", label: "설정" },
@@ -44,6 +47,7 @@ function Main() {
         )}
         <div hidden={tab !== "pipeline"}><Pipeline /></div>
         {tab === "candidates" && <Candidates />}
+        {tab === "editpoints" && <EditPoints />}
         {tab === "calibration" && <Calibration />}
         {tab === "metrics" && <Metrics />}
         {tab === "settings" && <Settings />}

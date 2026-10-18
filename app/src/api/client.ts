@@ -1,5 +1,5 @@
 import type {
-  CalibResult, Candidate, Episode, ErrorInfo, Health, Job, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
+  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, ErrorInfo, Health, Job, Layout, LogLine, MetricRow, PreviewResult, Profile, StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -45,11 +45,15 @@ export const api = {
   health: () => request<Health>("/api/health"),
   episodes: () => request<Episode[]>("/api/episodes"),
   episode: (id: string) => request<Episode>(`/api/episodes/${encodeURIComponent(id)}`),
-  addEpisode: (video_path: string, title: string, game = "d2r", id?: string) => post<Episode>("/api/episodes", { video_path, title, game, id: id || null }),
+  addEpisode: (video_path: string, title: string, game = "d2r", id?: string, kind: EpisodeKind = "edited") =>
+    post<Episode>("/api/episodes", { video_path, title, game, id: id || null, kind }),
+  editpoints: (id: string) => request<EditPointsResult>(`/api/episodes/${encodeURIComponent(id)}/editpoints`),
+  decideEditPoint: (id: string, start: number, end: number, label: "kept" | "no" | "", reason = "") =>
+    post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/decision`, { start, end, label, reason, kind: "editpoints" }),
   jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
   jobLog: (id: string, tail = 400) => request<{ job_id: string; path: string; lines: LogLine[] }>(`/api/jobs/${id}/log?tail=${tail}`),
-  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean }) =>
+  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean; final?: string; kind?: EpisodeKind; threshold?: number }) =>
     post<Job>("/api/jobs", { episode, stages, params }),
   cancelJob: (id: string) => post<Job>(`/api/jobs/${id}/cancel`, {}),
   candidates: (id: string) => request<Candidate[]>(`/api/episodes/${encodeURIComponent(id)}/candidates`),

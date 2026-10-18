@@ -129,34 +129,67 @@ def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_dr
     return items
 
 
+def change_runs(files: list[Path], thr: float = 6.0, size: tuple[int, int] = (64, 12)) -> list[tuple[int, int]]:
+    """배너 크롭이 '바뀐' 지점으로 프레임을 나눈 구간 [(start, end_exclusive)]. 작은 회색 썸네일의 평균 절대차 > thr.
+    OBS 텍스트 배너는 정적이라 7시간에 수십 번만 바뀐다 → OCR 호출이 수천 → 수십 으로 준다."""
+    import numpy as np
+    from PIL import Image
+    runs, start, prev = [], 0, None
+    for i, p in enumerate(files):
+        cur = np.asarray(Image.open(p).convert("L").resize(size), dtype=np.float32)
+        if prev is not None and float(np.abs(cur - prev).mean()) > thr:
+            runs.append((start, i)); start = i
+        prev = cur
+    runs.append((start, len(files)))
+    return runs
+
+
 @signal("item_banner")
-def item_banner(cache: Path, step: int = 3, min_stable: int = 3) -> Segments:
+def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | None = None) -> Segments:
+    """mode: coarse(기본, 편집본 — step 초마다 OCR 후 변하는 곳만 1초 단위) | change(원본 — 크롭 변화 감지 후 구간당 1회 OCR).
+    meta.json 의 kind 가 original 이면 change."""
     roi_dir = cache / "rois" / "banner"
     if not roi_dir.exists():
         raise FileNotFoundError(f"{roi_dir} 없음 — prep 이 games/<game>.yaml 의 roi_crops 에 banner 를 포함해야 함")
+    if mode is None:
+        try:
+            mode = "change" if json.loads((cache / "meta.json").read_text(encoding="utf-8")).get("kind") == "original" else "coarse"
+        except OSError:
+            mode = "coarse"
     ocr = BannerOCR(roi_dir, cache / "banner_ocr.json")
     n = len(ocr)
     t0 = time.time()
-    coarse = list(range(0, n, step))
-    for k, i in enumerate(coarse):
-        ocr.text(i)
-        if k % 50 == 0 and ocr.calls:
-            print(f"\n    banner ocr coarse {k}/{len(coarse)} ({time.time() - t0:.0f}s)", end="", flush=True)
-    for a, b in zip(coarse, coarse[1:]):
-        if ocr.text(a) != ocr.text(b):
-            for i in range(a, b + 1):
-                ocr.text(i)
+    seq: list[str] = []
+    n_runs = 0
+    if mode == "change":
+        runs = change_runs(ocr.files)
+        n_runs = len(runs)
+        for k, (s, e) in enumerate(runs):
+            mid = (s + e) // 2
+            txt = ocr.text(mid)
+            seq.extend([txt] * (e - s))
+            if k % 20 == 0 and ocr.calls:
+                print(f"\n    banner ocr change-run {k}/{n_runs} ({time.time() - t0:.0f}s)", end="", flush=True)
+    else:
+        coarse = list(range(0, n, step))
+        for k, i in enumerate(coarse):
+            ocr.text(i)
+            if k % 50 == 0 and ocr.calls:
+                print(f"\n    banner ocr coarse {k}/{len(coarse)} ({time.time() - t0:.0f}s)", end="", flush=True)
+        for a, b in zip(coarse, coarse[1:]):
+            if ocr.text(a) != ocr.text(b):
+                for i in range(a, b + 1):
+                    ocr.text(i)
+        # 1초 시퀀스 (OCR 안 한 초는 직전 값으로 채움)
+        last = ""
+        for i in range(n):
+            if i in ocr.cache:
+                last = ocr.cache[i]
+            seq.append(last)
     ocr.save()
-
-    # 1초 시퀀스 (OCR 안 한 초는 직전 값으로 채움)
-    seq, last = [], ""
-    for i in range(n):
-        if i in ocr.cache:
-            last = ocr.cache[i]
-        seq.append(last)
     states = stable_states(seq, min_stable)
     items = transitions(states)
     return Segments("item_banner", items, meta={
-        "step": step, "min_stable": min_stable, "ocr_calls": ocr.calls, "ocr_cached": len(ocr.cache),
+        "mode": mode, "step": step, "min_stable": min_stable, "ocr_calls": ocr.calls, "ocr_cached": len(ocr.cache), "n_runs": n_runs,
         "n_frames": n, "n_states": len(states), "elapsed_s": round(time.time() - t0, 1),
     })

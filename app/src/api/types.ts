@@ -33,14 +33,34 @@ export interface Health {
   problems: Problem[];
 }
 
-export type StageName = "prep" | "transcribe" | "signals" | "shorts" | "export" | "xml" | "weaklabel" | "eval";
-export const STAGES: StageName[] = ["prep", "transcribe", "signals", "shorts", "export", "xml", "weaklabel", "eval"];
+export type StageName = "prep" | "transcribe" | "signals" | "candidates" | "align" | "shorts" | "export" | "xml" | "weaklabel" | "eval";
+export const STAGES: StageName[] = ["prep", "transcribe", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"];
 export const STAGE_LABEL: Record<StageName, string> = {
-  prep: "준비", transcribe: "전사", signals: "신호", shorts: "후보", export: "초안 렌더", xml: "Premiere XML", weaklabel: "약한 정답", eval: "평가",
+  prep: "준비", transcribe: "전사", signals: "신호", candidates: "편집 포인트", align: "정답(정렬)", shorts: "쇼츠 후보", export: "초안 렌더", xml: "Premiere XML", weaklabel: "약한 정답", eval: "평가",
 };
+export type EpisodeKind = "edited" | "original";
+export const KIND_LABEL: Record<EpisodeKind, string> = { edited: "편집본 → 쇼츠", original: "원본 → 편집 포인트" };
+/** 회차 종류별 기본 단계 (jobs.DEFAULT_STAGES 와 동일) */
+export const DEFAULT_STAGES: Record<EpisodeKind, StageName[]> = {
+  edited: ["prep", "transcribe", "signals", "shorts", "export", "xml"],
+  original: ["prep", "transcribe", "signals", "candidates", "align", "eval"],
+};
+
+export interface EditPoint {
+  idx: number; start: number; end: number; score: number; label: string; meta: Record<string, unknown>;
+  kept: boolean; kept_labels: string[]; decision: "kept" | "no" | "";
+}
+export interface EditPointsResult {
+  episode: string; duration: number; candidates: EditPoint[]; signals: string[];
+  kept: { start: number; end: number; label: string; note: string }[];
+  report: { recall: number; precision: number; coverage: number; n_labels: number; n_candidates: number; missed: { start: number; end: number; label: string }[] } | null;
+  align: { final: string; matched_frac: number; n_segments: number; unmatched: [number, number][] } | null;
+  video_url: string | null;
+}
 
 export interface Episode {
   id: string;
+  kind?: EpisodeKind;
   source?: string;      // 영상 실제 경로
   linked?: boolean;     // videos/ 안의 링크/복사본이면 true, 원본 경로 참조면 false
   title?: string;
@@ -153,12 +173,17 @@ export interface Profile {
 
 export interface MetricRow {
   episode: string;
+  phase: "shorts" | "editpoints";
   labels: number;
-  keep: number;
-  no: number;
-  hit1: number | null;
-  hit3: number | null;
-  mrr: number | null;
+  keep?: number;
+  no?: number;
+  hit1?: number | null;
+  hit3?: number | null;
+  mrr?: number | null;
+  recall?: number;
+  precision?: number;
+  coverage?: number;
+  n_candidates?: number;
 }
 
 export type Layout = "card" | "feed";

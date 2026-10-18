@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, toErrorInfo } from "../api/client";
 import { useEngineEvents } from "../api/ws";
-import type { EngineEvent, Episode, ErrorInfo, Health, Job, Layout, LogLine, StageName } from "../api/types";
+import type { EngineEvent, Episode, ErrorInfo, Health, Job, LogLine, StageName } from "../api/types";
 
 export interface Toast { id: number; text: string; bad: boolean }
+export type JobParams = Parameters<typeof api.runJob>[2];
 export interface RunError { info: ErrorInfo; job: Pick<Job, "id" | "episode" | "stages" | "params"> | null }
 
 interface Store {
@@ -27,7 +28,7 @@ interface Store {
   refreshEpisodes: () => Promise<void>;
   refreshJobs: () => Promise<void>;
   addEpisode: (path: string, title: string) => Promise<void>;
-  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean }) => Promise<void>;
+  runJob: (episode: string, stages: StageName[], params: JobParams) => Promise<void>;
   cancelJob: () => Promise<void>;
   viewJob: (id: string) => Promise<void>;
   clearLog: () => void;
@@ -85,7 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearLog = useCallback(() => { setLog([]); setLogTitle("로그"); setLogPath(""); }, []);
   const dismissError = useCallback(() => setRunError(null), []);
 
-  const runJob = useCallback(async (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean }) => {
+  const runJob = useCallback(async (episode: string, stages: StageName[], params: JobParams) => {
     const j = await api.runJob(episode, stages, params);
     setActiveJobId(j.id); setViewJobId(j.id); setRunError(null);
     setLog([]); setLogTitle(`${episode} · ${j.id}`); setLogPath(j.log_path || "");

@@ -32,6 +32,7 @@ class AddEpisode(BaseModel):
     title: str = ""
     game: str = "d2r"
     link: bool = True            # False = 복사/링크 없이 원본 경로 참조
+    kind: str = "edited"         # edited(편집본→쇼츠) | original(원본→편집 포인트)
 
 
 class RunJob(BaseModel):
@@ -56,6 +57,7 @@ class Decision(BaseModel):
     label: str
     reason: str = ""
     file: str = ""
+    kind: str = "shorts"         # shorts | editpoints
 
 
 def create_app(engine: Engine | None = None) -> FastAPI:
@@ -122,7 +124,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
 
     @app.post("/api/episodes")
     def episode_add(body: AddEpisode):
-        return engine.episode_add(body.video_path, body.id, body.title, body.game, body.link)
+        return engine.episode_add(body.video_path, body.id, body.title, body.game, body.link, body.kind)
 
     # ---- jobs ----
     @app.post("/api/jobs")
@@ -156,7 +158,19 @@ def create_app(engine: Engine | None = None) -> FastAPI:
 
     @app.post("/api/episodes/{vid}/decision")
     def decision(vid: str, body: Decision):
-        return engine.decision_set(vid, body.start, body.end, body.label, body.reason, body.file)
+        return engine.decision_set(vid, body.start, body.end, body.label, body.reason, body.file, body.kind)
+
+    @app.get("/api/episodes/{vid}/editpoints")
+    def editpoints(vid: str):
+        return engine.editpoints_list(vid)
+
+    # 원본/편집본 영상 자체 (편집 포인트 검토용 재생). Range 지원.
+    @app.api_route("/media/video/{vid}", methods=["GET", "HEAD"])
+    def media_video(vid: str):
+        p = engine.project.video_path(vid)
+        if not p:
+            raise HTTPException(404)
+        return FileResponse(str(p), media_type="video/mp4")
 
     @app.get("/api/episodes/{vid}/calibrate")
     def calibrate_check(vid: str):

@@ -21,3 +21,14 @@ speech_kernel: {pre: 20, post: 6, cooldown: 8}   # 키워드 시각 t 를 [t-pre
 transcribe:
   language: ko
   faster_whisper: {model: large-v3-turbo, device: cuda, compute_type: int8_float16, vad: true, word_timestamps: true}
+
+# 회차 종류별 파이프라인. edited = 친구 편집본 → 쇼츠 (Phase 1), original = 원본 녹화 → 편집 포인트 (Phase 2).
+# 원본은 길이가 수십 배라 OCR 이 무거운 신호(chat_text)와 편집본에만 뜻이 있는 신호(cut_density·edit_emphasis)를 뺀다.
+# item_banner 는 원본에서 '변화 감지' 모드(배너 크롭이 바뀔 때만 OCR)로 돈다.
+pipelines:
+  edited:
+    signals: all
+    scene_cuts: true
+  original:
+    signals: [audio_loudness, frame_motion, item_banner, chat_burst, speech_keyword, ui_state]
+    scene_cuts: false

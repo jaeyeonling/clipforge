@@ -104,7 +104,8 @@ def build_single_pass(video: Path, out: Path, meta: dict, want_audio: bool) -> l
 
 
 def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | None = None,
-               proxy: bool = False, vid: str | None = None) -> Path:
+               proxy: bool = False, vid: str | None = None, kind: str = "edited", scene_cuts: bool | None = None) -> Path:
+    """kind: edited(편집본→쇼츠) | original(원본→편집 포인트). 원본은 scdet 를 끈다(컷이 없으니 의미 없고 느리다)."""
     vid = vid or video.stem                       # 참조 등록이면 파일 이름과 회차 id 가 다를 수 있다
     out = cache_root / vid
     out.mkdir(parents=True, exist_ok=True)
@@ -121,7 +122,8 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
         meta["frames"] = {"fps": float(prof["frames"].get("fps", 1.0)),
                           "height": min(int(prof["frames"].get("max_height", 1080)), meta["height"])}
         meta["roi_crops"] = [n for n in prof["roi_crops"] if n in meta["rois"]]
-        meta["scene_cuts"] = bool(prof["frames"].get("scene_cuts", True))
+        meta["kind"] = kind
+        meta["scene_cuts"] = bool(scene_cuts) if scene_cuts is not None else (bool(prof["frames"].get("scene_cuts", True)) and kind != "original")
         meta["scdet_threshold"] = float(prof["frames"].get("scdet_threshold", 10))
         write_json(meta_p, "meta", meta)
     meta = load_json(meta_p, "meta")

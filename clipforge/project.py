@@ -172,7 +172,9 @@ class Project:
         stages = {
             "prep": (self.cache / vid / "frames").exists(),
             "transcribe": (self.cache / vid / "transcript.json").exists(),
-            "signals": (self.cache / vid / "item_banner.json").exists(),
+            "signals": (self.cache / vid / "item_banner.json").exists() or (self.cache / vid / "audio_loudness.json").exists(),
+            "candidates": (self.cache / vid / "candidates.json").exists(),
+            "align": (self.cache / vid / "align.json").exists(),
             "shorts": (self.cache / vid / "shorts.json").exists(),
             "export": (self.review / vid / "shorts" / "index.json").exists(),
             "xml": (self.premiere / f"{vid}_shorts.xml").exists(),
@@ -184,7 +186,8 @@ class Project:
                 for row in csv.DictReader(f):
                     if row.get("id") == vid:
                         title = row.get("title", ""); break
-        return {"source": str(video) if video else row.get("source", ""), "linked": bool(video and video.parent == self.videos), "id": vid, "video": str(video) if video else meta.get("source"), "title": title,
+        kind = row.get("kind") or meta.get("kind") or "edited"
+        return {"source": str(video) if video else row.get("source", ""), "linked": bool(video and video.parent == self.videos), "id": vid, "kind": kind, "video": str(video) if video else meta.get("source"), "title": title,
                 "duration": meta.get("duration"), "width": meta.get("width"), "height": meta.get("height"),
                 "game": meta.get("game") or row.get("game") or None, "stages": stages}
 

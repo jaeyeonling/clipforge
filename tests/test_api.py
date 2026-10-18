@@ -107,3 +107,29 @@ def test_episode_add_reference_without_copy(engine, tmp_path):
     with _pt.raises(ApiError) as ei:
         engine.episode_add(str(tmp_path / "x.txt"), None, "", "d2r")
     assert ei.value.code == "E_BAD_FILE" or ei.value.code == "E_NOT_FOUND"
+
+
+def test_phase2_editpoints_and_metrics(engine, tmp_path):
+    """원본 회차: candidates.json + labels/<vid>.csv(kept) → 편집 포인트 목록·지표, 사람 판정, align 파라미터 검증."""
+    from clipforge.timeline import Segment, Segments
+    vid = _fake_episode(engine, "orig1")
+    engine._upsert_episode_row(vid, "d2r", "원본", source="", kind="original")
+    assert engine.episode_get(vid)["kind"] == "original"
+    Segments("candidates", [Segment(10, 20, "cand", 2.0), Segment(50, 60, "cand", 1.5), Segment(80, 90, "cand", 1.2)],
+             meta={"signals": ["audio_loudness"]}).save(engine.project.cache / vid / "candidates.json")
+    (engine.project.labels / f"{vid}.csv").write_text("start,end,label,note\n12,18,kept,auto align f.mp4 0-6\n70,75,kept,auto align f.mp4 8-13\n", encoding="utf-8")
+    ep = engine.editpoints_list(vid)
+    assert [c["kept"] for c in ep["candidates"]] == [True, False, False]
+    assert ep["report"]["n_labels"] == 2 and ep["report"]["recall"] == 0.5 and ep["report"]["missed"][0]["start"] == 70
+    assert ep["video_url"] == f"/media/video/{vid}"
+    engine.decision_set(vid, 50, 60, "kept", "", "", kind="editpoints")
+    ep = engine.editpoints_list(vid)
+    assert ep["candidates"][1]["decision"] == "kept" and ep["candidates"][1]["kept"] is True   # 사람 판정도 정답
+    rows = [r for r in engine.metrics_summary() if r["episode"] == vid]
+    assert rows and rows[0]["phase"] == "editpoints" and rows[0]["labels"] == 3
+    import pytest as _pt
+    with _pt.raises(ApiError) as ei:
+        engine.job_run(vid, ["align"], {})
+    assert ei.value.code == "E_BAD_PARAMS"
+    with _pt.raises(ApiError):
+        engine.decision_set(vid, 1, 2, "keep", kind="editpoints")                     # editpoints 는 kept|no

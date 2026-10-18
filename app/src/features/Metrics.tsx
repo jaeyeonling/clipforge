@@ -14,17 +14,30 @@ export function Metrics() {
   const pct = (v: number | null) => (v == null ? "-" : v);
   return (
     <div className="two">
-      <Card title="지표 (hit@K · MRR)">
-        {rows === null ? <span className="muted small">읽는 중…</span> : !rows.length ? <Empty title="라벨이 있는 회차가 없습니다">후보 탭에서 keep / no 를 누르면 여기 지표가 생깁니다.</Empty> : (
-          <table className="data">
-            <thead><tr><th>회차</th><th>라벨</th><th>keep</th><th>no</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr></thead>
-            <tbody>{rows.map((r) => (
-              <tr key={r.episode}><td><b>{r.episode}</b></td><td className="num">{r.labels}</td><td className="num">{r.keep}</td><td className="num">{r.no}</td><td className="num">{pct(r.hit1)}</td><td className="num">{pct(r.hit3)}</td><td className="num">{pct(r.mrr)}</td></tr>
-            ))}</tbody>
-          </table>
-        )}
-        <p className="muted xs" style={{ marginTop: 10 }}>hit@K = 정답 구간이 상위 K 안에 든 비율. 라벨이 30개를 넘기 전까지는 참고용입니다.</p>
-      </Card>
+      <div>
+        <Card title="쇼츠 지표 (hit@K · MRR)">
+          {rows === null ? <span className="muted small">읽는 중…</span> : !rows.some((r) => r.phase === "shorts") ? <Empty title="라벨이 있는 편집본 회차가 없습니다">후보 탭에서 keep / no 를 누르면 여기 지표가 생깁니다.</Empty> : (
+            <table className="data">
+              <thead><tr><th>회차</th><th>라벨</th><th>keep</th><th>no</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr></thead>
+              <tbody>{rows.filter((r) => r.phase === "shorts").map((r) => (
+                <tr key={r.episode}><td><b>{r.episode}</b></td><td className="num">{r.labels}</td><td className="num">{r.keep}</td><td className="num">{r.no}</td><td className="num">{pct(r.hit1 ?? null)}</td><td className="num">{pct(r.hit3 ?? null)}</td><td className="num">{pct(r.mrr ?? null)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+          <p className="muted xs" style={{ marginTop: 10 }}>hit@K = 정답 구간이 상위 K 안에 든 비율. 라벨이 30개를 넘기 전까지는 참고용입니다.</p>
+        </Card>
+        <Card title="편집 포인트 지표 (recall · coverage)">
+          {rows === null ? <span className="muted small">읽는 중…</span> : !rows.some((r) => r.phase === "editpoints") ? <Empty title="정답이 있는 원본 회차가 없습니다">원본 회차에 align(최종본 정렬)을 돌리거나 편집 포인트 탭에서 kept 를 표시하면 생깁니다.</Empty> : (
+            <table className="data">
+              <thead><tr><th>회차</th><th>정답</th><th>후보</th><th>recall</th><th>precision</th><th>coverage</th></tr></thead>
+              <tbody>{rows.filter((r) => r.phase === "editpoints").map((r) => (
+                <tr key={r.episode}><td><b>{r.episode}</b></td><td className="num">{r.labels}</td><td className="num">{r.n_candidates}</td><td className="num">{((r.recall ?? 0) * 100).toFixed(0)}%</td><td className="num">{((r.precision ?? 0) * 100).toFixed(0)}%</td><td className="num">{((r.coverage ?? 0) * 100).toFixed(1)}%</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+          <p className="muted xs" style={{ marginTop: 10 }}>목표: recall ≥ 95%, coverage ≤ 10%. recall 이 1순위 — 놓친 정답은 편집 포인트 탭 "정답 아님" 필터와 지표 카드의 놓침 목록에서 봅니다.</p>
+        </Card>
+      </div>
       <Jobs />
     </div>
   );

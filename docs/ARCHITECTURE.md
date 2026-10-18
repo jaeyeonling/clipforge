@@ -98,6 +98,7 @@ videos/<id>.mp4 ─▶ L0 prep ─▶ cache/<id>/{meta.json, audio.wav, frames/}
 - 허용 오차: 겹침 ≥ 1s(현재). 친구 컷은 보통 3~15s라 적절.
 
 ### `align` — 정답 데이터 자동 생성 (신규, 최우선)
+> **구현됨(2026-10-19)**: `clipforge/align.py`, 설계·파라미터·검증은 docs/design/ALIGN.md. 합성·재인코딩 테스트 통과(경계 오차 ≤ 0.35s). 원본 VOD 실측은 미정.
 > 조사한 모든 레포가 평가를 못 한 이유는 정답 만들기가 비싸서다. 친구의 **최종본**이 있으면 정답은 이미 존재한다.
 
 - 입력: `finals/<id>.mp4`(유튜브 업로드본) + `cache/<id>/audio.wav`.

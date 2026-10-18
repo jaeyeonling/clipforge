@@ -124,3 +124,11 @@ python scripts/build_engine_dist.py --smoke     # 구성 + 번들 파이썬으�
 set CLIPFORGE_ENGINE_DIST=1 && cd desktop && npm start   # 껍데기를 번들 런타임으로 띄워 보기
 ```
 데이터(영상·캐시·라벨)는 `CLIPFORGE_DATA` 로 분리한다. 설치본에서는 껍데기가 `%APPDATA%/clipforge/data` 를 넘긴다.
+
+## Phase 2: 최종본 ↔ 원본 정렬 (align)
+```
+python -m clipforge.run prep <orig>                       # 원본 VOD 전처리 (audio.wav)
+python -m clipforge.run align <orig> --final <final.mp4>  # 살아남은 구간 → labels/<orig>.csv (kept), cache/<orig>/align.json
+python -m clipforge.run eval <orig>                       # 후보 vs kept → recall / coverage
+```
+설계: docs/design/ALIGN.md (오디오 랜드마크 지문, 창 투표, 경계 다듬기).

@@ -121,6 +121,28 @@ def cmd_eval(a):
     print(evaluate(cands, labels, meta["duration"]).pretty())
 
 
+def cmd_align(a):
+    """최종본(편집본) ↔ 원본 정렬 → labels/<vid>.csv 에 kept 구간 (docs/design/ALIGN.md).
+    --final 은 영상 파일 경로(ffmpeg 로 오디오 추출) 또는 prep 된 회차 id."""
+    from .align import align_files, extract_audio, pretty, write_labels
+    cache = CACHE / a.vid
+    orig_wav = cache / "audio.wav"
+    if not orig_wav.exists():
+        raise FileNotFoundError(f"{orig_wav} 없음 — 먼저 python -m clipforge.run prep {a.vid}")
+    fin = Path(a.final)
+    if (CACHE / a.final / "audio.wav").exists():
+        final_wav = CACHE / a.final / "audio.wav"; final_name = a.final
+    elif fin.is_file():
+        final_wav = extract_audio(fin, cache / "align" / f"{fin.stem}.wav"); final_name = fin.name
+    else:
+        raise FileNotFoundError(f"최종본을 찾지 못했습니다: {a.final} (영상 경로 또는 prep 된 회차 id)")
+    segs, diag = align_files(orig_wav, final_wav, cache_dir=cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r"))
+    print(pretty(segs, diag))
+    (cache / "align.json").write_text(json.dumps({"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1), encoding="utf-8")
+    n = write_labels(LABELS / f"{a.vid}.csv", segs, final_name)
+    print(f"[align] {n} kept 구간 → {LABELS / f'{a.vid}.csv'}  (진단 {cache / 'align.json'}, 원본 지문 캐시 {cache / 'fingerprint.npz'}, 지문 {diag.get('fingerprint_s')}s)")
+
+
 def cmd_weaklabel(a):
     """제목 → 아이템 키워드 → 배너 추가 시각 → labels/<vid>.shorts.csv (label=title_item)."""
     meta = load_meta(a.vid)
@@ -326,6 +348,8 @@ def main():
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)
         p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3"); p.set_defaults(f=fn)
     p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
+    p = sp.add_parser("align"); p.add_argument("vid", help="원본 회차 id (prep 완료)"); p.add_argument("--final", required=True, help="최종본 영상 경로 또는 회차 id")
+    p.set_defaults(f=cmd_align)
     p = sp.add_parser("export"); p.add_argument("vid"); p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
     p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
     p.add_argument("--ease", type=float, default=0.0, help="크롭 중심 이동 시간(초). 0=즉시 점프(기본)")

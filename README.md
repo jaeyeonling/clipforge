@@ -26,6 +26,14 @@ python -m venv .venv ; .\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## 앱 (로컬 웹 UI)
+
+```powershell
+python -m clipforge.app            # http://127.0.0.1:8765 가 브라우저로 열림 (127.0.0.1 전용, 외부 접근 없음)
+```
+회차 등록 → 단계 선택(전체 / 순위만) → 실행(진행률·로그) → 후보 초안 재생 → keep / no(사유) 판정이 `labels/` 에 바로 저장 → 지표.
+엔진 API 는 `/api/*`(HTTP) + `/ws`(이벤트), 데스크톱 껍데기용 stdio 전송은 `python -m clipforge.api.stdio`.
+
 ## 첫 실험 (친구 영상 1개로 30분)
 
 ```powershell

@@ -10,3 +10,5 @@ nvidia-cudnn-cu12
 opentimelineio
 otio-fcp-adapter
 fonttools
+fastapi
+uvicorn[standard]

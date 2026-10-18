@@ -132,14 +132,15 @@ def chat_messages_for(c: ShortCandidate, chat: list[dict] | None, pre: float = 1
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
                   cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0,
                   transcript: dict | None = None, subs: bool = True, chat: list[dict] | None = None,
-                  top_mode: str = "auto", layout: str = "feed", brand: str = "", episode_label: str = "") -> list[dict]:
+                  top_mode: str = "auto", layout: str = "feed", brand: str = "", episode_label: str = "",
+                  progress=None) -> list[dict]:
     """ui = ui_state 구간 목록 — 크롭 중심이 인벤토리/캐릭터창을 따라간다.
     chat = chat_text 메시지 목록 [{t, nick, text}] — 상단 채팅 피드 모드의 입력. top_mode = auto|title|chat."""
     from .topband import CHAT_H_TOP, TITLE_H, chat_band, title_band
     out_dir.mkdir(parents=True, exist_ok=True)
     if layout == "feed":
         return render_feed(cands, meta, out_dir, k=k, transcript=transcript, chat=chat, brand=brand,
-                           episode_label=episode_label)
+                           episode_label=episode_label, progress=progress)
     src = Path(meta["source"])
     index = []
     for rank, c in enumerate(cands, 1):
@@ -215,17 +216,20 @@ def index_md(index: list[dict], meta: dict) -> str:
 
 def render_feed(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
                 transcript: dict | None = None, chat: list[dict] | None = None, brand: str = "",
-                episode_label: str = "") -> list[dict]:
+                episode_label: str = "", progress=None) -> list[dict]:
     """레이아웃 feed: 16:9 영상 전체 + 발화 자막 + 채팅 하이라이트 + 회차 띠 + 훅 + 채팅 피드 + 인트로. layout_feed.py"""
     from . import layout_feed as LF
     src = Path(meta["source"])
     brand = brand or "디아블로2 하이라이트"
     episode_label = episode_label or Path(meta["source"]).stem
     index = []
+    total = min(len(cands), k) if k else len(cands)
     for rank, c in enumerate(cands, 1):
         if k and rank > k:
             continue
         name = f"{rank:02d}_{c.variant}_{fmt_time(c.start).replace(':', '-')}_{c.score:.2f}.mp4"
+        if progress:
+            progress((rank - 1) / max(total, 1), f"{rank}/{total} {name}")
         lines = hook_lines(c)
         hook = lines[-1] if len(lines) > 1 else lines[0]          # 고정 훅 = 아이템 맥락 줄 ("지존참 직득!")
         intro = [episode_label, hook] if episode_label and hook else lines[:2]   # 인트로: 회차(흰) / 득템 훅(금)

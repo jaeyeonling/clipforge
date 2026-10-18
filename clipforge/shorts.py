@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 import wave
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -232,6 +233,19 @@ def _load_chat_keywords() -> dict:
     return ((yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("chat_keywords") or {}) if p.exists() else {}
 
 
+OCR_FIX = {"혈": "헐", "슷츠": "쇼츠", "솟츠": "쇼츠"}
+
+
+def clean_chat(text: str) -> str:
+    """채팅 OCR 표시용 교정: 알려진 오인식 치환, 숫자/단위 뒤·문장 끝 감탄사 앞 띄어쓰기, 중복 공백 정리."""
+    for a, b in OCR_FIX.items():
+        text = text.replace(a, b)
+    inter = r"(헐|대박|미쳤다|미쳤네|실화|ㄷㄷ+|ㅋㅋ+|마이갓|레전드)"
+    text = re.sub(r"(?<=\S)" + inter + r"$", r" \1", text)                     # 끝에 붙은 감탄사
+    text = re.sub(r"(?<=[0-9A-Za-z원룬개])" + inter, r" \1", text)               # 숫자/단위 뒤
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def best_chat_quote(c: ShortCandidate, chat: Segments | None, pre: float = 8.0) -> tuple[str, float]:
     """창 [anchor−pre, end] 안의 채팅 중 반응 어휘 가중치가 가장 큰 메시지 (닉네임 제외). (텍스트, 점수)"""
     if not chat:
@@ -241,7 +255,7 @@ def best_chat_quote(c: ShortCandidate, chat: Segments | None, pre: float = 8.0) 
     for m in chat.items:
         if not (c.anchor - pre <= m.start <= c.end):
             continue
-        text = m.meta.get("text", "")
+        text = clean_chat(m.meta.get("text", ""))
         sc = sum(float(ent.get("weight", 0.3)) for ent in kws.values() if any(w in text for w in ent.get("words", [])))
         sc += 0.2 if m.start >= c.anchor else 0.0
         sc -= 0.01 * max(0, len(text) - 20)
@@ -271,9 +285,10 @@ def suggest_hook(c: ShortCandidate, transcript: dict | None, kw_events: Segments
         quote_score = 0.0
     chat_q, chat_s = best_chat_quote(c, chat)
     kinds = set(c.evidence.get("anchor_kinds", []))
-    if chat_q and (kinds & {"zoom", "chat"} or chat_s >= 1.0 or not quote):
-        if chat_s >= 0.6 or not quote:
-            quote = "“" + _trim_quote(chat_q, 22) + "”"
+    # 채팅 원문 우선 조건: 편집자가 채팅을 강조한 줌 구간이거나, 전사에 쓸 만한 대사가 없을 때.
+    # 그 외엔 스트리머 본인 리액션(전사)이 더 자연스럽다.
+    if chat_q and ("zoom" in kinds or not quote or (chat_s >= 1.0 and quote_score < 1.5)):
+        quote = "“" + _trim_quote(chat_q, 22) + "”"
     ctx = ""
     heads = []
     for tok in c.evidence.get("items", []):

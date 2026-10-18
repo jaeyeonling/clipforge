@@ -161,7 +161,11 @@ def cmd_export(a):
         cands = [ShortCandidate(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
         out = REVIEW / a.vid / "shorts"
         (out / "keep").mkdir(parents=True, exist_ok=True)
-        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx)
+        ui_p = CACHE / a.vid / "ui_state.json"
+        ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
+        if ui is None:
+            print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라갑니다)")
+        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx, ui=ui)
         print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")

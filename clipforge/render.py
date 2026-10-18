@@ -34,15 +34,39 @@ def hook_lines(c: ShortCandidate) -> list[str]:
     return [line1, line2]
 
 
+CX_BY_STATE = {"inventory": 0.72, "left_panel": 0.28}   # ui_state → 크롭 중심 x (화면 폭 비율)
+
+
+def crop_track(c: ShortCandidate, ui: list[dict] | None, W: int, side: int, cx_default: float = 0.5,
+               step: float = 0.1, ease: float = 0.5) -> list[tuple[float, int]]:
+    """클립 내 시각(초, 클립 기준) → crop x0. ui_state 구간을 따라 목표를 정하고 ease 초에 걸쳐 선형 이동."""
+    def target(t_abs: float) -> float:
+        for u in ui or []:
+            if u["start"] <= t_abs < u["end"] and u["label"] in CX_BY_STATE:
+                return CX_BY_STATE[u["label"]]
+        return cx_default
+    n = int((c.end - c.start) / step) + 1
+    xs, cur = [], target(c.start)
+    for i in range(n):
+        t = i * step
+        goal = target(c.start + t)
+        cur += max(-1.0, min(1.0, (goal - cur) / max(ease / step, 1))) if abs(goal - cur) > 1e-3 else 0.0
+        cur = goal if abs(goal - cur) < 1e-3 else cur
+        x0 = int(max(0, min(W - side, cur * W - side / 2)))
+        xs.append((round(t, 2), x0))
+    return xs
+
+
 def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file: str, cx: float = 0.5,
-              nvenc: bool = True) -> list[str]:
+              nvenc: bool = True, cmd_file: str | None = None, x0_init: int | None = None) -> list[str]:
     W, H = meta["width"], meta["height"]
     side = H                                     # 정사각 크롭 변 = 원본 높이
-    x0 = int(max(0, min(W - side, cx * W - side / 2)))
+    x0 = x0_init if x0_init is not None else int(max(0, min(W - side, cx * W - side / 2)))
     chat = meta["rois"].get("chat")
     dur = c.end - c.start
-    fc = [f"[0:v]split=2[g][c]",
-          f"[g]crop={side}:{side}:{x0}:0,scale={GAME_H}:{GAME_H}[game]"]
+    src_v = f"[0:v]sendcmd=f={cmd_file},split=2[g][c]" if cmd_file else "[0:v]split=2[g][c]"
+    fc = [src_v,
+          f"[g]crop@game={side}:{side}:{x0}:0,scale={GAME_H}:{GAME_H}[game]"]
     if chat:
         cw, ch = chat[2], chat[3]
         sh = int(1080 * ch / cw)                 # 폭 1080 으로 맞춘 뒤 높이 CHAT_H 로 자름/패드
@@ -66,7 +90,8 @@ def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file
 
 
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
-                  cx: float = 0.5) -> list[dict]:
+                  cx: float = 0.5, ui: list[dict] | None = None) -> list[dict]:
+    """ui = ui_state 구간 목록 [{start, end, label}] — 있으면 크롭 중심이 인벤토리/캐릭터창을 따라간다."""
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Path(meta["source"])
     index = []
@@ -80,18 +105,26 @@ def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int
         hook_file = name.replace(".mp4", ".txt")
         lines = hook_lines(c)
         (out_dir / hook_file).write_text("\n".join(lines), encoding="utf-8")
-        cmd = build_cmd(src, c, meta, name, hook_file, cx)
+        # 크롭 중심 트랙 → sendcmd 파일 (클립 기준 시각)
+        track = crop_track(c, ui, meta["width"], meta["height"], cx)
+        cmd_file = name.replace(".mp4", ".cmd")
+        moves = sum(1 for a, b in zip(track, track[1:]) if a[1] != b[1])
+        (out_dir / cmd_file).write_text("".join(f"{t:.2f} crop@game x {x};\n" for t, x in track), encoding="utf-8")
+        cmd = build_cmd(src, c, meta, name, hook_file, cx, cmd_file=cmd_file, x0_init=track[0][1])
         try:
             subprocess.run(cmd, check=True, cwd=out_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
             print(f"  ! nvenc failed ({e.stderr.decode(errors='ignore')[-200:].strip()}), retry libx264")
-            subprocess.run(build_cmd(src, c, meta, name, hook_file, cx, nvenc=False), check=True, cwd=out_dir,
+            subprocess.run(build_cmd(src, c, meta, name, hook_file, cx, nvenc=False, cmd_file=cmd_file,
+                                     x0_init=track[0][1]), check=True, cwd=out_dir,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         (out_dir / hook_file).unlink(missing_ok=True)
-        print(f"  {name}")
+        (out_dir / cmd_file).unlink(missing_ok=True)
+        print(f"  {name}  (crop moves: {moves})")
         index.append({"file": name, "variant": c.variant, "rank": rank, "start": c.start, "end": c.end,
                       "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
-                      "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines})
+                      "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
+                      "crop_moves": moves})
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
     return index

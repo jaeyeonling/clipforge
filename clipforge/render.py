@@ -38,8 +38,9 @@ CX_BY_STATE = {"inventory": 0.72, "left_panel": 0.28}   # ui_state → 크롭 �
 
 
 def crop_track(c: ShortCandidate, ui: list[dict] | None, W: int, side: int, cx_default: float = 0.5,
-               step: float = 0.1, ease: float = 0.5) -> list[tuple[float, int]]:
-    """클립 내 시각(초, 클립 기준) → crop x0. ui_state 구간을 따라 목표를 정하고 ease 초에 걸쳐 선형 이동."""
+               step: float = 0.1, ease: float = 0.0) -> list[tuple[float, int]]:
+    """클립 내 시각(초, 클립 기준) → crop x0. ui_state 구간을 따라 목표를 정한다.
+    ease=0 (기본): 상태가 바뀌는 순간 바로 점프 (편집 컷처럼). ease>0: 그 초에 걸쳐 선형 이동 (패닝)."""
     def target(t_abs: float) -> float:
         for u in ui or []:
             if u["start"] <= t_abs < u["end"] and u["label"] in CX_BY_STATE:
@@ -50,8 +51,11 @@ def crop_track(c: ShortCandidate, ui: list[dict] | None, W: int, side: int, cx_d
     for i in range(n):
         t = i * step
         goal = target(c.start + t)
-        cur += max(-1.0, min(1.0, (goal - cur) / max(ease / step, 1))) if abs(goal - cur) > 1e-3 else 0.0
-        cur = goal if abs(goal - cur) < 1e-3 else cur
+        if ease <= 0 or abs(goal - cur) < 1e-3:
+            cur = goal
+        else:
+            cur += (goal - cur) / max(ease / step, 1)
+            cur = goal if abs(goal - cur) < 1e-3 else cur
         x0 = int(max(0, min(W - side, cur * W - side / 2)))
         xs.append((round(t, 2), x0))
     return xs
@@ -90,7 +94,7 @@ def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file
 
 
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
-                  cx: float = 0.5, ui: list[dict] | None = None) -> list[dict]:
+                  cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0) -> list[dict]:
     """ui = ui_state 구간 목록 [{start, end, label}] — 있으면 크롭 중심이 인벤토리/캐릭터창을 따라간다."""
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Path(meta["source"])
@@ -106,7 +110,7 @@ def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int
         lines = hook_lines(c)
         (out_dir / hook_file).write_text("\n".join(lines), encoding="utf-8")
         # 크롭 중심 트랙 → sendcmd 파일 (클립 기준 시각)
-        track = crop_track(c, ui, meta["width"], meta["height"], cx)
+        track = crop_track(c, ui, meta["width"], meta["height"], cx, ease=ease)
         cmd_file = name.replace(".mp4", ".cmd")
         moves = sum(1 for a, b in zip(track, track[1:]) if a[1] != b[1])
         (out_dir / cmd_file).write_text("".join(f"{t:.2f} crop@game x {x};\n" for t, x in track), encoding="utf-8")

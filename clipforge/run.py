@@ -165,7 +165,7 @@ def cmd_export(a):
         ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
         if ui is None:
             print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라갑니다)")
-        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx, ui=ui)
+        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx, ui=ui, ease=a.ease)
         print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
@@ -261,6 +261,7 @@ def main():
     p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
     p = sp.add_parser("export"); p.add_argument("vid"); p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
     p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
+    p.add_argument("--ease", type=float, default=0.0, help="크롭 중심 이동 시간(초). 0=즉시 점프(기본)")
     p.set_defaults(f=cmd_export)
     for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--shorts", action="store_true"); p.set_defaults(f=fn)

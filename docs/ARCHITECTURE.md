@@ -175,9 +175,9 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 |---|---|---|
 | 1 | ✅ 환경·스모크: 실제 편집본(ep59)으로 prep→signals→cands 통과, git init | 한 번에 돈다 |
 | 2 | ✅ prep 개편: 단일 패스 audio + frames 1080p + ROI 네이티브 크롭, proxy lazy(NVENC), 게임 프로필 | ep59 4K 11.7분 → 2분48초 |
-| 3 | `item_banner` 신호 정식화 (coarse→refine OCR, 안정 상태 전이, Events 출력) | ep59에서 득템 이벤트 6개 재현, 캐시 재사용 |
-| 4 | Events→Curve 어댑터 + `edit_emphasis`(배너 소실·카드) + `cut_density` + `chat_burst` | 신호 4개가 cands에 들어감 |
-| 5 | 쇼츠 후보 생성기(앵커→창→발화 쉼 스냅) + 8.3 점수 + 두 길이 variant | ep59 상위 5개 후보 JSON |
+| 3 | ✅ `item_banner` 신호 정식화 (coarse→refine OCR, 안정 상태 전이, Events 출력) | ep59 득템 6개 재현, OCR 캐시로 0.6초 |
+| 4 | ✅ Events→Curve 어댑터 + `edit_emphasis`(HUD 소실=줌, 밝은 사각형=메모장) + `cut_density`(prep scdet) + `chat_burst`(채팅 ROI 마스크 XOR) | 5개 신호 가중합. ep59 최고 후보 2:42~3:09 = 제목 아이템(지존참). 채팅 변화율 상위 12초가 전부 2:51~3:41 |
+| 5 | ✅ 쇼츠 후보 생성기 `shorts.py` (앵커→창→쉼·컷 스냅→5축 점수, short/story variant, `run shorts`) | ep59: short 1위 3:25~3:42(지존참 리액션), story 1위 2:39~3:14(지존참 드랍) = 제목 순간. 스냅샷 `experiments/ep59_shorts.json` |
 | 6 | `export --shorts`: 9:16 크롭 NVENC 초안 mp4 + 훅 텍스트 제안 | 사람이 보고 고를 수 있는 초안 |
 | 7 | 제목 → 아이템 → 배너 시각 약한 정답 + hit@K 평가 | ep59 hit@1 = 지존참 구간 |
 | 8 | 도메인 사전 v0: d2data 조인 → `data/d2r/items.json`, 인벤 약어 → `slang.yaml`, 배너 토큰 매칭률 | 매칭률 숫자 |
@@ -253,6 +253,12 @@ Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
 | 감점 | 컷 2개 이상 걸침(−0.1/컷), 길이 15초 미만·60초 초과(−0.2), `ui_state` 메뉴 비율 >30%(−0.2) | |
 
 출력은 후보마다 `{start, end, anchor, score, evidence, hook_mode: "cold_open"|"payoff_flash", overlay_text}`. `overlay_text`는 배너 OCR에서 추가된 아이템명(예: "3맥20어레20피 스몰참")으로 자동 제안.
+
+### 8.3.1 구현 메모 (2026-10-18, ep59 첫 실행)
+- 배너 이벤트 라벨을 `append / appear / switch / reset` 로 나눠야 했다. 줌·로딩 뒤 배너가 다시 나타나는 `appear` 와 이벤트 공지 → 득템 배너 교체 `switch` 는 드랍이 아니다. 직전 상태가 비었을 때는 **마지막 진짜 배너**와 비교해야 "사라졌다 다시 나타나며 늘어난" 추가(3:42 스몰참)를 잡는다.
+- 채팅 변화율(`chat_burst`) 상위 12초가 전부 2:51~3:41 에 몰렸다 → 편집본에서도 채팅 신호가 살아 있음. Captus 식 "채팅 밀도 = 하이라이트" 가설이 1편에서 확인.
+- 앵커 병합 간격 10초, 창 경계 스냅 ±4초(무음 ≥0.4초 또는 scdet 컷). short variant pre 5/post 12, story pre 12/post 22.
+- `overlay_text` 는 아직 OCR 원문("템엄슬가3맥20어레20피")이라 8단계 사전 매칭 뒤에야 쓸 수 있다.
 
 ### 8.4 정답 없이 시작하는 법 — 제목이 곧 약한 정답
 친구 채널 영상 제목은 그 회차의 핵심 득템을 명시한다("59일차만에 … 지존참 직득", "56~57일차 … 자룬 직득"). 제목의 아이템명을 배너 OCR의 APPEND 토큰과 퍼지 매칭하면 **그 회차 쇼츠 1순위의 시각이 자동으로 나온다**. 편집본 40여 편 × 1개 = 약 40개의 hit@1 라벨을 공짜로 얻는다. 이것이 Phase 1의 첫 평가 셋. 친구가 후보 중 고른 것(`harvest`)이 쌓이면 그걸로 가중치를 조정한다.

@@ -6,6 +6,7 @@
   python -m clipforge.run eval     foo                     # labels/foo.csv 와 비교
   python -m clipforge.run export   foo                     # 후보 클립 mp4로 잘라 review/foo/ 에 저장
   python -m clipforge.run sweep    foo                     # threshold 를 바꿔가며 recall/coverage 표
+  python -m clipforge.run shorts   foo [--k 5]             # 쇼츠 후보 (앵커→창→점수), Phase 1
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
@@ -20,6 +21,7 @@ from .candidates import DEFAULT_WEIGHTS, make_candidates
 from .evaluate import evaluate
 from .preprocess import preprocess
 from .profiles import load_profile
+from .shorts import make_shorts, pretty as shorts_pretty, save_shorts
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segments, fmt_time
 
@@ -118,6 +120,16 @@ def cmd_export(a):
     print(f"[export] {len(cands.items)} clips -> {out}\n  쓸 클립은 {out / 'keep'} 로 옮기세요. (python -m clipforge.run harvest {a.vid} 로 레이블 생성)")
 
 
+def cmd_shorts(a):
+    """쇼츠 후보: 앵커 → 창 → 점수. cache/<vid>/shorts.json 저장."""
+    meta = load_meta(a.vid)
+    curves, events = load_signals(a.vid)
+    cands = make_shorts(CACHE / a.vid, events, curves, meta["duration"], k=a.k)
+    save_shorts(cands, CACHE / a.vid / "shorts.json")
+    print(f"[shorts] {len(cands)} candidates (top {a.k} per variant) -> {CACHE / a.vid / 'shorts.json'}")
+    print(shorts_pretty(cands))
+
+
 def cmd_harvest(a):
     """review/<vid>/keep/ 에 들어간 클립을 labels/<vid>.csv 에 추가 → 피드백 루프."""
     cands = Segments.load(CACHE / a.vid / "candidates.json")
@@ -143,6 +155,7 @@ def main():
     for name, fn in [("cands", cmd_cands), ("sweep", cmd_sweep)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)
         p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3"); p.set_defaults(f=fn)
+    p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
     for name, fn in [("eval", cmd_eval), ("export", cmd_export), ("harvest", cmd_harvest)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.set_defaults(f=fn)
 

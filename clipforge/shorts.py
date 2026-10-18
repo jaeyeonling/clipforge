@@ -1,0 +1,225 @@
+"""쇼츠 후보 생성기 (Phase 1). 설계: docs/ARCHITECTURE.md 8.2 ~ 8.3.
+
+임계 초과 구간이 아니라 **페이오프 앵커**에서 창을 만든다.
+  앵커 = item_banner(append) > edit_emphasis(zoom/note) > chat_burst 피크
+  창   = [anchor - pre, anchor + post] 를 발화 쉼(무음)·장면 컷에 스냅. 두 variant: short(≈15~25s) / story(≈30~45s)
+  점수 = Payoff .35 + Reaction .25 + Chat .15 + Completeness .15 + Hook .10 − 감점(컷 수·길이)
+
+출력 후보마다 편집 지시가 붙는다: hook_mode(cold_open | payoff_flash), overlay_text(배너에서 읽은 아이템명), 앵커 시각.
+정답이 쌓이면 가중치는 hit@K 로 조정한다 (evaluate_shorts).
+"""
+from __future__ import annotations
+
+import json
+import wave
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+from .timeline import Curve, Segments, fmt_time
+
+WEIGHTS = {"payoff": 0.35, "reaction": 0.25, "chat": 0.15, "completeness": 0.15, "hook": 0.10}
+VARIANTS = {"short": {"pre": 5.0, "post": 12.0}, "story": {"pre": 12.0, "post": 22.0}}
+MIN_LEN, MAX_LEN = 15.0, 60.0
+
+
+@dataclass
+class ShortCandidate:
+    start: float
+    end: float
+    anchor: float
+    variant: str
+    score: float = 0.0
+    axes: dict = field(default_factory=dict)
+    evidence: dict = field(default_factory=dict)
+    hook_mode: str = "cold_open"
+    overlay_text: str = ""
+
+    @property
+    def duration(self) -> float:
+        return self.end - self.start
+
+
+# ---------- 오디오: 발화 쉼 ----------
+def speech_pauses(wav: Path, frame: float = 0.05, min_len: float = 0.4, rel_db: float = -15.0) -> list[tuple[float, float]]:
+    """RMS(dB) 가 중앙값보다 rel_db 이상 낮은 상태가 min_len 초 이상 이어지는 구간."""
+    with wave.open(str(wav), "rb") as w:
+        sr, n = w.getframerate(), w.getnframes()
+        x = np.frombuffer(w.readframes(n), dtype=np.int16).astype(np.float32) / 32768.0
+    hop = int(sr * frame)
+    m = len(x) // hop
+    rms = np.sqrt((x[: m * hop].reshape(m, hop) ** 2).mean(axis=1) + 1e-12)
+    db = 20 * np.log10(rms + 1e-9)
+    quiet = db < (np.median(db) + rel_db)
+    out, i = [], 0
+    while i < m:
+        if quiet[i]:
+            j = i
+            while j < m and quiet[j]:
+                j += 1
+            if (j - i) * frame >= min_len:
+                out.append((i * frame, j * frame))
+            i = j
+        else:
+            i += 1
+    return out
+
+
+def snap(t: float, points: list[float], max_shift: float, direction: int) -> float:
+    """t 를 points 중 direction(-1: 앞쪽, +1: 뒤쪽) max_shift 이내의 가장 가까운 점으로."""
+    best = None
+    for p in points:
+        d = (t - p) if direction < 0 else (p - t)
+        if 0 <= d <= max_shift and (best is None or d < best[0]):
+            best = (d, p)
+    return best[1] if best else t
+
+
+# ---------- 앵커 ----------
+def collect_anchors(events: dict[str, Segments], curves: dict[str, Curve], duration: float,
+                    chat_pct: float = 97.0, min_gap: float = 10.0) -> list[dict]:
+    anchors: list[dict] = []
+    for s in events.get("item_banner", Segments("", [])).items:
+        if s.label == "append":
+            anchors.append({"t": s.start, "kind": "item", "strength": 1.0, "text": s.meta.get("added", "")})
+    for s in events.get("edit_emphasis", Segments("", [])).items:
+        if s.end >= duration - 8:          # 엔딩 크레딧류
+            continue
+        anchors.append({"t": s.start, "kind": s.label, "strength": 0.8 if s.label == "zoom" else 0.7,
+                        "text": "", "span": [s.start, s.end]})
+    if "chat_burst" in curves:
+        c = curves["chat_burst"]; v = c.as_array(); thr = np.percentile(v, chat_pct)
+        for i in range(1, len(v) - 1):
+            if v[i] >= thr and v[i] >= v[i - 1] and v[i] >= v[i + 1]:
+                anchors.append({"t": i * c.hop, "kind": "chat", "strength": 0.5, "text": ""})
+    # 가까운 앵커 병합: 강한 것 유지, 종류는 합집합
+    anchors.sort(key=lambda a: a["t"])
+    merged: list[dict] = []
+    for a in anchors:
+        if merged and a["t"] - merged[-1]["t"] <= min_gap:
+            m = merged[-1]
+            m["kinds"].add(a["kind"])
+            if a["strength"] > m["strength"]:
+                m.update(t=a["t"], kind=a["kind"], strength=a["strength"])
+            if a.get("text") and not m.get("text"):
+                m["text"] = a["text"]
+        else:
+            merged.append({**a, "kinds": {a["kind"]}})
+    return merged
+
+
+# ---------- 점수 ----------
+def _curve_max(curve: Curve | None, a: float, b: float) -> float:
+    if curve is None:
+        return 0.0
+    v = curve.as_array(); i, j = int(a / curve.hop), int(np.ceil(b / curve.hop)) + 1
+    return float(v[max(0, i):max(1, j)].max()) if j > i else 0.0
+
+
+def score_candidate(c: ShortCandidate, anchor: dict, events: dict[str, Segments], curves: dict[str, Curve],
+                    cuts: list[float], pauses: list[tuple[float, float]], chat_ref: float, duration: float) -> None:
+    items = [s for s in events.get("item_banner", Segments("", [])).items
+             if s.label == "append" and c.start <= s.start <= c.end]
+    emph = [s for s in events.get("edit_emphasis", Segments("", [])).items
+            if s.start < c.end and s.end > c.start and s.end < duration - 8]
+
+    payoff = 1.0 if items else 0.0
+    reaction = 0.0
+    if any(s.label == "zoom" for s in emph):
+        reaction = max(reaction, 1.0)
+    if any(s.label == "note" for s in emph):
+        reaction = max(reaction, 0.8)
+    aud = curves.get("audio_loudness")
+    if aud is not None:
+        z = (aud.as_array() - aud.as_array().mean()) / (aud.as_array().std() or 1.0)
+        zc = Curve("z", aud.hop, [float(x) for x in z])
+        reaction = max(reaction, float(np.clip(_curve_max(zc, c.anchor, c.end) / 3.0, 0, 1)) * 0.6)
+    chat = float(np.clip(_curve_max(curves.get("chat_burst"), c.start, c.end) / (chat_ref or 1.0), 0, 1))
+
+    # 완결성: 앵커 앞뒤로 비(非)줌 게임플레이 ≥3s, 경계가 쉼/컷에 닿았는가
+    before_ok = (c.anchor - c.start) >= 3.0 and not any(s.start <= c.start + 3 <= s.end and s.label == "zoom" for s in emph)
+    after_ok = (c.end - c.anchor) >= 3.0
+    on_pause = lambda t: any(p0 - 0.3 <= t <= p1 + 0.3 for p0, p1 in pauses) or any(abs(t - k) <= 0.3 for k in cuts)
+    completeness = (0.5 if before_ok else 0.0) + (0.3 if after_ok else 0.0) + (0.1 if on_pause(c.start) else 0.0) + (0.1 if on_pause(c.end) else 0.0)
+
+    # 훅: 첫 2초에 에너지/이벤트가 있는가, 줌·메모장·무음으로 시작하면 감점
+    head_zoom = any(s.start <= c.start + 1 <= s.end for s in emph)
+    head_quiet = any(p0 <= c.start and p1 >= c.start + 1.5 for p0, p1 in pauses)
+    head_energy = aud is not None and _curve_max(zc, c.start, c.start + 2.0) > 0.0
+    hook = 0.0 if head_zoom or head_quiet else (1.0 if head_energy or (c.anchor - c.start) <= 3.0 else 0.5)
+
+    n_cuts = sum(1 for k in cuts if c.start + 0.5 < k < c.end - 0.5)
+    penalty = 0.1 * max(0, n_cuts - 1)
+    if not (MIN_LEN <= c.duration <= MAX_LEN):
+        penalty += 0.2
+
+    axes = {"payoff": payoff, "reaction": round(reaction, 2), "chat": round(chat, 2),
+            "completeness": round(completeness, 2), "hook": hook, "penalty": round(penalty, 2)}
+    c.axes = axes
+    c.score = round(sum(WEIGHTS[k] * axes[k] for k in WEIGHTS) - penalty, 3)
+    c.evidence = {"anchor_kinds": sorted(anchor["kinds"]), "items": [s.meta.get("added", "") for s in items],
+                  "emphasis": [s.label for s in emph], "n_cuts": n_cuts,
+                  "chat_peak": round(_curve_max(curves.get("chat_burst"), c.start, c.end), 3)}
+    c.overlay_text = (items[0].meta.get("added", "") if items else anchor.get("text", "")) or ""
+    c.hook_mode = "payoff_flash" if (c.anchor - c.start) > 6.0 and payoff else "cold_open"
+
+
+def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curve], duration: float,
+                k: int = 5, variants: dict | None = None) -> list[ShortCandidate]:
+    variants = variants or VARIANTS
+    cuts_p = cache / "cuts.json"
+    cuts = json.loads(cuts_p.read_text()) if cuts_p.exists() else []
+    pauses = speech_pauses(cache / "audio.wav") if (cache / "audio.wav").exists() else []
+    pause_pts = [p0 for p0, _ in pauses] + [p1 for _, p1 in pauses]
+    snap_pts = sorted(set(pause_pts + list(cuts)))
+    chat_ref = float(np.percentile(curves["chat_burst"].as_array(), 99)) if "chat_burst" in curves else 1.0
+
+    anchors = collect_anchors(events, curves, duration)
+    out: list[ShortCandidate] = []
+    for a in anchors:
+        for vname, v in variants.items():
+            s0, e0 = max(0.0, a["t"] - v["pre"]), min(duration, a["t"] + v["post"])
+            s = snap(s0, snap_pts, 4.0, -1); e = snap(e0, snap_pts, 4.0, +1)
+            if e - s < MIN_LEN:
+                e = min(duration, s + MIN_LEN)
+            if e - s > MAX_LEN:
+                e = s + MAX_LEN
+            c = ShortCandidate(round(s, 2), round(e, 2), a["t"], vname)
+            score_candidate(c, a, events, curves, cuts, pauses, chat_ref, duration)
+            out.append(c)
+    # 같은 variant 끼리 IoU > 0.5 중복 제거 (높은 점수 유지)
+    out.sort(key=lambda c: -c.score)
+    kept: list[ShortCandidate] = []
+    for c in out:
+        dup = False
+        for o in kept:
+            if o.variant != c.variant:
+                continue
+            inter = max(0.0, min(c.end, o.end) - max(c.start, o.start))
+            union = max(c.end, o.end) - min(c.start, o.start)
+            if union > 0 and inter / union > 0.5:
+                dup = True; break
+        if not dup:
+            kept.append(c)
+    final: list[ShortCandidate] = []
+    for v in variants:
+        final += [c for c in kept if c.variant == v][:k]
+    return final
+
+
+def save_shorts(cands: list[ShortCandidate], path: Path) -> None:
+    path.write_text(json.dumps([asdict(c) for c in cands], ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def pretty(cands: list[ShortCandidate]) -> str:
+    lines = []
+    for v in VARIANTS:
+        lines.append(f"[{v}]")
+        for i, c in enumerate([c for c in cands if c.variant == v], 1):
+            ax = c.axes
+            lines.append(f"  {i}. {fmt_time(c.start)}-{fmt_time(c.end)} ({c.duration:.0f}s)  score={c.score:.2f}  "
+                         f"anchor={fmt_time(c.anchor)} {'+'.join(c.evidence['anchor_kinds'])}  "
+                         f"P{ax['payoff']:.0f} R{ax['reaction']:.1f} C{ax['chat']:.1f} K{ax['completeness']:.1f} H{ax['hook']:.1f} -{ax['penalty']:.1f}"
+                         f"  cuts={c.evidence['n_cuts']}  hook={c.hook_mode}  text=\"{c.overlay_text[:30]}\"")
+    return "\n".join(lines)

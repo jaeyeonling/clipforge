@@ -9,7 +9,7 @@
   3. 정규화 텍스트가 min_stable(기본 3)초 이상 유지되는 구간만 "안정 상태"로 인정 (프레임 간 OCR jitter 제거)
   4. 안정 상태 간 전이에서 글자가 늘면 APPEND(득템), 거의 사라지면 RESET(배너 소실: 줌·카드·로딩)
 
-출력: Segments("item_banner") — start=end=전이 시각, label="append"|"reset",
+출력: Segments("item_banner") — start=end=전이 시각, label="append"|"appear"|"switch"|"reset",
       meta={"added", "removed", "text"}. RESET 은 edit_emphasis 의 입력이 된다.
 OCR 결과는 cache/<id>/banner_ocr.json 에 초 단위로 캐시되어 파라미터를 바꿔도 재사용된다.
 """
@@ -27,6 +27,7 @@ from .base import signal
 IGNORE_TOKENS = {"준영"}          # 배너 본문이 아닌 고정 텍스트(스트리머 이름 라벨)
 NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%]")
 DECOR_RE = re.compile(r"[★츠]")
+HEADER_RE = re.compile(r"^(득템|득렘|득램|특템|특램|독템)")   # OCR 변형 포함
 
 
 def _engine():
@@ -86,11 +87,18 @@ def stable_states(seq: list[str], min_stable: int) -> list[tuple[int, int, str]]
 def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_drop: int = 20) -> list[Segment]:
     items: list[Segment] = []
     prev: tuple[int, int, str] | None = None
+    last_banner = ""          # 마지막으로 확인된 "진짜" 득템 배너 텍스트 (머리말 있고 충분히 긴 것)
     for s, e, t in states:
         if prev is None or t == prev[2]:
             prev = (s, e, t)
+            if HEADER_RE.match(t) and len(DECOR_RE.sub("", t)) >= 5:
+                last_banner = t
             continue
         pt = prev[2]
+        # 직전 상태가 비었거나 깨졌으면(줌·로딩·OCR 실패) 마지막 진짜 배너와 비교한다.
+        # 그래야 "사라졌다 다시 나타나며 글자가 늘어난" 경우를 append 로 잡는다.
+        if len(DECOR_RE.sub("", pt)) < 5 and last_banner:
+            pt = last_banner
         sm = difflib.SequenceMatcher(None, pt, t)
         added = "".join(t[j1:j2] for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag in ("insert", "replace"))
         removed = "".join(pt[i1:i2] for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag in ("delete", "replace"))
@@ -98,12 +106,25 @@ def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_dr
         # ★ 는 OCR 이 '츠' 로 읽는 경우가 많아 jitter 의 주범. 장식 문자만 늘어난 전이는 무시한다.
         added_core = DECOR_RE.sub("", added)
         if dl >= min_added and len(added_core) >= min_added:
-            items.append(Segment(float(s), float(s), "append", 1.0,
+            # append : 득템 배너에 글자가 늘어남 (드랍)
+            # appear : 거의 빈 상태에서 배너가 (재)등장 — 줌/로딩 뒤 복귀. 드랍 아님
+            # switch : 다른 종류의 배너(이벤트 공지 등)로 교체 — 내용 유사도 낮고 머리말 없음
+            if not HEADER_RE.match(t):
+                label = "switch"
+            elif len(DECOR_RE.sub("", pt)) < 5:
+                label = "appear"
+            elif not HEADER_RE.match(pt) and sm.ratio() < 0.3:
+                label = "switch"
+            else:
+                label = "append"
+            items.append(Segment(float(s), float(s), label, 1.0,
                                  {"added": added, "removed": removed, "text": t, "stable": e - s}))
         elif dl <= -reset_drop:
             items.append(Segment(float(s), float(s), "reset", 1.0,
                                  {"added": added, "removed": removed, "text": t, "stable": e - s}))
         prev = (s, e, t)
+        if HEADER_RE.match(t) and len(DECOR_RE.sub("", t)) >= 5:
+            last_banner = t
     return items
 
 

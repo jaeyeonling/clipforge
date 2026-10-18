@@ -169,17 +169,21 @@ clipforge/
 
 ## 5. 구현 순서 (각 단계가 지표를 바꾼다)
 
+Phase 1(편집본 → 쇼츠) 기준으로 재정렬 (2026-10-18). ✅ = 완료.
+
 | # | 작업 | 끝났다는 기준 |
 |---|---|---|
-| 1 | 환경·스모크: 합성 영상으로 prep→signals→cands→eval 통과, git init | 한 번에 돈다 |
-| 2 | prep 개편: frames 720p 1fps, proxy lazy, NVENC export | 2h 영상 prep ≤ 15분 |
-| 3 | **align**: 합성 최종본으로 recall ≥ 95% | 친구 영상 1개에 자동 라벨 생성 |
-| 4 | 베이스라인 숫자: 음량만으로 recall/coverage. 놓친 라벨 집계 | 첫 리포트 저장 |
-| 5 | adapters + 동의보너스 + 억제마스크(`ui_state` D2R 인벤토리/마을) | precision 상승 확인 |
-| 6 | `d2_item_label` (HSV→OCR→사전) | rune_drop recall 상승 |
-| 7 | `speech_keyword` (faster-whisper 또는 ffmpeg whisper) | reaction recall 상승 |
-| 8 | `xml` 출력 → 친구가 Premiere에서 열어 피드백 | 실사용 1회 |
-| 9 | DNF 프로필·신호 | DNF 영상 1개 baseline |
+| 1 | ✅ 환경·스모크: 실제 편집본(ep59)으로 prep→signals→cands 통과, git init | 한 번에 돈다 |
+| 2 | ✅ prep 개편: 단일 패스 audio + frames 1080p + ROI 네이티브 크롭, proxy lazy(NVENC), 게임 프로필 | ep59 4K 11.7분 → 2분48초 |
+| 3 | `item_banner` 신호 정식화 (coarse→refine OCR, 안정 상태 전이, Events 출력) | ep59에서 득템 이벤트 6개 재현, 캐시 재사용 |
+| 4 | Events→Curve 어댑터 + `edit_emphasis`(배너 소실·카드) + `cut_density` + `chat_burst` | 신호 4개가 cands에 들어감 |
+| 5 | 쇼츠 후보 생성기(앵커→창→발화 쉼 스냅) + 8.3 점수 + 두 길이 variant | ep59 상위 5개 후보 JSON |
+| 6 | `export --shorts`: 9:16 크롭 NVENC 초안 mp4 + 훅 텍스트 제안 | 사람이 보고 고를 수 있는 초안 |
+| 7 | 제목 → 아이템 → 배너 시각 약한 정답 + hit@K 평가 | ep59 hit@1 = 지존참 구간 |
+| 8 | 도메인 사전 v0: d2data 조인 → `data/d2r/items.json`, 인벤 약어 → `slang.yaml`, 배너 토큰 매칭률 | 매칭률 숫자 |
+| 9 | `xml` 쇼츠 시퀀스 + 리뷰 시퀀스(마커+V2) → 친구 Premiere 피드백 | 실사용 1회 |
+| 10 | 편집본 5~10편으로 확장, 가중치 조정 | hit@3 ≥ 0.8 |
+| — | Phase 2: `align`, 음량/발화 신호(원본), `d2_item_label`, `ui_state`, DNF 프로필 | 원본 샘플 확보 후 |
 
 ## 6. 실제 최종본 1편에서 확인한 사실 (`래더 12기 59일차 지존참.mp4`, 2026-10-18 분석)
 

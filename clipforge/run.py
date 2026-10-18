@@ -35,7 +35,10 @@ def load_curves(vid: str) -> dict[str, Curve]:
     for name in REGISTRY:
         p = CACHE / vid / f"{name}.json"
         if p.exists():
-            out[name] = Curve.load(p)
+            try:
+                out[name] = Curve.load(p)
+            except TypeError:
+                pass          # Segments(이벤트) 신호는 어댑터(다음 단계)를 거쳐 들어온다
     return out
 
 

@@ -15,7 +15,7 @@
       └───────────────── labels/<id>.csv (정답: 친구가 실제로 남긴 구간) ────────────────┘
 ```
 
-설계·조사·결정 기록은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 쇼츠 공식 조사는 [docs/research/shorts_formula.md](docs/research/shorts_formula.md).
+제품 설계는 [docs/PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md), 분석 코어 설계·조사·결정 기록은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 쇼츠 공식 조사는 [docs/research/shorts_formula.md](docs/research/shorts_formula.md).
 
 ## 설치 (Windows)
 

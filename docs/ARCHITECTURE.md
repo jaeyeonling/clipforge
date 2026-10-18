@@ -1,5 +1,7 @@
 # clipforge 아키텍처 설계 (v1 초안, 2026-10-18)
 
+> 제품(방송용 통합 프로그램)으로 확장하는 설계는 [PRODUCT_ARCHITECTURE.md](PRODUCT_ARCHITECTURE.md). 이 문서는 분석 코어(신호·판정·평가)의 설계와 실험 기록이다.
+
 > 참고 레포 6개(AutoEditor, Auto-clipper, auto-highlighter, automated-content-pipeline, vod-to-viral, crispy)와
 > 로컬 환경 실측(RTX 4070 SUPER, FFmpeg 9.0.2)을 바탕으로 정리. 각 결정의 근거는 절 끝의 `근거:` 참조.
 

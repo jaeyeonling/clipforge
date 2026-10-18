@@ -2,3 +2,4 @@ numpy
 Pillow
 rapidocr
 onnxruntime
+PyYAML

@@ -4,7 +4,7 @@
 모델 선택은 나중 문제. 지금 이 하네스가 하는 일은 딱 하나 — **신호 하나 추가 → recall 변화 확인** 사이클을 분 단위로 만드는 것.
 
 ```
-원본 mp4 ─prep─▶ cache/<id>/ (audio.wav, proxy.mp4, thumbs/, meta.json)
+원본 mp4 ─prep─▶ cache/<id>/ (meta.json, audio.wav, frames/ 1fps≤1080p, rois/<name>/ 네이티브 크롭, [proxy.mp4])
                    │
             signals ▼  Curve/Segments JSON  (audio_loudness, frame_motion, ... 플러그인)
                    │
@@ -14,6 +14,8 @@
       │   recall / precision / coverage / 놓친 구간                                       ▲
       └───────────────── labels/<id>.csv (정답: 친구가 실제로 남긴 구간) ────────────────┘
 ```
+
+설계·조사·결정 기록은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 쇼츠 공식 조사는 [docs/research/shorts_formula.md](docs/research/shorts_formula.md).
 
 ## 설치 (Windows)
 
@@ -27,8 +29,9 @@ pip install -r requirements.txt
 ## 첫 실험 (친구 영상 1개로 30분)
 
 ```powershell
-# 1. 원본 영상을 videos/ 에 넣고 전처리 (2시간 영상 기준 수 분. NVDEC 자동 시도)
-python -m clipforge.run prep videos\ep01.mp4
+# 1. 원본 영상을 videos/ 에 넣고 전처리. 단일 패스로 오디오·프레임·ROI 크롭을 동시에 뽑는다 (NVDEC 자동 시도).
+#    4K60 은 NVDEC 로도 실시간의 ~4배 → 2시간이면 ~30분. 게임 프로필은 games/<game>.yaml (--game, 기본 d2r)
+python -m clipforge.run prep videos\ep01.mp4 [--game d2r] [--proxy]
 
 # 2. 정답 만들기: 친구 최종본을 보면서 "원본에서 어느 구간이 살아남았나"를 labels\ep01.csv 에 적는다
 #    start,end,label,note   (시간은 mm:ss 또는 hh:mm:ss, label은 rune_drop / reaction / fail / explain / clear 등 자유)
@@ -66,7 +69,7 @@ from .base import signal
 
 @signal("d2_item_drop")
 def d2_item_drop(cache: Path) -> Segments:
-    # cache/thumbs/*.jpg 를 d2r-image / PaddleOCR 로 읽어 룬·유니크 이름이 보이는 초를 구간으로
+    # cache/rois/banner/*.jpg 또는 cache/frames/*.jpg 를 RapidOCR 로 읽어 룬·유니크 이름이 보이는 초를 구간으로
     ...
 ```
 
@@ -86,4 +89,4 @@ Curve(연속값)든 Segments(이벤트)든 공통 포맷으로만 내놓으면 `
 | 이름 | 입력 | 설명 |
 |---|---|---|
 | `audio_loudness` | audio.wav | RMS dB, 중앙값 대비. hop 0.5s |
-| `frame_motion` | thumbs/ | 1fps 썸네일 간 평균 절대 차이. 정적 구간 탐지용 |
+| `frame_motion` | frames/ | 1fps 프레임 간 평균 절대 차이(160×90 축소). 정적 구간 탐지용 |

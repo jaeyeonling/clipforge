@@ -1,6 +1,6 @@
 """CLI 진입점.
 
-  python -m clipforge.run prep     videos/foo.mp4          # 전처리 캐시
+  python -m clipforge.run prep     videos/foo.mp4 [--game d2r] [--proxy] [--force]   # 전처리 캐시 (단일 패스)
   python -m clipforge.run signals  foo                     # 등록된 신호 전부 계산
   python -m clipforge.run cands    foo [--threshold 1.5] [--w audio_loudness=1 --w frame_motion=0.3]
   python -m clipforge.run eval     foo                     # labels/foo.csv 와 비교
@@ -49,7 +49,7 @@ def parse_weights(items: list[str] | None) -> dict[str, float]:
 
 def cmd_prep(a):
     for v in a.videos:
-        preprocess(Path(v), CACHE, a.force)
+        preprocess(Path(v), CACHE, a.force, a.game, a.proxy)
 
 
 def cmd_signals(a):
@@ -124,7 +124,9 @@ def main():
     ap = argparse.ArgumentParser(prog="clipforge")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sp.add_parser("prep");    p.add_argument("videos", nargs="+"); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_prep)
+    p = sp.add_parser("prep");    p.add_argument("videos", nargs="+"); p.add_argument("--force", action="store_true")
+    p.add_argument("--game", default=None, help="games/<game>.yaml (기본: 파일명 접두어 또는 d2r)")
+    p.add_argument("--proxy", action="store_true", help="480p NVENC 프록시도 생성"); p.set_defaults(f=cmd_prep)
     p = sp.add_parser("signals"); p.add_argument("vid"); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_signals)
     for name, fn in [("cands", cmd_cands), ("sweep", cmd_sweep)]:
         p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)

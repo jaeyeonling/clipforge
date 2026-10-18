@@ -286,5 +286,17 @@ clipforge/
 - `events.yaml` 의 화면 단서 → `ui_state`(억제 마스크) 와 결과형 이벤트 템플릿.
 - 매칭 실패 토큰은 `reports/unknown_tokens.md` 에 쌓여 다음 사전 갱신 입력이 된다. **지식 보강도 recall 지표로 측정**: "배너 토큰 중 사전 매칭률".
 
-### 9.5 DNF로 확장할 때
+### 9.5 소스 조사 결과 (2026-10-18)
+| 지식 | 1차 소스 | 형식·라이선스 | 비고 |
+|---|---|---|---|
+| 아이템 마스터 (영↔한) | **blizzhackers/d2data** `json/uniqueitems.json, setitems.json, runes.json(룬워드), armor/weapons/misc.json` + `json/localestrings-kor.json`(573KB) | JSON, MIT. raw: `https://raw.githubusercontent.com/blizzhackers/d2data/master/json/` | 키 체계: 베이스/룬/참은 3글자 코드(`uit`=모너크, `r33`=조드 룬, `cm1`=스몰 차암), 유니크/세트는 영문 index(`"Harlequin Crest":"할리퀸 크레스트"`), 룬워드 `Runeword33`=수수께끼. **레거시 음차와 D2R 공식 번역이 섞여 있음** → 친구 어휘(배너·제목)로 `aliases` 보강 필수 |
+| 검증용 | 인벤 디아2 DB `diablo2.inven.co.kr/dataninfo/item/` (한/영 병기, 정적 HTML) | 무단 전재 금지 | 샘플링 대조만, 재배포 안 함 |
+| 드랍 확률 | d2data `treasureclassex.json`, `atomic.json`, `tcprecalc.json` | JSON, MIT | 희귀도 가중치 계산용. silospen DropCalc(MIT)는 JVM 웹툴 |
+| 약어 사전 | 인벤 "거래 축약어 모음"(wznews 264060), 인벤 "지존참·으뜸 참 옵션"(5734/10603: 3맥20어래20피=스몰 지존참), 인벤 "디아2 용어정리 238개"(5734/80), 나무위키 `디아블로 2/아이템`, `부적(디아블로 2)`, `룬어 아이템` | 글/위키 | 직득·대리작·노거래·슬가는 어디에도 정의 없음 → **친구 인터뷰에서 확보** |
+| 시세 | 구조화 소스 **없음**. 인벤 자유게시판 `category=시세질문`, 디시 디아2R 마이너갤 거래 말머리, 아이템베이 D2R(게임 3786, 원 단위), maxroll 룬 상대가치(등급제) | 자유 텍스트 | 룬 단위 환산 관례(이스트~베르 기준). `value.yaml`은 수동 입력 + 친구 현금 카드가 현실적 |
+| UI/CV | botty `config/game.ini` HSV(1280×720 기준), `assets/templates/inventory/`(unidentified.png 등 68개), `templates/ui/`; D2 색코드(ÿc4 gold, ÿc2 green, ÿc8 orange, ÿc9 yellow) | MIT | 템플릿은 720p 기준이라 4K 프레임엔 재추출 필요. Roboflow "Diablo 2: Resurrected"(210장) 존재 |
+
+구현 순서: (1) d2data 4개 JSON + localestrings-kor 조인 → `data/d2r/items.json` 생성 스크립트, (2) 인벤 약어 글 4개를 수작업 통합 → `slang.yaml` 초안, (3) ep59 배너 토큰으로 매칭률 측정, (4) 미매칭 토큰을 친구 인터뷰 질문지로.
+
+### 9.6 DNF로 확장할 때
 같은 네 파일을 `data/dnf/`에. 에픽/태초 장비, 증폭·강화 단계별 가치, 레이드 이름, 결과창 단서. 친구가 던파도 방송하므로 9.2의 방법이 그대로 적용된다.

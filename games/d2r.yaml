@@ -1,0 +1,25 @@
+# Diablo II: Resurrected (한국어 클라이언트, 기준 채널 방송 화면 기준)
+# ROI 는 기준 해상도에 대한 비율 [x, y, w, h] (0~1). prep 이 실제 해상도 픽셀로 변환해 meta.json 에 기록한다.
+name: d2r
+resolution_ref: [3840, 2160]
+
+rois:
+  # 좌상단 "득템 :" 누적 배너 (OBS 텍스트). item_banner 신호 입력. 네이티브 해상도로 잘라 저장.
+  banner:   [0.0, 0.0, 0.443, 0.148]      # 1700x320 @4K
+  # 좌하단 채팅 오버레이. chat_burst 신호 입력.
+  chat:     [0.0, 0.815, 0.234, 0.185]    # 900x400 @4K
+  # 우상단 게임명/난이도/공포의 영역 레벨 텍스트.
+  zone:     [0.86, 0.0, 0.14, 0.06]
+
+# 네이티브 크롭으로 저장할 ROI (OCR 용). 나머지는 frames/ 에서 잘라 쓴다.
+roi_crops: [banner, chat]
+
+frames:
+  fps: 1.0
+  max_height: 1080     # 4K 소스는 1080p 로, 그 이하는 원본 유지
+
+item_colors:   # HSV (OpenCV h 0-180). d2r-image 차용, 미검증 — d2_item_label 구현 시 실제 프레임으로 보정
+  gold:   [20, 75, 140, 26, 95, 230]
+  green:  [56, 190, 190, 63, 255, 255]
+  orange: [20, 190, 190, 23, 255, 255]
+  yellow: [27, 110, 190, 33, 145, 255]

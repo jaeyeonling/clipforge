@@ -127,7 +127,7 @@
 
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 
-진행 (2026-10-18 밤): ✅ 1 설정 객체(`project.py`: 앱/데이터 폴더 분리, ffmpeg 자동 탐색, health 진단) · ✅ 2 Job 러너(`jobs.py`: 단계 큐, 진행률[prep 는 프레임 수 폴링, export 는 클립 단위], 취소, 작업 로그 파일, 오류 코드+힌트) · ✅ 3 API(`api/methods.py` 전송 무관, `api/server.py` HTTP+WebSocket+미디어 Range, `api/stdio.py` JSON Lines) · ✅ 4 판정 I/O(`decision.set` → labels.csv) · ◐ UI v0(`ui/`: 빌드 없는 로컬 웹 화면 — 회차·실행·후보 리뷰·판정·지표). **UI 스택 결정**: 1차는 엔진이 직접 서빙하는 로컬 웹 UI. 데스크톱 껍데기(Tauri/WPF)는 stdio 또는 HTTP 로 같은 API 를 쓴다. 남은 것: 5 캘리브레이션, 6 오류·로그 UI, 7 테스트 뼈대, 8 스키마 버전.
+진행 (2026-10-18 밤): ✅ 1 설정 객체(`project.py`: 앱/데이터 폴더 분리, ffmpeg 자동 탐색, health 진단) · ✅ 2 Job 러너(`jobs.py`: 단계 큐, 진행률[prep 는 프레임 수 폴링, export 는 클립 단위], 취소, 작업 로그 파일, 오류 코드+힌트) · ✅ 3 API(`api/methods.py` 전송 무관, `api/server.py` HTTP+WebSocket+미디어 Range, `api/stdio.py` JSON Lines) · ✅ 4 판정 I/O(`decision.set` → labels.csv) · ◐ UI v0(`ui/`: 빌드 없는 로컬 웹 화면 — 회차·실행·후보 리뷰·판정·지표). **UI 스택 결정**: 1차는 엔진이 직접 서빙하는 로컬 웹 UI. 데스크톱 껍데기(Tauri/WPF)는 stdio 또는 HTTP 로 같은 API 를 쓴다. ✅ 5 캘리브레이션(`calibrate.py`: 배너 OCR·패널 제목·채팅·HUD 적중률 점검 + ROI 박스 미리보기 + ROI 수치 편집/프로필 저장, UI 패널) · ✅ 7 테스트 뼈대(`tests/`: pytest 17개 — timeline/adapters/candidates/배너 전이/lexicon/weaklabel/subtitles/textdraw/발화 경계/채팅 교정 + API: Engine·HTTP·판정·프로필 검증). 남은 것: 6 오류·로그 UI 다듬기, 8 스키마 버전. ep59 캘리브레이션 결과: 배너 68% / 패널 40% / 채팅 92% / HUD 99% → 전부 pass.
 
 
 1. **설정 객체**: `ROOT/CACHE/REVIEW` 전역과 PATH 환경 의존 제거 → `Project` 객체(경로·프로필·도구 위치) 주입. ffmpeg/모델/폰트는 설치 폴더 기준으로 탐색.

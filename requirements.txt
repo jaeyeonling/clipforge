@@ -12,3 +12,5 @@ otio-fcp-adapter
 fonttools
 fastapi
 uvicorn[standard]
+pytest
+httpx

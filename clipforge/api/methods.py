@@ -154,6 +154,32 @@ class Engine:
             w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader(); w.writerows(rows)
         return {"ok": True, "labels": len(rows)}
 
+    # ---- calibration / profile ----
+    def calibrate_check(self, vid: str) -> dict:
+        from .. import calibrate
+        return calibrate.check(self.project, vid)
+
+    def calibrate_preview(self, vid: str, t: int | None = None, rois: dict | None = None) -> dict:
+        from .. import calibrate
+        try:
+            out = calibrate.preview(self.project, vid, t, rois)
+        except FileNotFoundError as e:
+            raise ApiError("E_NO_FRAMES", str(e), "prep 단계를 먼저 실행하세요")
+        return {"path": str(out), "url": f"/media/cache/{vid}/calib_preview.png?ts={int(out.stat().st_mtime)}"}
+
+    def profile_get(self, game: str) -> dict:
+        from .. import calibrate
+        if not (self.project.games / f"{game}.yaml").exists():
+            raise ApiError("E_NOT_FOUND", f"프로필 없음: {game}")
+        return calibrate.get_rois(self.project, game)
+
+    def profile_set(self, game: str, rois: dict, panel_bands: dict | None = None) -> dict:
+        from .. import calibrate
+        try:
+            return calibrate.set_rois(self.project, game, rois, panel_bands)
+        except ValueError as e:
+            raise ApiError("E_BAD_ROI", str(e))
+
     # ---- metrics ----
     def metrics_summary(self) -> list[dict]:
         from ..eval_shorts import evaluate_shorts

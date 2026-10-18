@@ -52,6 +52,16 @@
     <div id="cands" class="cands"></div>
   </section>
   <section class="col right">
+    <h2>캘리브레이션 <button id="calibBtn" class="ghost small" title="ROI 적중률 점검 + 미리보기">점검</button></h2>
+    <div id="calibStatus" class="meta">회차를 선택하고 점검을 누르세요.</div>
+    <ul id="calibChecks" class="checks"></ul>
+    <div class="calib-prev"><img id="calibImg" alt="" hidden></div>
+    <div class="calib-ctl">
+      <label>프레임(초) <input id="calibT" type="number" min="0" value="200" class="num"></label>
+      <button id="calibPrevBtn" class="ghost small">미리보기</button>
+      <button id="roiEditBtn" class="ghost small">ROI 편집</button>
+    </div>
+    <div id="roiEditor" class="roi-editor" hidden></div>
     <h2>지표</h2>
     <table id="metrics"><thead><tr><th>회차</th><th>라벨</th><th>keep</th><th>no</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr></thead><tbody></tbody></table>
     <h3>작업</h3>

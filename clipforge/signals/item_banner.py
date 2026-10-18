@@ -119,7 +119,8 @@ def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_dr
                 label = "append"
             items.append(Segment(float(s), float(s), label, 1.0,
                                  {"added": added, "removed": removed, "text": t, "stable": e - s}))
-        elif dl <= -reset_drop:
+        elif dl <= -reset_drop or (len(DECOR_RE.sub("", t)) < 5 <= len(DECOR_RE.sub("", pt)) - 3):
+            # 글자가 reset_drop 이상 줄었거나, 짧은 배너라도 사실상 비워졌으면 소실(reset)
             items.append(Segment(float(s), float(s), "reset", 1.0,
                                  {"added": added, "removed": removed, "text": t, "stable": e - s}))
         prev = (s, e, t)

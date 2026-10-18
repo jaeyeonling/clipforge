@@ -132,6 +132,42 @@ function connectWs() {
   ws.onclose = () => setTimeout(connectWs, 1500);
 }
 
+// ---- 캘리브레이션 ----
+const calib = { game: null, rois: null, bands: null };
+async function calibCheck() {
+  if (!state.episode) return toast("회차를 먼저 선택하세요", true);
+  const r = await api(`/api/episodes/${state.episode}/calibrate`);
+  const ul = $("#calibChecks"); ul.innerHTML = "";
+  if (!r.ok) { $("#calibStatus").textContent = r.error; return; }
+  calib.game = r.game;
+  $("#calibStatus").innerHTML = `${esc(r.game)} · ${r.resolution.join("×")} · 전체 <span class="badge ${r.status}">${r.status}</span>`;
+  for (const c of r.checks) ul.innerHTML += `<li><span class="badge ${c.status}">${c.status}</span><div><b>${esc(c.name)}</b> ${c.rate == null ? "" : Math.round(c.rate * 100) + "%"} <span class="meta">${esc(c.detail)}</span>${c.hint ? `<div class="hint">${esc(c.hint)}</div>` : ""}</div></li>`;
+  await calibPreview();
+}
+async function calibPreview(rois) {
+  if (!state.episode) return;
+  const t = Number($("#calibT").value) || 0;
+  const r = await api(`/api/episodes/${state.episode}/calibrate/preview`, { method: "POST", body: JSON.stringify({ t, rois: rois || null }) });
+  const img = $("#calibImg"); img.src = r.url; img.hidden = false;
+}
+async function roiEdit() {
+  if (!calib.game) { const e = await api(`/api/episodes/${state.episode}`); calib.game = e.game || "d2r"; }
+  const prof = await api(`/api/profiles/${calib.game}`);
+  calib.rois = prof.rois; calib.bands = prof.panel_bands;
+  const ed = $("#roiEditor"); ed.hidden = false;
+  ed.innerHTML = `<div class="roi"><span class="name">ROI (비율)</span><span>x</span><span>y</span><span>w</span><span>h</span></div>` +
+    Object.entries(prof.rois).map(([k, v]) => `<div class="roi" data-k="${esc(k)}"><span class="name">${esc(k)}</span>${v.map((x) => `<input type="number" step="0.005" min="0" max="1" value="${x}">`).join("")}</div>`).join("") +
+    `<div class="btns"><button id="roiPreview" class="ghost small">미리보기 갱신</button><button id="roiSave" class="primary small">프로필 저장</button><button id="roiClose" class="ghost small">닫기</button></div>
+     <div class="meta">네이티브 크롭(배너·채팅)이 바뀌는 ROI 는 다음 prep(강제 재계산)부터 반영됩니다.</div>`;
+  const read = () => Object.fromEntries([...ed.querySelectorAll(".roi[data-k]")].map((row) => [row.dataset.k, [...row.querySelectorAll("input")].map((i) => Number(i.value))]));
+  $("#roiPreview").onclick = () => calibPreview(read()).catch((e) => toast(e.message, true));
+  $("#roiSave").onclick = () => api(`/api/profiles/${calib.game}`, { method: "PUT", body: JSON.stringify({ rois: read() }) }).then((r) => toast(r.note || "저장됨")).catch((e) => toast(e.message, true));
+  $("#roiClose").onclick = () => (ed.hidden = true);
+}
+$("#calibBtn").onclick = () => calibCheck().catch((e) => toast(e.message, true));
+$("#calibPrevBtn").onclick = () => calibPreview().catch((e) => toast(e.message, true));
+$("#roiEditBtn").onclick = () => roiEdit().catch((e) => toast(e.message, true));
+
 $("#runBtn").onclick = () => run().catch((e) => toast(e.message, true));
 $("#cancelBtn").onclick = () => state.job && api(`/api/jobs/${state.job}/cancel`, { method: "POST" }).then(loadJobs).catch((e) => toast(e.message, true));
 $("#addBtn").onclick = () => api("/api/episodes", { method: "POST", body: JSON.stringify({ video_path: $("#addPath").value.trim(), title: $("#addTitle").value.trim() }) })

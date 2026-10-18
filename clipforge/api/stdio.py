@@ -25,6 +25,10 @@ METHODS = {
     "candidates.list": lambda e, p: e.candidates_list(p["vid"]),
     "decision.set": lambda e, p: e.decision_set(p["vid"], p["start"], p["end"], p["label"], p.get("reason", ""), p.get("file", "")),
     "metrics.summary": lambda e, p: e.metrics_summary(),
+    "calibrate.check": lambda e, p: e.calibrate_check(p["vid"]),
+    "calibrate.preview": lambda e, p: e.calibrate_preview(p["vid"], p.get("t"), p.get("rois")),
+    "profile.get": lambda e, p: e.profile_get(p["game"]),
+    "profile.set": lambda e, p: e.profile_set(p["game"], p["rois"], p.get("panel_bands")),
 }
 
 

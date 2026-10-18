@@ -46,3 +46,17 @@ input.num { width:56px; }
 .novideo { aspect-ratio:9/16; display:flex; align-items:center; justify-content:center; color:var(--muted); background:#000; font-size:12px; }
 .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); background:#2a2723; color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:9px 14px; font-size:13px; opacity:0; transition:all .25s; pointer-events:none; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); } .toast.bad { border-color:var(--red); }
+
+button.small { padding:3px 9px; font-size:12px; }
+.checks { list-style:none; margin:8px 0; padding:0; font-size:12px; }
+.checks li { display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; }
+.checks .badge { min-width:44px; text-align:center; border-radius:6px; padding:1px 6px; font-weight:700; }
+.checks .pass { background:#243a22; color:#b7e8a0; } .checks .warn { background:#3a3322; color:#f0d36a; } .checks .fail { background:#3a2222; color:#ff8a80; } .checks .skip { background:#2a2723; color:var(--muted); }
+.checks .hint { color:var(--muted); }
+.calib-prev img { width:100%; border:1px solid var(--line); border-radius:8px; margin:6px 0; }
+.calib-ctl { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+.roi-editor { margin:8px 0; font-size:12px; }
+.roi-editor .roi { display:grid; grid-template-columns: 110px repeat(4, 1fr); gap:4px; align-items:center; margin-bottom:4px; }
+.roi-editor input { width:100%; padding:4px 6px; font-size:12px; }
+.roi-editor .roi .name { color:var(--accent); }
+.roi-editor .btns { display:flex; gap:6px; margin-top:6px; }

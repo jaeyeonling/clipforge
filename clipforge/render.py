@@ -237,9 +237,12 @@ def render_feed(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int |
         ass_file = name.replace(".mp4", ".ass")
         LF.build_static(c, brand, episode_label, hook, out_dir / static_png)
         (out_dir / ass_file).write_text(LF.build_ass(c, transcript, chat, intro), encoding="utf-8")
+        n_cues = 0
         if transcript:
             from .subtitles import cues_for_clip, write_srt
-            write_srt(cues_for_clip(transcript, c.start, c.end, max_chars=26), out_dir / name.replace(".mp4", ".srt"), c.start)
+            cues = cues_for_clip(transcript, c.start, c.end, max_chars=26)
+            n_cues = len(cues)
+            write_srt(cues, out_dir / name.replace(".mp4", ".srt"), c.start)
         cmd = LF.build_cmd(src, c, meta, name, static_png, ass_file)
         try:
             subprocess.run(cmd, check=True, cwd=out_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -252,7 +255,7 @@ def render_feed(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int |
         index.append({"file": name, "variant": c.variant, "rank": rank, "start": c.start, "end": c.end,
                       "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
                       "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
-                      "layout": "feed", "top_mode": "feed", "top_h": 0})
+                      "layout": "feed", "top_mode": "feed", "top_h": 0, "subtitle_cues": n_cues})
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
     return index

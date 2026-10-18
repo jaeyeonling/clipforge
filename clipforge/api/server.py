@@ -35,6 +35,16 @@ class RunJob(BaseModel):
     params: dict = {}
 
 
+class PreviewReq(BaseModel):
+    t: int | None = None
+    rois: dict | None = None
+
+
+class ProfileSet(BaseModel):
+    rois: dict
+    panel_bands: dict | None = None
+
+
 class Decision(BaseModel):
     start: float
     end: float
@@ -124,6 +134,30 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @app.post("/api/episodes/{vid}/decision")
     def decision(vid: str, body: Decision):
         return engine.decision_set(vid, body.start, body.end, body.label, body.reason, body.file)
+
+    @app.get("/api/episodes/{vid}/calibrate")
+    def calibrate_check(vid: str):
+        return engine.calibrate_check(vid)
+
+    @app.post("/api/episodes/{vid}/calibrate/preview")
+    def calibrate_preview(vid: str, body: PreviewReq):
+        return engine.calibrate_preview(vid, body.t, body.rois)
+
+    @app.get("/api/profiles/{game}")
+    def profile_get(game: str):
+        return engine.profile_get(game)
+
+    @app.put("/api/profiles/{game}")
+    def profile_set(game: str, body: ProfileSet):
+        return engine.profile_set(game, body.rois, body.panel_bands)
+
+    @app.api_route("/media/cache/{path:path}", methods=["GET", "HEAD"])
+    def media_cache(path: str):
+        root = engine.project.cache.resolve()
+        p = (root / path).resolve()
+        if root not in p.parents or not p.is_file() or p.suffix.lower() not in (".png", ".jpg", ".json"):
+            raise HTTPException(404)
+        return FileResponse(str(p), headers={"Cache-Control": "no-store"})
 
     @app.get("/api/metrics")
     def metrics():

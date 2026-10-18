@@ -219,11 +219,9 @@ def export_xml(meta: dict, candidates: Segments, shorts: list[ShortCandidate], u
     w.review(f"{vid} review", candidates, shorts)
     paths.append(w.write(out_dir / f"{vid}_review.xml"))
     w2 = XmemlWriter(meta)
-    by_variant: dict[str, int] = {}
-    for c in shorts:
-        by_variant[c.variant] = by_variant.get(c.variant, 0) + 1
-        if by_variant[c.variant] > k:
-            continue
-        w2.short(c, by_variant[c.variant], ui)
+    for rank, c in enumerate(shorts, 1):
+        if rank > k:
+            break
+        w2.short(c, rank, ui)
     paths.append(w2.write(out_dir / f"{vid}_shorts.xml"))
     return paths

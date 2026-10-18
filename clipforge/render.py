@@ -139,13 +139,10 @@ def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Path(meta["source"])
     index = []
-    by_variant: dict[str, int] = {}
-    for c in cands:
-        by_variant[c.variant] = by_variant.get(c.variant, 0) + 1
-        rank = by_variant[c.variant]
+    for rank, c in enumerate(cands, 1):
         if k and rank > k:
             continue
-        name = f"{c.variant}_{rank:02d}_{fmt_time(c.start).replace(':', '-')}_{c.score:.2f}.mp4"
+        name = f"{rank:02d}_{c.variant}_{fmt_time(c.start).replace(':', '-')}_{c.score:.2f}.mp4"
         lines = hook_lines(c)
         mode = pick_top_mode(c, top_mode)
         top_png = name.replace(".mp4", "_top.png")
@@ -205,7 +202,7 @@ def index_md(index: list[dict], meta: dict) -> str:
     for r in index:
         ev = r["evidence"]
         why = "+".join(ev.get("anchor_kinds", [])) + (f", 컷{ev.get('n_cuts', 0)}" if ev.get("n_cuts") else "")
-        lines.append(f"| {r['variant']} {r['rank']} | `{r['file']}` | {fmt_time(r['start'])}–{fmt_time(r['end'])} "
+        lines.append(f"| {r['rank']} ({r['variant']}) | `{r['file']}` | {fmt_time(r['start'])}–{fmt_time(r['end'])} "
                      f"| {fmt_time(r['anchor'])} | {r['score']:.2f} | {why} | {r.get('top_mode', 'title')} | {' / '.join(r['hook_lines'])} |  |")
     lines += ["", "- 각 mp4 옆의 `.srt` 는 같은 대사 자막(Premiere 캡션으로 임포트 가능), `.ass` 는 초안에 구운 스타일 원본.",
               "- 판정 열에 keep/no 를 적거나, 쓸 파일을 `keep/` 폴더로 옮기면 `harvest --shorts` 가 정답으로 회수한다 (7단계).",

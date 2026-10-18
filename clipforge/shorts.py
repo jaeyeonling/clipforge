@@ -176,9 +176,14 @@ def score_candidate(c: ShortCandidate, anchor: dict, events: dict[str, Segments]
     payoff = 1.0 if items else 0.0
     reaction = 0.0
     if any(s.label == "zoom" for s in emph):
-        reaction = max(reaction, 1.0)
+        reaction = max(reaction, 0.6)        # 편집자의 줌 = 강조 신호지만 날것 리액션은 아님
     if any(s.label == "note" for s in emph):
-        reaction = max(reaction, 0.8)
+        reaction = max(reaction, 0.6)
+    kw_after = [k for k in events.get("speech_keyword", Segments("", [])).items if c.anchor - 2.0 <= k.start <= c.end]
+    if any(k.label == "강" for k in kw_after):
+        reaction = max(reaction, 1.0)
+    elif any(k.label in ("중", "득템") for k in kw_after):
+        reaction = max(reaction, 0.7)
     aud = curves.get("audio_loudness")
     if aud is not None:
         z = (aud.as_array() - aud.as_array().mean()) / (aud.as_array().std() or 1.0)
@@ -199,10 +204,13 @@ def score_candidate(c: ShortCandidate, anchor: dict, events: dict[str, Segments]
     hook = 0.0 if head_zoom or head_quiet else (1.0 if head_energy or (c.anchor - c.start) <= 3.0 else 0.5)
 
     n_cuts = sum(1 for k in cuts if c.start + 0.5 < k < c.end - 0.5)
-    penalty = 0.1 * max(0, n_cuts - 1)
+    penalty = 0.05 * max(0, n_cuts - 2)
     if not (MIN_LEN <= c.duration <= MAX_LEN):
         penalty += 0.2
 
+    # 임팩트 게이트 (친구 피드백 2026-10-18 "임팩트 없음"): 리액션도 채팅 반응도 약하면 득템이 있어도 감점
+    if reaction < 0.3 and chat < 0.5:
+        penalty += 0.15
     axes = {"payoff": payoff, "reaction": round(reaction, 2), "chat": round(chat, 2),
             "completeness": round(completeness, 2), "hook": hook, "penalty": round(penalty, 2)}
     c.axes = axes
@@ -363,9 +371,33 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
                 dup = True; break
         if not dup:
             kept.append(c)
-    final: list[ShortCandidate] = []
-    for v in variants:
-        final += [c for c in kept if c.variant == v][:k]
+    # 순간(moment) 단위 중복 제거 (친구 피드백 2026-10-18 "중복"): 한 순간에서는 variant 를 통틀어 점수 최고 1개만.
+    # 같은 순간 = 앵커 간격 ≤ moment_gap 또는 창이 1/3 이상 겹침. 드랍→리액션이 이어지는 긴 창이 리액션만 있는 창보다 선호되도록
+    # story 에 +0.02 타이브레이크.
+    moment_gap = 45.0
+    # (a) 클러스터링: 앵커 간격 ≤ moment_gap 또는 창 겹침 ≥ 1/3
+    clusters: list[list[ShortCandidate]] = []
+    for c in sorted(kept, key=lambda c: c.anchor):
+        for cl in clusters:
+            if any(abs(c.anchor - o.anchor) <= moment_gap or
+                   max(0.0, min(c.end, o.end) - max(c.start, o.start)) >= 0.33 * min(c.duration, o.duration) for o in cl):
+                cl.append(c); break
+        else:
+            clusters.append([c])
+    # (b) 대표: 순간의 '원인'(가장 이른 득템 앵커)을 담은 창 중 점수 최고. 없으면 점수 최고.
+    #     친구 피드백 2026-10-18: 같은 지존참 순간에서 드랍→리액션 전체(2:38~3:17)를 고르고 줌 리액션만 있는 창은 거절.
+    moments: list[ShortCandidate] = []
+    for cl in clusters:
+        cause = min((c.anchor for c in cl if "item" in c.evidence.get("anchor_kinds", [])), default=None)
+        pool = [c for c in cl if cause is not None and c.start <= cause <= c.end] or cl
+        best = max(pool, key=lambda c: (c.score + (0.02 if c.variant == "story" else 0.0)))
+        moments.append(best)
+    moments.sort(key=lambda c: -c.score)
+    final: list[ShortCandidate] = moments[:k]
+    # 참고용: 같은 순간의 다른 variant 는 meta 로만 남긴다 (index 에서 '대안' 으로 표시 가능)
+    for c in final:
+        c.evidence["alternatives"] = [f"{o.variant} {fmt_time(o.start)}-{fmt_time(o.end)} {o.score:.2f}" for o in kept
+                                      if o is not c and (abs(o.anchor - c.anchor) <= moment_gap)][:3]
     # 상단 자막 제안: 전사 대사 + 사전 아이템명
     tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
     try:
@@ -383,12 +415,11 @@ def save_shorts(cands: list[ShortCandidate], path: Path) -> None:
 
 
 def pretty(cands: list[ShortCandidate]) -> str:
-    lines = []
-    for v in VARIANTS:
-        lines.append(f"[{v}]")
-        for i, c in enumerate([c for c in cands if c.variant == v], 1):
+    lines = ["[moments]  (한 순간에 한 클립, variant 혼합. 대안은 evidence.alternatives)"]
+    if True:
+        for i, c in enumerate(cands, 1):
             ax = c.axes
-            lines.append(f"  {i}. {fmt_time(c.start)}-{fmt_time(c.end)} ({c.duration:.0f}s)  score={c.score:.2f}  "
+            lines.append(f"  {i}. [{c.variant}] {fmt_time(c.start)}-{fmt_time(c.end)} ({c.duration:.0f}s)  score={c.score:.2f}  "
                          f"anchor={fmt_time(c.anchor)} {'+'.join(c.evidence['anchor_kinds'])}  "
                          f"P{ax['payoff']:.0f} R{ax['reaction']:.1f} C{ax['chat']:.1f} K{ax['completeness']:.1f} H{ax['hook']:.1f} -{ax['penalty']:.1f}"
                          f"  cuts={c.evidence['n_cuts']}  hook={c.hook_mode}  자막={' / '.join(c.hook_lines)}")

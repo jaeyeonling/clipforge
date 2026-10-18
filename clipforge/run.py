@@ -259,18 +259,31 @@ def cmd_harvest(a):
         if lab_p.exists():
             with open(lab_p, encoding="utf-8", newline="") as f:
                 rows = list(_csv.DictReader(f))
-        existing = {(r["start"], r["end"]) for r in rows if r.get("label") == "keep"}
+        existing = {(r["start"], r["end"], r["label"]) for r in rows if r.get("label") in ("keep", "no")}
         added = 0
         for name in kept:
             r = index[name]
-            key = (f"{r['start']:.1f}", f"{r['end']:.1f}")
+            key = (f"{r['start']:.1f}", f"{r['end']:.1f}", "keep")
             if key in existing:
                 continue
             rows.append({"start": key[0], "end": key[1], "label": "keep", "note": f"harvest {name}"})
             added += 1
+        # no/ 폴더: mp4 를 옮기거나 <파일명>.txt 마커(내용 = 사유: 재미없음/임팩트없음/중복/잘림 …)
+        no_dir = REVIEW / a.vid / "shorts" / "no"
+        for p in list(no_dir.glob("*.mp4")) + list(no_dir.glob("*.mp4.txt")):
+            name = p.name[:-4] if p.name.endswith(".txt") else p.name
+            if name not in index:
+                continue
+            r = index[name]
+            key = (f"{r['start']:.1f}", f"{r['end']:.1f}", "no")
+            if key in existing:
+                continue
+            reason = p.read_text(encoding="utf-8").strip() if p.suffix == ".txt" else ""
+            rows.append({"start": key[0], "end": key[1], "label": "no", "note": f"harvest-no {name} {reason}".strip()})
+            added += 1
         with open(lab_p, "w", encoding="utf-8", newline="") as f:
             w = _csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader(); w.writerows(rows)
-        print(f"[harvest --shorts] {added} new keep labels ({len(kept)} files in keep/) -> {lab_p}")
+        print(f"[harvest --shorts] {added} new labels (keep: {len(kept)} files, no: {len(list(no_dir.glob('*')))} markers) -> {lab_p}")
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
     kept = {p.name.split("_")[0] for p in (REVIEW / a.vid / "keep").glob("*.mp4")}

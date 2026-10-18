@@ -33,10 +33,12 @@ class ShortsReport:
 
 def evaluate_shorts(cands: list[ShortCandidate], labels: Segments, ks=(1, 3, 5), min_overlap: float = 3.0) -> list[ShortsReport]:
     reports = []
-    for variant in sorted({c.variant for c in cands}):
-        ranked = [c for c in cands if c.variant == variant]
-        rep = ShortsReport(variant, len(labels.items))
+    for variant in ["all"]:                       # 순간 단위 단일 랭킹 (variant 혼합)
+        ranked = list(cands)
+        rep = ShortsReport(variant, len([l for l in labels.items if l.label != "no"]))
         for lab in labels.items:
+            if lab.label == "no":                 # 거절 라벨은 hit 계산에서 제외 (별도 표시)
+                continue
             key = f"{fmt_time(lab.start)}-{fmt_time(lab.end)} {lab.label} {lab.meta.get('note', '')}"
             first = None
             for i, c in enumerate(ranked, 1):
@@ -46,5 +48,10 @@ def evaluate_shorts(cands: list[ShortCandidate], labels: Segments, ks=(1, 3, 5),
             rep.first_rank[key] = first
         for k in ks:
             rep.hits_at[k] = sum(1 for r in rep.first_rank.values() if r and r <= k)
+        nos = [l for l in labels.items if l.label == "no"]
+        if nos:
+            top3 = ranked[:3]
+            bad = sum(1 for l in nos if any(max(0.0, min(c.end, l.end) - max(c.start, l.start)) >= 0.5 * (l.end - l.start) for c in top3))
+            rep.first_rank[f"(거절 라벨 {len(nos)}개 중 상위 3 에 남은 것)"] = bad
         reports.append(rep)
     return reports

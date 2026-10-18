@@ -105,14 +105,39 @@ S.ready();
 </script>`);
 }
 
+/** 메뉴는 숨기지만(autoHideMenuBar) 편집·보기 단축키는 살린다: Ctrl+C/V/X/A/Z, Ctrl+R, F12. */
+function installMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: "편집", submenu: [{ role: "undo", label: "실행 취소" }, { role: "redo", label: "다시 실행" }, { type: "separator" }, { role: "cut", label: "잘라내기" }, { role: "copy", label: "복사" }, { role: "paste", label: "붙여넣기" }, { role: "selectAll", label: "전체 선택" }] },
+    { label: "보기", submenu: [{ role: "reload", label: "새로고침" }, { role: "toggleDevTools", label: "개발자 도구" }, { type: "separator" }, { role: "resetZoom", label: "원래 크기" }, { role: "zoomIn", label: "확대" }, { role: "zoomOut", label: "축소" }, { type: "separator" }, { role: "togglefullscreen", label: "전체 화면" }] },
+  ]));
+}
+
 function createWindow() {
+  installMenu();
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 980, minHeight: 640,
-    backgroundColor: "#0b0a09", title: "clipforge", show: false,
+    backgroundColor: "#17171c", title: "clipforge", show: false,
     icon: path.join(ASSETS, "icon.png"), autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.once("ready-to-show", () => win.show());
+  // 오른쪽 클릭 메뉴: 복사·붙여넣기·전체 선택. Electron 은 기본 컨텍스트 메뉴가 없어서 직접 단다.
+  win.webContents.on("context-menu", (_e, params) => {
+    const ef = params.editFlags || {};
+    const items = [];
+    if (params.isEditable) {
+      items.push({ role: "undo", label: "실행 취소", enabled: ef.canUndo }, { role: "redo", label: "다시 실행", enabled: ef.canRedo }, { type: "separator" },
+        { role: "cut", label: "잘라내기", enabled: ef.canCut }, { role: "copy", label: "복사", enabled: ef.canCopy }, { role: "paste", label: "붙여넣기", enabled: ef.canPaste }, { type: "separator" },
+        { role: "selectAll", label: "전체 선택" });
+    } else if (params.selectionText && params.selectionText.trim()) {
+      items.push({ role: "copy", label: "복사" });
+    }
+    if (params.linkURL) items.push({ label: "링크 복사", click: () => require("electron").clipboard.writeText(params.linkURL) });
+    if (params.mediaType === "image" && params.srcURL) items.push({ label: "이미지 복사", click: () => win.webContents.copyImageAt(params.x, params.y) });
+    if (!items.length) items.push({ role: "selectAll", label: "전체 선택" });
+    Menu.buildFromTemplate(items).popup({ window: win });
+  });
   win.loadURL(bootHtml("엔진을 준비하는 중…", "", true));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
   win.on("close", (e) => {

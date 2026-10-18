@@ -116,3 +116,11 @@ cd desktop && npm install
 npm start          # 창 + 엔진 (8765 에 엔진이 이미 떠 있으면 그것에 붙음)
 npm run smoke      # 자동 점검: 창·엔진 준비 확인 후 5초 뒤 종료, 로그는 %APPDATA%\clipforge\shell.log
 ```
+
+## 배포 번들 (포터블 엔진) — `engine-dist/`
+설치본의 몸통. 임베더블 파이썬 + 패키지 + 엔진 코드 + 화면 + ffmpeg + Whisper 모델을 한 폴더에 모은다 (관리자 권한·레지스트리 불필요).
+```
+python scripts/build_engine_dist.py --smoke     # 구성 + 번들 파이썬으로 엔진을 띄워 health 확인
+set CLIPFORGE_ENGINE_DIST=1 && cd desktop && npm start   # 껍데기를 번들 런타임으로 띄워 보기
+```
+데이터(영상·캐시·라벨)는 `CLIPFORGE_DATA` 로 분리한다. 설치본에서는 껍데기가 `%APPDATA%/clipforge/data` 를 넘긴다.

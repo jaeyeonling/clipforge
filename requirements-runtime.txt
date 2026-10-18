@@ -1,0 +1,15 @@
+# 배포 런타임용 (requirements.txt 에서 개발 전용 제외). scripts/build_engine_dist.py 가 생성
+numpy
+Pillow
+rapidocr
+onnxruntime
+PyYAML
+rapidfuzz
+faster-whisper
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+opentimelineio
+otio-fcp-adapter
+fonttools
+fastapi
+uvicorn[standard]

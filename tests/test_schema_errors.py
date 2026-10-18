@@ -112,3 +112,15 @@ def test_http_error_shapes(tmp_project):
     assert r.status_code == 404
     h = client.get("/api/health").json()
     assert "problems" in h and "engine_version" in h and h["schema"]["meta"] == SCHEMA["meta"]
+
+
+# ---------- 배포 번들: ffmpeg 탐색 순서 (번들 bin/ > CLIPFORGE_FFMPEG > PATH) ----------
+def test_find_ffmpeg_prefers_bundle_bin(tmp_path, monkeypatch):
+    from clipforge import project
+    (tmp_path / "bin").mkdir(); (tmp_path / "bin" / "ffmpeg.exe").write_bytes(b"")
+    monkeypatch.setattr(project, "APP_ROOT", tmp_path)
+    assert project.find_ffmpeg() == tmp_path / "bin"
+    (tmp_path / "bin" / "ffmpeg.exe").unlink()
+    other = tmp_path / "x"; other.mkdir(); (other / "ffmpeg.exe").write_bytes(b"")
+    monkeypatch.setenv("CLIPFORGE_FFMPEG", str(other))
+    assert project.find_ffmpeg() == other

@@ -63,8 +63,18 @@ def transcribe_faster(wav: Path, cfg: dict, language: str) -> dict:
     _add_nvidia_dlls()
     from faster_whisper import WhisperModel
     t0 = time.time()
-    model = WhisperModel(cfg.get("model", "large-v3-turbo"), device=cfg.get("device", "cuda"),
-                         compute_type=cfg.get("compute_type", "int8_float16"))
+    name = cfg.get("model", "large-v3-turbo")
+    local = ROOT / "models" / f"faster-whisper-{name}"          # 배포 번들(engine-dist/models) → 오프라인
+    src = str(local) if (local / "model.bin").exists() else name
+    device, compute = cfg.get("device", "cuda"), cfg.get("compute_type", "int8_float16")
+    try:
+        model = WhisperModel(src, device=device, compute_type=compute)
+    except Exception as e:  # noqa: BLE001 — CUDA 런타임/드라이버 없음 → CPU 로 (약 20배 느림)
+        if device == "cpu":
+            raise
+        print(f"  (faster-whisper {device} 실패: {str(e)[:120]} → cpu/int8 폴백)")
+        device, compute = "cpu", "int8"
+        model = WhisperModel(src, device=device, compute_type=compute)
     # PyAV 버전 충돌(av.open metadata_errors)을 피하려고 WAV 를 직접 읽어 16kHz float32 배열로 넘긴다.
     import wave
     import numpy as np
@@ -77,7 +87,7 @@ def transcribe_faster(wav: Path, cfg: dict, language: str) -> dict:
     for s in segments:
         segs.append({"start": round(s.start, 3), "end": round(s.end, 3), "text": s.text.strip(),
                      "words": [{"start": round(w.start, 3), "end": round(w.end, 3), "word": w.word} for w in (s.words or [])]})
-    return {"backend": "faster_whisper", "model": cfg.get("model", "large-v3-turbo"), "language": language,
+    return {"backend": "faster_whisper", "model": name, "device": device, "compute_type": compute, "source": src, "language": language,
             "elapsed_s": round(time.time() - t0, 1), "segments": segs}
 
 

@@ -17,6 +17,10 @@ function resolveEngine(app) {
   }
   if (app.isPackaged) {
     const dir = path.join(process.resourcesPath, "engine");
+    return { py: path.join(dir, "python.exe"), cwd: dir, dataRoot: path.join(app.getPath("userData"), "data") };
+  }
+  if (process.env.CLIPFORGE_ENGINE_DIST === "1") {                 // 개발 중 번들 런타임 점검: engine-dist/ 로 띄운다
+    const dir = path.join(REPO, "engine-dist");
     return { py: path.join(dir, "python.exe"), cwd: dir };
   }
   const venv = path.join(REPO, ".venv", "Scripts", "python.exe");
@@ -67,11 +71,13 @@ class Engine {
     const pick = await pickPort(preferred);
     this.port = pick.port; this.external = pick.external;
     if (pick.external) { this.log(`engine: 이미 떠 있는 엔진에 연결 ${this.url}`); return this.waitReady(5000); }
-    const { py, cwd } = resolveEngine(this.app);
+    const { py, cwd, dataRoot } = resolveEngine(this.app);
     if (!fs.existsSync(py) && py !== "python") throw new Error(`엔진 파이썬을 찾지 못했습니다: ${py}`);
     const args = ["-m", "clipforge.app", "--no-browser", "--port", String(this.port)];
-    this.log(`engine: spawn ${py} ${args.join(" ")} (cwd ${cwd})`);
-    this.proc = spawn(py, args, { cwd, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const env = { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" };
+    if (dataRoot && !env.CLIPFORGE_DATA) { fs.mkdirSync(dataRoot, { recursive: true }); env.CLIPFORGE_DATA = dataRoot; }   // 설치본: 사용자 데이터는 앱 폴더 밖
+    this.log(`engine: spawn ${py} ${args.join(" ")} (cwd ${cwd}${env.CLIPFORGE_DATA ? ", data " + env.CLIPFORGE_DATA : ""})`);
+    this.proc = spawn(py, args, { cwd, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     this.proc.stdout.on("data", (d) => this.log(`[engine] ${String(d).trimEnd()}`));
     this.proc.stderr.on("data", (d) => this.log(`[engine] ${String(d).trimEnd()}`));
     this.proc.on("exit", (code, sig) => { this.log(`engine: exit code=${code} sig=${sig}`); this.proc = null; if (this.onExit) this.onExit(code); });

@@ -159,7 +159,21 @@
 - `engine.js`: 엔진 사이드카. 파이썬 탐색(개발: 저장소 `.venv`, 배포: `resources/engine/python.exe`, 환경변수 `CLIPFORGE_ENGINE_PY` 로 덮어씀) → 포트 선택(8765 에 **이미 우리 엔진이 떠 있으면 그대로 붙고**, 아니면 빈 포트) → spawn(stdout/stderr 를 쉘 로그로) → `/api/health` 가 200 될 때까지 대기(최대 60초) → 종료 시 `taskkill /T /F`.
 - `main.js`: 창(부팅 화면 → 엔진 URL 로드, 외부 링크는 시스템 브라우저, 닫기 = 트레이로 숨김), 트레이(열기·상태·로그 폴더·브라우저에서 열기·종료), `/ws` 구독으로 진행률을 트레이 메뉴에, 완료/오류를 OS 알림으로. 단일 인스턴스. `--smoke` 는 창+엔진 준비 후 5초 뒤 자동 종료(점검용). 쉘 로그 `%APPDATA%/clipforge/shell.log`.
 - `preload.js`: contextIsolation/sandbox 켜고 정보성 값만 노출. 화면은 HTTP/WS 로 엔진과 직접 대화하므로 IPC 가 필요 없다 — **stdio JSON Lines 전송은 다른 껍데기(C#·CLI 자동화)를 위해 유지**하되 Electron 은 쓰지 않는다 (결정: 화면 코드가 브라우저·Electron 에서 동일).
-- `package.json` 의 `build` 블록은 electron-builder NSIS 설정 자리(아이콘·extraResources: app/dist → ui, engine-dist → engine). **남은 것**: 포터블 파이썬 런타임(`engine-dist/`: python embeddable + 패키지 + ffmpeg + 모델 + 폰트) 구성, electron-builder 로 설치본, 자동 업데이트(electron-updater, 배포 서버 결정 뒤).
+- `package.json` 의 `build` 블록은 electron-builder NSIS 설정 자리(아이콘·extraResources: engine-dist → engine). **남은 것**: electron-builder 로 설치본, 자동 업데이트(electron-updater, 배포 서버 결정 뒤).
+
+**`engine-dist/` 포터블 엔진 런타임 (2026-10-18 밤, `scripts/build_engine_dist.py --smoke`)** — 설치본의 몸통. 관리자 권한·레지스트리·PATH 불필요, 폴더째 옮겨도 동작(상대 경로만).
+| 구성 | 내용 | 용량 |
+|---|---|---|
+| python.exe + `python312._pth` | python.org 임베더블 3.12.10 (`[zip, ., Lib\site-packages, import site]` — PYTHONPATH·사용자 site 무시 → 격리) | 11MB |
+| Lib/site-packages | `requirements-runtime.txt`(개발 전용 pytest·httpx 제외) 를 개발 venv 의 pip 로 `--target` 설치 | 2.0GB (그중 NVIDIA cuBLAS/cuDNN 1.9GB) |
+| clipforge/ games/ data/ assets/ app/dist/ | 엔진·프로필·사전·폰트·화면. `APP_ROOT` = engine-dist | 5MB |
+| bin/ffmpeg.exe, ffprobe.exe | Gyan full 9.0.2 (GPL 고지 동봉). `find_ffmpeg` 가 번들 bin/ 을 PATH 보다 먼저 봄 | 434MB |
+| models/faster-whisper-large-v3-turbo | HF 캐시 스냅샷 복사. `transcribe` 가 로컬 폴더 우선 → 오프라인(HF_HUB_OFFLINE 에서 검증), GPU 실패 시 CPU/int8 폴백 | 1.6GB |
+| **합계** | | **4.5GB** |
+- 검증: 번들 파이썬만으로(PATH=bin) 엔진 기동 → health 전부 OK(ffmpeg·NVENC·GPU·Whisper GPU·OCR·폰트), Electron `CLIPFORGE_ENGINE_DIST=1 --smoke` 통과, ep59 오디오 오프라인 전사 OK.
+- 데이터 분리: 껍데기가 설치본에서 `CLIPFORGE_DATA=%APPDATA%/clipforge/data` 를 넘긴다(§6 원칙: 업데이트가 라벨을 지우지 않음).
+- 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 친구 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
+- 주의: 번들 안에서 `ffmpeg_whisper` 폴백(ggml 모델)은 넣지 않았다. 전사 폴백은 faster-whisper CPU 로 충분하다.
 
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 

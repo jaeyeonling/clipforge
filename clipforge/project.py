@@ -21,10 +21,13 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_ffmpeg() -> Path | None:
-    cands: list[Path] = [APP_ROOT / "bin"]
+    cands: list[Path] = [APP_ROOT / "bin"]                      # 1) 번들(engine-dist/bin) 이 항상 우선
     if os.environ.get("CLIPFORGE_FFMPEG"):
-        cands.append(Path(os.environ["CLIPFORGE_FFMPEG"]))
-    exe = shutil.which("ffmpeg")
+        cands.append(Path(os.environ["CLIPFORGE_FFMPEG"]))        # 2) 명시 지정
+    for c in cands:
+        if (c / "ffmpeg.exe").exists() or (c / "ffmpeg").exists():
+            return c
+    exe = shutil.which("ffmpeg")                                  # 3) PATH
     if exe:
         return Path(exe).parent
     local = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"

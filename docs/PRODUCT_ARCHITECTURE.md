@@ -248,7 +248,7 @@
 | 2. UI v1 | 회차 추가 → 실행 → 리뷰(재생·판정) → 내보내기 | 친구가 설명 없이 한 회차 처리 |
 | 3. Premiere 검증 | XML 임포트·세로 시퀀스·SRT 캡션 | 친구 Premiere 에서 실사용 1회 |
 | 4. 라이브 v1 | 득템 배너 자동 갱신(승인 모드) + 북마크 | 방송 1회 무사고, 오탐 0 |
-| 5. Phase 2 | 원본 VOD → 편집 포인트 | recall ≥ 0.95, coverage ≤ 10% |
+| 5. Phase 2 | 원본 VOD → 편집 포인트 — **파이프라인 구현됨(2026-10-19)**: 회차 종류 original, 원본용 신호 세트(common.yaml pipelines), 배너 OCR 변화 감지 모드, 단계 candidates/align/eval, 편집 포인트 탭(원본 재생·kept/no). 실측은 원본 VOD 입수 뒤 | recall ≥ 0.95, coverage ≤ 10% |
 | 6. 배포 | 설치본·업데이트·고지 | 깨끗한 PC 설치 성공 |
 
 ## 12. 결정 요청

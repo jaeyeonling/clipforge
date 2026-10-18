@@ -137,3 +137,7 @@ python -m clipforge.run eval <orig>                       # 후보 vs kept → r
 ## 라이브 (방송 중) — 라이브 탭
 화면을 1초에 한 장 보고 세트·유니크 아이템 라벨이 뜨면 "배너에 추가?" 제안을 올린다(승인 모드). 승인하면 득템 배너 텍스트와 OBS 텍스트 소스가 바뀌고 북마크가 남는다.
 OBS 연동: OBS → 도구 → WebSocket 서버 설정(포트 4455, 비밀번호) → 라이브 탭에서 연결 확인 → 텍스트 소스 선택. GPU 는 쓰지 않는다. 설계·검증: docs/design/LIVE.md.
+
+## 친구에게 전달
+- 온라인: GitHub Releases (`scripts/publish_github.py`) + 사용 안내 `docs/USER_GUIDE.md`
+- 오프라인(USB): `python scripts/make_usb_release.py --out E:/clipforge-release` → 폴더째 전달. 친구는 1-설치 → 2-위치등록.cmd → 앱 실행.

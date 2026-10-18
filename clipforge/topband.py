@@ -70,7 +70,12 @@ def title_band(lines: list[str], path: Path, height: int = TITLE_H, font_kind: s
         tw = d.textlength(l, font=f)
         x = (W - tw) / 2
         bbox = f.getbbox(l)
-        d.text((x, y - bbox[1]), l, font=f, fill=(20, 20, 20), stroke_width=3, stroke_fill=(20, 20, 20))
+        # 손글씨체는 FreeType 스트로커(stroke_width)가 일부 글리프(예: '참'의 ㅊ)를 속 빈 획으로 그린다.
+        # 윤곽선 방향과 무관하게 굵어지도록 글자를 작은 오프셋으로 여러 번 찍어 '가짜 볼드' 처리.
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                if dx * dx + dy * dy <= 5:
+                    d.text((x + dx, y - bbox[1] + dy), l, font=f, fill=(20, 20, 20))
         y += h + gap
     img.save(path)
     return path

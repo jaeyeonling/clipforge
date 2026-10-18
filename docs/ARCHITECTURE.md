@@ -66,7 +66,9 @@ videos/<id>.mp4 ─▶ L0 prep ─▶ cache/<id>/{meta.json, audio.wav, frames/}
 | `audio_spike` | Curve | 직전 5s 평균 대비 상승분 | e-kemeny 방식. 지속적 큰 소리(전투 BGM)와 "갑자기 큰 소리"를 구분 |
 | `frame_motion` | Curve | 1fps 프레임차 | 현재 구현 |
 | `ui_state` | Events(mask) | `{town, inventory, menu, loading, dungeon_select}` 구간 | 게임 프로필의 템플릿/색 ROI로 판정. **억제 마스크**로 사용 |
-| `item_banner` | Events | `{t, added_text}` | **D2 1순위.** 좌상단 "특템 :" 배너 ROI를 1fps OCR, 텍스트가 길어지는 시각을 이벤트로. 6절 참조 |
+| `item_banner` | Events | `{t, added_text}` | **D2 1순위.** 좌상단 "득템 :" 배너 ROI를 3초 coarse OCR → 변화 구간만 1초, 안정 상태 전이에서 글자가 늘어난 시각을 이벤트로. 6.1절 참조 |
+| `edit_emphasis` | Events | `{t_start, t_end, kind}` | **Phase 1 전용.** 편집본에서 배너 소실·흰 카드·타이틀 자막 구간 = 친구가 줌/카드로 강조한 지점. 쇼츠 후보 순위에 직접 반영 |
+| `cut_density` | Curve | 30초 창 내 scdet 컷 수 | **Phase 1 전용.** 잘게 자른 구간 = 긴장. ffmpeg `scdet=t=10` 로그 파싱 |
 | `d2_item_label` | Events | `{t, quality, text, matched_name}` | HSV 마스크(gold/green/orange/yellow) → 어두운 박스 contour → OCR → 이름 사전(rapidfuzz). 룬·유니크·세트만 이벤트. 배너에 안 적히는 드랍 보완용 |
 | `dnf_result` | Events | 던전 클리어/결과창, 보스 HP 0 | 템플릿 매칭(TM_CCOEFF_NORMED ≥ 0.8) |
 | `speech_keyword` | Events | 트랜스크립트에서 감탄사/키워드 시각 | faster-whisper(large-v3-turbo) 또는 ffmpeg whisper 필터. 한국어 사전은 `games/common.yaml` |
@@ -194,6 +196,13 @@ clipforge/
 | OCR 글자 크기 | 4K 기준 배너 글자 높이 ≈45px, 바닥 아이템 라벨 ≈40px | 원본이 4K면 `frames/`는 **1080p**(라벨 20px)로. 배너 ROI는 별도로 네이티브 해상도 크롭 저장(`rois/banner/%06d.png`, 작음) |
 
 > 아직 모름: 원본 녹화의 해상도/길이(최종본과 같은 4K60일 가능성 높음), 원본이 OBS 로컬 녹화인지 플랫폼 VOD인지, BGM 추가 여부.
+
+### 6.1 `item_banner` 프로토타입 결과 (`experiments/banner_proto.py`, 같은 영상)
+- RapidOCR 한국어 PP-OCRv5 mobile, CPU onnxruntime. 배너 크롭(1700×320) 1장 ≈ 1.4~2.0초. 3초 간격 + 변화 구간 정밀화로 631회 호출, 총 500초. → 1fps 전수 OCR은 비싸므로 **"3초 coarse → 변화 구간만 1초"** 전략을 신호 구현에 그대로 채택. GPU onnxruntime로 가면 수 배 단축 가능.
+- 인식 품질: 아이템명 거의 정확(스웹벨트, 레이븐링, 말룬, 기드참(매찬34), 에테강철그늘, 탈라샤 갑옷, 신타이탄, 에테갑옷(방783)). 오인식 패턴: 득템→득렘/특램, 횃불→팻불, ★→츠. **프레임 간 jitter**가 있어 1초 단위 diff는 가짜 이벤트가 많음 → **3초 이상 유지된 "안정 상태" 간 전이**만 이벤트로 (구현에 반영).
+- 검출된 득템 추가 이벤트: 4:54 스웹벨트, 6:45 레이븐링, 7:47 기드참(34), 8:33 기드참(23)+에테강철그늘, 10:59 탈라샤갑옷·신타이탄·에테갑옷·드루횃불(편집본이라 여러 개가 한 컷에 몰림). 영상 제목의 "지존참"(3맥20어레20피 스몰참)은 2:51~3:27 사이 추가.
+- 모든 이벤트가 scdet 컷 군집(4:50~4:58, 6:52~6:59, 7:40~7:55, 8:27~8:45, 10:58)과 겹침 → 친구는 드랍 순간을 반드시 남긴다. Phase 2에서 이 신호 하나로 drop 계열 recall이 높을 것으로 기대.
+- **배너 소실(RESET)도 신호**: 3:30~3:42 배너가 사라진 이유는 친구가 **채팅 오버레이를 줌인**한 편집("헐 지참 나왔어요??"). 즉 배너 RESET ≈ 줌/카드 삽입 ≈ **친구가 강조한 지점**. Phase 1(쇼츠)에서는 이게 가장 직접적인 "친구 취향" 신호. 신호명 `edit_emphasis`(줌·카드·타이틀 구간)로 추가.
 
 ## 7. 열린 결정 (사용자 확인 필요)
 1. ~~디아블로2 버전~~ → **D2R 한국어, 페이스캠 없음** 확정.

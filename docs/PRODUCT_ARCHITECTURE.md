@@ -145,7 +145,15 @@
 5. 오프라인 동작, 로그·크래시 수집(로컬 파일, 전송은 사용자 동의).
 6. 긴 작업은 진행률·ETA·취소가 항상 보인다(지금 Job 러너가 제공).
 
-이행 순서: 지금 `ui/`(빌드 없는 바닐라 314줄)는 실험용으로 유지 → Phase 0 지표가 나오면 React+Vite 로 화면을 다시 만들고(기능은 동일, 디자인 시스템 적용) → Electron 껍데기(사이드카·트레이·업데이터) → NSIS 설치본. 엔진 API 는 변하지 않으므로 UI 교체가 엔진 작업을 막지 않는다.
+이행 순서: ✅ React+Vite 화면(`app/`, 2026-10-18 밤) → Electron 껍데기(사이드카·트레이·업데이터) → NSIS 설치본. 엔진 API 는 변하지 않으므로 UI 교체가 엔진 작업을 막지 않는다.
+
+**`app/` 구조 (React 18 + TypeScript + Vite 6, 의존성은 react/react-dom 뿐)**
+- `src/api/` — `types.ts`(엔진 반환 타입), `client.ts`(fetch 래퍼, 모든 오류를 ApiError{code,hint,kind} 로), `ws.ts`(useEngineEvents: /ws 자동 재연결)
+- `src/state/store.tsx` — AppProvider 하나: health·회차·선택·작업·활성 작업·로그·오류 카드·토스트·tick(데이터 변경 신호). WS 이벤트가 여기서 상태를 갱신한다.
+- `src/components/ui.tsx` — Button/Badge/Card/Empty/Progress/Spinner/Toasts/Tabs + fmtTime 류. `src/styles/tokens.css`(디자인 토큰: 다크, 브랜드 노랑 `--accent`), `app.css`(골격·컴포넌트).
+- `src/features/` — Header(상태 칩·실행 중 배지·연결 끊김) + Alerts(health.problems 배너), Sidebar(회차 목록·단계 점·등록), Pipeline(단계 선택 그리드·프리셋·실행/취소·진행률·오류 카드·로그 창), Candidates(필터·카드·keep/no), Calibration(점검·미리보기·ROI 편집), Metrics(지표 표 + 작업 이력 → 로그).
+- 개발: `npm run dev`(5173, /api·/media·/ws 를 8765 로 프록시). 배포: `npm run build` → `dist/` 를 엔진 `project.ui_dir` 가 자동 서빙(없으면 예전 `ui/`). Node 는 포터블(`C:/Users/jaeye/tools/node`, PATH 에 추가해 사용).
+- 다음 화면 작업: 후보 카드 드래그 정렬/비교 보기, ROI 드래그 편집(지금은 수치), 키보드 판정(K/N), 라이브 탭 자리.
 
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 

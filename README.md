@@ -99,3 +99,12 @@ Curve(연속값)든 Segments(이벤트)든 공통 포맷으로만 내놓으면 `
 |---|---|---|
 | `audio_loudness` | audio.wav | RMS dB, 중앙값 대비. hop 0.5s |
 | `frame_motion` | frames/ | 1fps 프레임 간 평균 절대 차이(160×90 축소). 정적 구간 탐지용 |
+
+
+## 화면 (React + Vite) — `app/`
+엔진은 `python -m clipforge.app` (127.0.0.1:8765). 화면은 `app/dist` 가 있으면 그걸, 없으면 `ui/`(예전 바닐라)를 서빙한다.
+```
+set PATH=C:/Users/jaeye/tools/node;%PATH%      # 포터블 Node 22
+cd app && npm install && npm run build         # → app/dist (엔진이 서빙)
+npm run dev                                    # 개발 서버 5173, API 는 8765 로 프록시
+```

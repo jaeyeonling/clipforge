@@ -173,7 +173,7 @@ function ComparePanel({ items, onDecide, onClose, onRemove }: { items: Candidate
       <div className={cx("compare-grid", items.length === 1 && "one")}>
         {items.map((c, i) => (
           <div key={keyOf(c)} className={cx("compare-item", c.decision)}>
-            {c.media_url ? <video ref={(el) => { refs.current[i] = el; }} src={c.media_url} controls preload="metadata" playsInline /> : <div className="novideo">초안 없음</div>}
+            {c.media_url ? <video ref={(el) => { refs.current[i] = el; }} data-group="compare" src={c.media_url} controls preload="metadata" playsInline /> : <div className="novideo">초안 없음</div>}
             <div className="row between" style={{ marginTop: 6 }}>
               <span className="small"><b>#{c.rank}</b> {c.variant} · {fmtTime(c.start)}–{fmtTime(c.end)} · {Math.round(c.end - c.start)}s · 점수 {Number(c.score).toFixed(2)}</span>
               <span className="row">

@@ -31,6 +31,18 @@ function Main() {
     else if (lastDone.stages.includes("candidates") || lastDone.stages.includes("align")) setTab("editpoints");
   }, [lastDone, selected?.id]);
 
+  // 영상은 한 번에 하나만: 어떤 <video> 가 재생을 시작하면 같은 그룹(비교 패널)이 아닌 나머지를 멈춘다
+  useEffect(() => {
+    const onPlay = (e: Event) => {
+      const v = e.target;
+      if (!(v instanceof HTMLVideoElement)) return;
+      const group = v.dataset.group || "";
+      document.querySelectorAll("video").forEach((o) => { if (o !== v && !o.paused && (!group || (o.dataset.group || "") !== group)) o.pause(); });
+    };
+    document.addEventListener("play", onPlay, true);
+    return () => document.removeEventListener("play", onPlay, true);
+  }, []);
+
   const running = !!activeJob && (activeJob.status === "running" || activeJob.status === "queued");
   return (
     <div className="main">

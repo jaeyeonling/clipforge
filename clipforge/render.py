@@ -62,7 +62,8 @@ def crop_track(c: ShortCandidate, ui: list[dict] | None, W: int, side: int, cx_d
 
 
 def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file: str, cx: float = 0.5,
-              nvenc: bool = True, cmd_file: str | None = None, x0_init: int | None = None) -> list[str]:
+              nvenc: bool = True, cmd_file: str | None = None, x0_init: int | None = None,
+              sub_file: str | None = None) -> list[str]:
     W, H = meta["width"], meta["height"]
     side = H                                     # 정사각 크롭 변 = 원본 높이
     x0 = x0_init if x0_init is not None else int(max(0, min(W - side, cx * W - side / 2)))
@@ -81,7 +82,11 @@ def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file
     fc.append(f"color=c=black:s=1080x{TOP_H}:d={dur:.2f}[top]")
     fc.append(f"[top]drawtext=fontfile='{FONT}':textfile={hook_file}:fontcolor=white:fontsize=60:line_spacing=18:"
               f"borderw=3:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2[topt]")
-    fc.append("[topt][game][chat]vstack=inputs=3[v]")
+    if sub_file:
+        fc.append("[topt][game][chat]vstack=inputs=3[v0]")
+        fc.append(f"[v0]subtitles={sub_file}[v]")          # 대사 자막 (ASS, libass). 경로는 cwd 기준 상대경로
+    else:
+        fc.append("[topt][game][chat]vstack=inputs=3[v]")
     cmd = ["ffmpeg", "-y", "-v", "error"]
     if nvenc:
         cmd += ["-hwaccel", "cuda"]
@@ -94,7 +99,8 @@ def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, hook_file
 
 
 def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int | None = None,
-                  cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0) -> list[dict]:
+                  cx: float = 0.5, ui: list[dict] | None = None, ease: float = 0.0,
+                  transcript: dict | None = None, subs: bool = True) -> list[dict]:
     """ui = ui_state 구간 목록 [{start, end, label}] — 있으면 크롭 중심이 인벤토리/캐릭터창을 따라간다."""
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Path(meta["source"])
@@ -114,21 +120,32 @@ def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int
         cmd_file = name.replace(".mp4", ".cmd")
         moves = sum(1 for a, b in zip(track, track[1:]) if a[1] != b[1])
         (out_dir / cmd_file).write_text("".join(f"{t:.2f} crop@game x {x};\n" for t, x in track), encoding="utf-8")
-        cmd = build_cmd(src, c, meta, name, hook_file, cx, cmd_file=cmd_file, x0_init=track[0][1])
+        sub_file = None
+        n_cues = 0
+        if subs and transcript:
+            from .subtitles import cues_for_clip, write_ass, write_srt
+            cues = cues_for_clip(transcript, c.start, c.end)
+            if cues:
+                sub_file = name.replace(".mp4", ".ass")
+                # 게임 영역 하단 HUD(구슬·벨트, 약 180px) 위에 놓는다
+                write_ass(cues, out_dir / sub_file, c.start, margin_v=CHAT_H + 180)
+                write_srt(cues, out_dir / name.replace(".mp4", ".srt"), c.start)
+                n_cues = len(cues)
+        cmd = build_cmd(src, c, meta, name, hook_file, cx, cmd_file=cmd_file, x0_init=track[0][1], sub_file=sub_file)
         try:
             subprocess.run(cmd, check=True, cwd=out_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
             print(f"  ! nvenc failed ({e.stderr.decode(errors='ignore')[-200:].strip()}), retry libx264")
             subprocess.run(build_cmd(src, c, meta, name, hook_file, cx, nvenc=False, cmd_file=cmd_file,
-                                     x0_init=track[0][1]), check=True, cwd=out_dir,
+                                     x0_init=track[0][1], sub_file=sub_file), check=True, cwd=out_dir,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         (out_dir / hook_file).unlink(missing_ok=True)
         (out_dir / cmd_file).unlink(missing_ok=True)
-        print(f"  {name}  (crop moves: {moves})")
+        print(f"  {name}  (crop moves: {moves}, subtitle cues: {n_cues})")
         index.append({"file": name, "variant": c.variant, "rank": rank, "start": c.start, "end": c.end,
                       "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
                       "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
-                      "crop_moves": moves})
+                      "crop_moves": moves, "subtitle_cues": n_cues})
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
     return index
@@ -142,6 +159,7 @@ def index_md(index: list[dict], meta: dict) -> str:
         why = "+".join(ev.get("anchor_kinds", [])) + (f", 컷{ev.get('n_cuts', 0)}" if ev.get("n_cuts") else "")
         lines.append(f"| {r['variant']} {r['rank']} | `{r['file']}` | {fmt_time(r['start'])}–{fmt_time(r['end'])} "
                      f"| {fmt_time(r['anchor'])} | {r['score']:.2f} | {why} | {r['hook_mode']} | {' / '.join(r['hook_lines'])} |  |")
-    lines += ["", "- 판정 열에 keep/no 를 적거나, 쓸 파일을 `keep/` 폴더로 옮기면 `harvest --shorts` 가 정답으로 회수한다 (7단계).",
+    lines += ["", "- 각 mp4 옆의 `.srt` 는 같은 대사 자막(Premiere 캡션으로 임포트 가능), `.ass` 는 초안에 구운 스타일 원본.",
+              "- 판정 열에 keep/no 를 적거나, 쓸 파일을 `keep/` 폴더로 옮기면 `harvest --shorts` 가 정답으로 회수한다 (7단계).",
               "- 훅 모드 `payoff_flash` = 앞 1~2초에 페이오프 장면을 먼저 보여준 뒤 되감기 권장. `cold_open` = 그대로 시작."]
     return "\n".join(lines)

@@ -28,10 +28,10 @@ def _clean(text: str, limit: int = 22) -> str:
 
 
 def hook_lines(c: ShortCandidate) -> list[str]:
-    line1 = _clean(c.overlay_text)
-    kinds = "+".join(c.evidence.get("anchor_kinds", []))
-    line2 = f"{fmt_time(c.anchor)}  {c.variant}  {kinds}"
-    return [line1, line2]
+    """상단 자막: shorts.suggest_hook 이 만든 [인용 대사, 아이템 맥락]. 없으면 배너 OCR 정리본."""
+    if getattr(c, "hook_lines", None):
+        return list(c.hook_lines)[:2]
+    return [_clean(c.overlay_text)]
 
 
 CX_BY_STATE = {"inventory": 0.72, "left_panel": 0.28}   # ui_state → 크롭 중심 x (화면 폭 비율)
@@ -141,7 +141,7 @@ def index_md(index: list[dict], meta: dict) -> str:
         ev = r["evidence"]
         why = "+".join(ev.get("anchor_kinds", [])) + (f", 컷{ev.get('n_cuts', 0)}" if ev.get("n_cuts") else "")
         lines.append(f"| {r['variant']} {r['rank']} | `{r['file']}` | {fmt_time(r['start'])}–{fmt_time(r['end'])} "
-                     f"| {fmt_time(r['anchor'])} | {r['score']:.2f} | {why} | {r['hook_mode']} | {r['hook_lines'][0]} |  |")
+                     f"| {fmt_time(r['anchor'])} | {r['score']:.2f} | {why} | {r['hook_mode']} | {' / '.join(r['hook_lines'])} |  |")
     lines += ["", "- 판정 열에 keep/no 를 적거나, 쓸 파일을 `keep/` 폴더로 옮기면 `harvest --shorts` 가 정답으로 회수한다 (7단계).",
               "- 훅 모드 `payoff_flash` = 앞 1~2초에 페이오프 장면을 먼저 보여준 뒤 되감기 권장. `cold_open` = 그대로 시작."]
     return "\n".join(lines)

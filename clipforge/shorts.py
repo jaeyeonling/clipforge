@@ -34,7 +34,8 @@ class ShortCandidate:
     axes: dict = field(default_factory=dict)
     evidence: dict = field(default_factory=dict)
     hook_mode: str = "cold_open"
-    overlay_text: str = ""
+    overlay_text: str = ""            # 배너 OCR 원문 (사전 매칭용)
+    hook_lines: list = field(default_factory=list)   # 상단 자막 제안 [인용 대사, 아이템 맥락]
 
     @property
     def duration(self) -> float:
@@ -212,6 +213,53 @@ def score_candidate(c: ShortCandidate, anchor: dict, events: dict[str, Segments]
     c.hook_mode = "payoff_flash" if (c.anchor - c.start) > 6.0 and payoff else "cold_open"
 
 
+KW_RANK = {"강": 3.0, "득템": 2.5, "중": 1.5, "약": 0.5}
+PUNCT = ",.!?~ "
+
+
+def _trim_quote(text: str, limit: int = 20) -> str:
+    t = text.strip().strip("\"'")
+    if len(t) <= limit:
+        return t
+    cut = max((t.rfind(ch, 0, limit + 1) for ch in ",. ?!"), default=-1)
+    t = t[:cut] if cut >= 8 else t[:limit]
+    return t.rstrip(PUNCT) + "…"
+
+
+def suggest_hook(c: ShortCandidate, transcript: dict | None, kw_events: Segments | None, lexicon=None) -> list[str]:
+    """[인용 대사, 아이템 맥락]. 인용 = 창 안(앵커−3s ~ 끝)에서 키워드 가중치가 가장 큰 세그먼트, 없으면 앵커 직후 첫 세그먼트."""
+    quote = ""
+    if transcript:
+        segs = [sg for sg in transcript.get("segments", []) if sg["end"] >= c.anchor - 3.0 and sg["start"] <= c.end and sg["text"].strip()]
+        kws = [k for k in (kw_events.items if kw_events else []) if c.anchor - 3.0 <= k.start <= c.end]
+        def score(sg):
+            w = sum(KW_RANK.get(k.label, 0.5) for k in kws if sg["start"] - 0.2 <= k.start <= sg["end"] + 0.2)
+            near = 1.0 if sg["start"] >= c.anchor else 0.3          # 앵커 이후 대사 선호
+            return w + near - 0.01 * max(0, len(sg["text"]) - 20)
+        if segs:
+            best = max(segs, key=score)
+            quote = _trim_quote(best["text"])
+    ctx = ""
+    heads = []
+    for tok in c.evidence.get("items", []):
+        for piece in tok.split(","):
+            piece = piece.strip()
+            if not piece:
+                continue
+            m = lexicon.lookup(piece) if lexicon else None
+            if m and m.head and m.kind not in ("meta", "unknown", None):
+                heads.append(m.head)
+    heads = list(dict.fromkeys(heads))
+    if heads:
+        ctx = " · ".join(heads[:2]) + " 직득!"
+    elif "zoom" in c.evidence.get("emphasis", []):
+        ctx = "채팅 폭발"
+    elif c.evidence.get("anchor_kinds") == ["chat"]:
+        ctx = "채팅 반응"
+    lines = [l for l in (quote, ctx) if l]
+    return lines or ["하이라이트"]
+
+
 def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curve], duration: float,
                 k: int = 5, variants: dict | None = None) -> list[ShortCandidate]:
     variants = variants or VARIANTS
@@ -234,6 +282,13 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
             s = snap_start(s0, segs)
             s = snap(s, cuts, 1.0, -1)                       # 1초 안에 장면 컷이 있으면 컷에서 시작 (더 깨끗)
             e = snap_end(e0, segs)
+            # 끝점 직후(≤3s)에 리액션/득템 대사가 시작하면 그 대사까지 포함 — "와, 뭐야!" 를 잘라먹지 않도록
+            for kw in events.get("speech_keyword", Segments("", [])).items:
+                if kw.label in ("강", "중", "득템") and e < kw.start <= e + 3.0:
+                    seg_end = next((b for a_, b in segs if a_ <= kw.start <= b), kw.start + 1.5)
+                    if seg_end + MARGIN - s <= MAX_LEN:
+                        e = seg_end + MARGIN
+                    break
             if e - s < MIN_LEN:                               # 짧으면 다음 발화 끝까지
                 nxt = [b for _, b in segs if b + MARGIN > s + MIN_LEN]
                 e = min(duration, (nxt[0] + MARGIN) if nxt else s + MIN_LEN)
@@ -261,6 +316,15 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
     final: list[ShortCandidate] = []
     for v in variants:
         final += [c for c in kept if c.variant == v][:k]
+    # 상단 자막 제안: 전사 대사 + 사전 아이템명
+    tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
+    try:
+        from .lexicon import Lexicon
+        lex = Lexicon()
+    except Exception:
+        lex = None
+    for c in final:
+        c.hook_lines = suggest_hook(c, tr, events.get("speech_keyword"), lex)
     return final
 
 
@@ -277,5 +341,5 @@ def pretty(cands: list[ShortCandidate]) -> str:
             lines.append(f"  {i}. {fmt_time(c.start)}-{fmt_time(c.end)} ({c.duration:.0f}s)  score={c.score:.2f}  "
                          f"anchor={fmt_time(c.anchor)} {'+'.join(c.evidence['anchor_kinds'])}  "
                          f"P{ax['payoff']:.0f} R{ax['reaction']:.1f} C{ax['chat']:.1f} K{ax['completeness']:.1f} H{ax['hook']:.1f} -{ax['penalty']:.1f}"
-                         f"  cuts={c.evidence['n_cuts']}  hook={c.hook_mode}  text=\"{c.overlay_text[:30]}\"")
+                         f"  cuts={c.evidence['n_cuts']}  hook={c.hook_mode}  자막={' / '.join(c.hook_lines)}")
     return "\n".join(lines)

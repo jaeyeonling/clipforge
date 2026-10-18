@@ -202,3 +202,8 @@ table.data { table-layout: fixed; }
 table.data td { word-break: break-all; overflow-wrap: anywhere; }
 table.data td:first-child { width: 110px; word-break: keep-all; }
 table.data td:last-child:has(.btn) { width: 64px; text-align: right; }
+
+/* ---------- 영상 등록: 드래그 앤 드롭 ---------- */
+.sidebar.drag { box-shadow: inset 0 0 0 2px var(--accent); }
+.dropzone { padding: 10px; border: 1px dashed var(--accent); border-radius: var(--r-md); color: var(--accent); text-align: center; font-size: var(--fs-sm); background: #1c1b12; }
+.ep .id .badge { margin-left: 6px; height: 16px; padding: 0 5px; }

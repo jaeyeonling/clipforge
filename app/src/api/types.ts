@@ -41,6 +41,8 @@ export const STAGE_LABEL: Record<StageName, string> = {
 
 export interface Episode {
   id: string;
+  source?: string;      // 영상 실제 경로
+  linked?: boolean;     // videos/ 안의 링크/복사본이면 true, 원본 경로 참조면 false
   title?: string;
   game?: string;
   duration?: number;

@@ -45,7 +45,7 @@ export const api = {
   health: () => request<Health>("/api/health"),
   episodes: () => request<Episode[]>("/api/episodes"),
   episode: (id: string) => request<Episode>(`/api/episodes/${encodeURIComponent(id)}`),
-  addEpisode: (video_path: string, title: string, game = "d2r") => post<Episode>("/api/episodes", { video_path, title, game }),
+  addEpisode: (video_path: string, title: string, game = "d2r", id?: string) => post<Episode>("/api/episodes", { video_path, title, game, id: id || null }),
   jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
   jobLog: (id: string, tail = 400) => request<{ job_id: string; path: string; lines: LogLine[] }>(`/api/jobs/${id}/log?tail=${tail}`),

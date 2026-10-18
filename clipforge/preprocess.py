@@ -104,8 +104,8 @@ def build_single_pass(video: Path, out: Path, meta: dict, want_audio: bool) -> l
 
 
 def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | None = None,
-               proxy: bool = False) -> Path:
-    vid = video.stem
+               proxy: bool = False, vid: str | None = None) -> Path:
+    vid = vid or video.stem                       # 참조 등록이면 파일 이름과 회차 id 가 다를 수 있다
     out = cache_root / vid
     out.mkdir(parents=True, exist_ok=True)
     game = game or guess_game(video)

@@ -34,37 +34,53 @@ class Engine:
             raise ApiError("E_NOT_FOUND", f"회차 없음: {vid}", "videos/ 에 <id>.mp4 를 넣고 다시 시도하세요")
         return self.project.episode_info(vid)
 
-    def episode_add(self, video_path: str, vid: str | None = None, title: str = "", game: str = "d2r") -> dict:
+    def episode_add(self, video_path: str, vid: str | None = None, title: str = "", game: str = "d2r", link: bool = True) -> dict:
         """영상 파일을 videos/ 에 등록(복사하지 않고 링크/복사 선택 — 지금은 복사 없이 같은 드라이브면 하드링크, 아니면 복사)."""
         src = Path(video_path)
         if not src.exists():
             raise ApiError("E_NOT_FOUND", f"파일 없음: {video_path}")
-        vid = vid or src.stem
+        if src.suffix.lower() not in self.project.VIDEO_EXTS:
+            raise ApiError("E_BAD_FILE", f"영상 파일이 아닙니다: {src.name}", f"가능: {', '.join(self.project.VIDEO_EXTS)}")
+        vid = self._safe_id(vid or src.stem)
+        if vid in self.project.episode_ids() and (self.project.cache / vid / "meta.json").exists():
+            existing = self.project.video_path(vid)
+            if existing and existing.resolve() != src.resolve():
+                raise ApiError("E_EXISTS", f"회차 {vid} 는 이미 다른 영상으로 등록돼 있습니다", "다른 id 를 지정하세요")
         dst = self.project.videos / f"{vid}{src.suffix.lower()}"
-        if not dst.exists():
+        linked = dst.exists()
+        if not linked and link:
             try:
                 import os
-                os.link(src, dst)
+                os.link(src, dst); linked = True            # 같은 볼륨: 즉시, 용량 0
             except OSError:
-                import shutil
-                shutil.copy2(src, dst)
-        if title:
-            self._upsert_episode_row(vid, game, title)
+                linked = False                               # 다른 볼륨: 복사하지 않고 원본 경로를 참조 (수 GB 복사 금지)
+        self._upsert_episode_row(vid, game, title, source="" if linked else str(src.resolve()))
         return self.project.episode_info(vid)
 
-    def _upsert_episode_row(self, vid: str, game: str, title: str) -> None:
+    @staticmethod
+    def _safe_id(s: str) -> str:
+        """파일/URL/폴더 이름으로 쓸 수 있는 id. 공백 → _, 그 외 특수문자 제거 (한글·영숫자·-_. 허용)."""
+        import re
+        s = re.sub(r"\s+", "_", s.strip())
+        s = re.sub(r"[^\w\-.]", "", s)
+        return s.strip("._") or "ep"
+
+    def _upsert_episode_row(self, vid: str, game: str, title: str, source: str | None = None) -> None:
         p = self.project.episodes_csv
         rows: list[dict] = []
         if p.exists():
             with open(p, encoding="utf-8", newline="") as f:
                 rows = list(csv.DictReader(f))
-        fields = ["id", "game", "title", "url", "views", "uploaded", "raw_hours", "note"]
+        fields = ["id", "game", "title", "url", "views", "uploaded", "raw_hours", "note", "source"]
         found = False
         for r in rows:
             if r.get("id") == vid:
-                r["title"] = title; r["game"] = game; found = True
+                if title: r["title"] = title
+                r["game"] = game or r.get("game", "")
+                if source is not None: r["source"] = source
+                found = True
         if not found:
-            rows.append({"id": vid, "game": game, "title": title, "url": "", "views": "", "uploaded": "", "raw_hours": "", "note": ""})
+            rows.append({"id": vid, "game": game, "title": title, "url": "", "views": "", "uploaded": "", "raw_hours": "", "note": "", "source": source or ""})
         with open(p, "w", encoding="utf-8", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader()
             for r in rows:

@@ -92,3 +92,18 @@ def test_profile_set_validates(engine, tmp_path):
     assert e2.profile_get("d2r")["rois"]["banner"] == [0.0, 0.0, 0.5, 0.2]
     with pytest.raises(ApiError):
         e2.profile_set("d2r", {"banner": [0, 0, 2, 2]})
+
+
+def test_episode_add_reference_without_copy(engine, tmp_path):
+    """다른 드라이브(또는 link=False)면 복사하지 않고 원본 경로를 참조한다. id 는 안전한 이름으로."""
+    src = tmp_path / "raw" / "래더 12기 60일차 (원본).mp4"
+    src.parent.mkdir(); src.write_bytes(b"\x00" * 10)
+    ep = engine.episode_add(str(src), None, "제목", "d2r", link=False)
+    assert ep["id"] == "래더_12기_60일차_원본" and ep["linked"] is False and ep["source"] == str(src.resolve()) and ep["game"] == "d2r"
+    assert ep["id"] in engine.project.episode_ids()
+    assert engine.project.video_path(ep["id"]) == src.resolve()
+    assert not list(engine.project.videos.glob("*.mp4"))            # 복사본 없음
+    import pytest as _pt
+    with _pt.raises(ApiError) as ei:
+        engine.episode_add(str(tmp_path / "x.txt"), None, "", "d2r")
+    assert ei.value.code == "E_BAD_FILE" or ei.value.code == "E_NOT_FOUND"

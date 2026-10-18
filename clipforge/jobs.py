@@ -184,9 +184,9 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
     cache = project.cache / vid
     if stage == "prep":
         from .preprocess import preprocess
-        video = next((p for p in project.videos.glob(f"{vid}.*") if p.suffix.lower() in (".mp4", ".mkv", ".mov")), None)
+        video = project.video_path(vid)
         if video is None:
-            raise EngineError("E_FILE_MISSING", f"videos/{vid}.mp4 없음", "videos/ 폴더에 영상을 넣거나 회차 등록으로 추가하세요.")
+            raise EngineError("E_FILE_MISSING", f"회차 {vid} 의 영상을 찾지 못했습니다", "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.")
         prog(0.02, "ffprobe / 단일 패스 디코딩")
         # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
         done_flag = threading.Event()
@@ -195,7 +195,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         def work():
             try:
                 preprocess(video, project.cache, force=bool(job.params.get("force")), game=job.params.get("game"),
-                           proxy=bool(job.params.get("proxy")))
+                           proxy=bool(job.params.get("proxy")), vid=vid)
             except BaseException as e:  # noqa: BLE001
                 err.append(e)
             finally:
@@ -256,7 +256,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         chat = [{"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")} for s in Segments.load(chat_p).items] if chat_p.exists() else None
         ui_p = cache / "ui_state.json"
         ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
-        ep = load_episode(vid) or {}
+        ep = load_episode(vid, project.episodes_csv) or {}
         out = project.review / vid / "shorts"
         (out / "keep").mkdir(parents=True, exist_ok=True); (out / "no").mkdir(parents=True, exist_ok=True)
         prog(0.05, "렌더 (NVENC)")
@@ -281,7 +281,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         from .run import load_meta
         from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
         meta = load_meta(vid)
-        ep = load_episode(vid)
+        ep = load_episode(vid, project.episodes_csv)
         title = job.params.get("title") or (ep or {}).get("title")
         if title and (cache / "item_banner.json").exists():
             kws = title_keywords(title, load_slang(meta.get("game", "d2r")))

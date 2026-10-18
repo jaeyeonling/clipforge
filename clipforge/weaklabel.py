@@ -28,8 +28,8 @@ def load_slang(game: str) -> dict:
     return yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def load_episode(vid: str) -> dict | None:
-    p = ROOT / "episodes.csv"
+def load_episode(vid: str, csv_path: Path | None = None) -> dict | None:
+    p = Path(csv_path) if csv_path else ROOT / "episodes.csv"
     if not p.exists():
         return None
     with open(p, encoding="utf-8", newline="") as f:

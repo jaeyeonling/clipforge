@@ -129,8 +129,30 @@ class Project:
         out["problems"] = health_problems(out)
         return out
 
+    VIDEO_EXTS = (".mp4", ".mkv", ".mov", ".m4v", ".ts", ".flv", ".webm")
+
+    def episode_rows(self) -> dict[str, dict]:
+        """episodes.csv → {id: row}. 제목·게임·source(참조 등록한 원본 경로)."""
+        if not self.episodes_csv.exists():
+            return {}
+        import csv
+        with open(self.episodes_csv, encoding="utf-8", newline="") as f:
+            return {r["id"]: r for r in csv.DictReader(f) if r.get("id")}
+
+    def video_path(self, vid: str) -> Path | None:
+        """회차 영상: 1) videos/<id>.<ext> (하드링크/복사본) 2) episodes.csv 의 source (복사하지 않은 참조)."""
+        for p in self.videos.glob(f"{vid}.*"):
+            if p.suffix.lower() in self.VIDEO_EXTS and p.is_file():
+                return p
+        src = self.episode_rows().get(vid, {}).get("source", "")
+        if src and Path(src).is_file():
+            return Path(src)
+        return None
+
     def episode_ids(self) -> list[str]:
-        ids = {p.stem for p in self.videos.glob("*.mp4")} | {p.name for p in self.cache.iterdir() if p.is_dir() and (p / "meta.json").exists()}
+        ids = {p.stem for p in self.videos.iterdir() if p.is_file() and p.suffix.lower() in self.VIDEO_EXTS}
+        ids |= {p.name for p in self.cache.iterdir() if p.is_dir() and (p / "meta.json").exists()}
+        ids |= {k for k, r in self.episode_rows().items() if r.get("source") and Path(r["source"]).is_file()}
         return sorted(ids)
 
     def episode_info(self, vid: str) -> dict:
@@ -139,7 +161,8 @@ class Project:
             meta = load_json(meta_p, "meta") if meta_p.exists() else {}
         except EngineError:
             meta = {}
-        video = next((p for p in self.videos.glob(f"{vid}.*")), None)
+        video = self.video_path(vid)
+        row = self.episode_rows().get(vid, {})
         stages = {
             "prep": (self.cache / vid / "frames").exists(),
             "transcribe": (self.cache / vid / "transcript.json").exists(),
@@ -155,9 +178,9 @@ class Project:
                 for row in csv.DictReader(f):
                     if row.get("id") == vid:
                         title = row.get("title", ""); break
-        return {"id": vid, "video": str(video) if video else meta.get("source"), "title": title,
+        return {"source": str(video) if video else row.get("source", ""), "linked": bool(video and video.parent == self.videos), "id": vid, "video": str(video) if video else meta.get("source"), "title": title,
                 "duration": meta.get("duration"), "width": meta.get("width"), "height": meta.get("height"),
-                "game": meta.get("game"), "stages": stages}
+                "game": meta.get("game") or row.get("game") or None, "stages": stages}
 
 
 def health_problems(h: dict) -> list[dict]:

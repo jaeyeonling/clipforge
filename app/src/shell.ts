@@ -15,7 +15,10 @@ interface ShellApi {
   platform: string;
   versions: { electron: string; node: string; chrome: string };
   update: { state: () => Promise<UpdateState>; onState: (cb: (s: UpdateState) => void) => () => void; check: () => Promise<unknown>; apply: () => Promise<void>; applyShell: () => Promise<void> };
-  shell: { info: () => Promise<ShellInfo>; openLogs: () => Promise<void>; openPath: (p: string) => Promise<void> };
+  shell: {
+    info: () => Promise<ShellInfo>; openLogs: () => Promise<void>; openPath: (p: string) => Promise<void>;
+    pickVideos: () => Promise<string[]>; pathForFile: (f: File) => string;
+  };
 }
 declare global { interface Window { clipforgeShell?: ShellApi } }
 

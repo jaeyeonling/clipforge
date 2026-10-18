@@ -18,7 +18,7 @@ METHODS = {
     "engine.health": lambda e, p: e.health(),
     "episode.list": lambda e, p: e.episode_list(),
     "episode.get": lambda e, p: e.episode_get(p["vid"]),
-    "episode.add": lambda e, p: e.episode_add(p["video_path"], p.get("id"), p.get("title", ""), p.get("game", "d2r")),
+    "episode.add": lambda e, p: e.episode_add(p["video_path"], p.get("id"), p.get("title", ""), p.get("game", "d2r"), p.get("link", True)),
     "job.run": lambda e, p: e.job_run(p["episode"], p.get("stages"), p.get("params")),
     "job.get": lambda e, p: e.job_get(p["job_id"]),
     "job.list": lambda e, p: e.job_list(),

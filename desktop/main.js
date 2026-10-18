@@ -336,6 +336,11 @@ ipcMain.handle("update:apply", () => applyUpdates());
 ipcMain.handle("update:applyShell", () => installShellUpdate());
 ipcMain.handle("update:state", () => broadcastUpdate());
 ipcMain.handle("shell:openLogs", () => shell.openPath(app.getPath("userData")));
+ipcMain.handle("shell:pickVideos", async () => {
+  const r = await dialog.showOpenDialog(win, { title: "영상 선택", properties: ["openFile", "multiSelections"],
+    filters: [{ name: "영상", extensions: ["mp4", "mkv", "mov", "m4v", "ts", "flv", "webm"] }, { name: "모든 파일", extensions: ["*"] }] });
+  return r.canceled ? [] : r.filePaths;
+});
 ipcMain.handle("shell:openPath", (_e, p) => (typeof p === "string" && p ? shell.openPath(p) : undefined));
 ipcMain.handle("shell:info", () => {
   const cfg = engine?.cfg || {};

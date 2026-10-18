@@ -31,6 +31,7 @@ class AddEpisode(BaseModel):
     id: str | None = None
     title: str = ""
     game: str = "d2r"
+    link: bool = True            # False = 복사/링크 없이 원본 경로 참조
 
 
 class RunJob(BaseModel):
@@ -121,7 +122,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
 
     @app.post("/api/episodes")
     def episode_add(body: AddEpisode):
-        return engine.episode_add(body.video_path, body.id, body.title, body.game)
+        return engine.episode_add(body.video_path, body.id, body.title, body.game, body.link)
 
     # ---- jobs ----
     @app.post("/api/jobs")

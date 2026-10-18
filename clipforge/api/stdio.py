@@ -11,6 +11,7 @@ import sys
 import threading
 
 from .. import jobs as jobs_mod
+from ..errors import classify
 from .methods import ApiError, Engine
 
 METHODS = {
@@ -22,6 +23,7 @@ METHODS = {
     "job.get": lambda e, p: e.job_get(p["job_id"]),
     "job.list": lambda e, p: e.job_list(),
     "job.cancel": lambda e, p: e.job_cancel(p["job_id"]),
+    "job.log": lambda e, p: e.job_log(p["job_id"], int(p.get("tail", 400))),
     "candidates.list": lambda e, p: e.candidates_list(p["vid"]),
     "decision.set": lambda e, p: e.decision_set(p["vid"], p["start"], p["end"], p["label"], p.get("reason", ""), p.get("file", "")),
     "metrics.summary": lambda e, p: e.metrics_summary(),
@@ -54,7 +56,7 @@ def main() -> None:
         except ApiError as e:
             write({"id": req.get("id"), "error": e.to_dict()})
         except Exception as e:  # noqa: BLE001
-            write({"id": req.get("id") if isinstance(req, dict) else None, "error": {"code": type(e).__name__, "message": str(e)}})
+            write({"id": req.get("id") if isinstance(req, dict) else None, "error": classify(e)})
 
 
 if __name__ == "__main__":

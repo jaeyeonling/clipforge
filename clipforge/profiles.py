@@ -13,7 +13,9 @@ def load_profile(game: str) -> dict:
     p = GAMES / f"{game}.yaml"
     if not p.exists():
         raise FileNotFoundError(f"게임 프로필 없음: {p}  (games/ 에 {game}.yaml 추가)")
-    prof = yaml.safe_load(p.read_text(encoding="utf-8"))
+    prof = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    from .schema import migrate
+    prof = migrate("profile", prof, p)
     prof.setdefault("rois", {})
     prof.setdefault("roi_crops", [])
     prof.setdefault("frames", {})

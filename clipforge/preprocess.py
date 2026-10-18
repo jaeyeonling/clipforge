@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 from .profiles import guess_game, load_profile, roi_pixels
+from .schema import load_json, write_json
 
 
 def run(cmd: list[str], quiet: bool = True, cwd: Path | None = None) -> None:
@@ -122,8 +123,8 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
         meta["roi_crops"] = [n for n in prof["roi_crops"] if n in meta["rois"]]
         meta["scene_cuts"] = bool(prof["frames"].get("scene_cuts", True))
         meta["scdet_threshold"] = float(prof["frames"].get("scdet_threshold", 10))
-        meta_p.write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
-    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+        write_json(meta_p, "meta", meta)
+    meta = load_json(meta_p, "meta")
     print(f"  duration={meta['duration']:.0f}s  {meta['width']}x{meta['height']}@{meta['fps']:.2f}  "
           f"frames {meta['frames']['fps']}fps@{meta['frames']['height']}p  rois={meta['roi_crops']}")
 

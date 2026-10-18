@@ -18,7 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from . import __version__ as ENGINE_VERSION
+from .errors import EngineError, classify
 from .project import Project
+from .schema import SCHEMA
 
 STAGES = ["prep", "transcribe", "signals", "shorts", "export", "xml", "weaklabel", "eval"]
 
@@ -36,9 +39,12 @@ class Job:
     started: float = 0.0
     finished: float = 0.0
     error: str | None = None
+    error_info: dict | None = None     # classify() 결과 {code, message, hint, kind}
+    stage_durations: dict = field(default_factory=dict)
     events: list[dict] = field(default_factory=list)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     log_path: Path | None = None
+    manifest_path: Path | None = None
 
     def emit(self, ev: dict) -> None:
         ev = {"job_id": self.id, "t": round(time.time(), 3), **ev}
@@ -60,8 +66,25 @@ class Job:
         self.emit({"type": "log", "stage": self.stage, "message": message})
 
     def to_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items() if k not in ("events", "cancel_event", "log_path")} | {
-            "log_path": str(self.log_path) if self.log_path else None}
+        return {k: v for k, v in self.__dict__.items() if k not in ("events", "cancel_event", "log_path", "manifest_path")} | {
+            "log_path": str(self.log_path) if self.log_path else None,
+            "manifest_path": str(self.manifest_path) if self.manifest_path else None}
+
+    def manifest(self) -> dict:
+        """run 매니페스트: 무엇을 어떤 파라미터로 돌렸고 얼마나 걸렸고 어떻게 끝났는지. 재현·대시보드용."""
+        return {"id": self.id, "episode": self.episode, "stages": self.stages, "params": self.params,
+                "status": self.status, "started": self.started, "finished": self.finished,
+                "stage_durations": self.stage_durations, "error": self.error_info,
+                "engine_version": ENGINE_VERSION, "schema": dict(SCHEMA),
+                "log_path": str(self.log_path) if self.log_path else None}
+
+    def write_manifest(self) -> None:
+        if not self.manifest_path:
+            return
+        try:
+            self.manifest_path.write_text(json.dumps(self.manifest(), ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
 
 
 _listeners: list[Callable[[dict], None]] = []
@@ -84,6 +107,7 @@ class JobRunner:
                   params=params or {})
         (self.project.reports / "jobs").mkdir(parents=True, exist_ok=True)
         job.log_path = self.project.reports / "jobs" / f"{job.id}_{episode}.jsonl"
+        job.manifest_path = self.project.reports / "jobs" / f"{job.id}_{episode}.manifest.json"
         with self._lock:
             self.jobs[job.id] = job
             self._queue.append(job.id)
@@ -103,7 +127,7 @@ class JobRunner:
             with self._lock:
                 if job_id in self._queue:
                     self._queue.remove(job_id)
-            job.emit({"type": "done", "status": "cancelled"})
+            job.emit({"type": "done", "status": "cancelled"}); job.write_manifest()
         return True
 
     def _loop(self) -> None:
@@ -120,35 +144,35 @@ class JobRunner:
         try:
             for i, stage in enumerate(job.stages):
                 if job.cancel_event.is_set():
-                    job.status = "cancelled"; job.emit({"type": "done", "status": "cancelled"}); return
+                    job.status, job.finished = "cancelled", time.time()
+                    job.emit({"type": "done", "status": "cancelled"}); return
                 base = 100.0 * i / len(job.stages)
                 span = 100.0 / len(job.stages)
                 job.progress(stage, base, f"{stage} 시작")
                 t0 = time.time()
                 run_stage(self.project, job, stage, lambda frac, msg="": job.progress(stage, base + span * frac, msg))
+                job.stage_durations[stage] = round(time.time() - t0, 1)
                 job.log(f"{stage} 완료 ({time.time() - t0:.0f}s)")
             job.status, job.finished = "done", time.time()
             job.progress("done", 100.0, "완료")
             job.emit({"type": "done", "status": "done"})
-        except Exception as e:  # noqa: BLE001
+        except (Exception, SystemExit) as e:  # noqa: BLE001
             job.status, job.finished = "error", time.time()
-            job.error = f"{type(e).__name__}: {e}"
-            job.log(traceback.format_exc())
-            job.emit({"type": "error", "code": type(e).__name__, "message": str(e)[:400],
-                      "hint": hint_for(e)})
+            info = classify(e)
+            job.error, job.error_info = info["message"], info
+            job.emit({"type": "log", "stage": job.stage, "level": "error", "message": traceback.format_exc()})
+            job.emit({"type": "error", "stage": job.stage, **info})
+        finally:
+            job.write_manifest()
 
 
-def hint_for(e: Exception) -> str:
-    s = str(e)
-    if "ffmpeg" in s.lower() or "ffprobe" in s.lower():
-        return "ffmpeg 를 찾지 못했거나 실패했습니다. 설치 폴더의 bin/ 또는 PATH 를 확인하세요."
-    if "transcript.json" in s:
-        return "전사가 아직 없습니다. transcribe 단계를 먼저 실행하세요."
-    if "rois" in s and "banner" in s:
-        return "게임 프로필(games/<game>.yaml)의 ROI 설정을 확인하세요."
-    if "CUDA" in s or "cudnn" in s.lower():
-        return "GPU 런타임 문제입니다. nvidia-cublas-cu12 / nvidia-cudnn-cu12 설치 또는 CPU 폴백을 확인하세요."
-    return ""
+def hint_for(e: Exception) -> str:   # 하위 호환
+    return classify(e)["hint"]
+
+
+def _require(path: Path, code: str, what: str, stage_hint: str) -> None:
+    if not path.exists():
+        raise EngineError(code, f"{what} 없음: {path}", stage_hint)
 
 
 # ---------- 단계 실행 (run.py 의 cmd_* 와 동일한 동작) ----------
@@ -162,7 +186,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         from .preprocess import preprocess
         video = next((p for p in project.videos.glob(f"{vid}.*") if p.suffix.lower() in (".mp4", ".mkv", ".mov")), None)
         if video is None:
-            raise FileNotFoundError(f"videos/{vid}.mp4 없음")
+            raise EngineError("E_FILE_MISSING", f"videos/{vid}.mp4 없음", "videos/ 폴더에 영상을 넣거나 회차 등록으로 추가하세요.")
         prog(0.02, "ffprobe / 단일 패스 디코딩")
         # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
         done_flag = threading.Event()
@@ -196,11 +220,13 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, "frames/rois/audio 준비됨")
     elif stage == "transcribe":
         from .transcribe import transcribe
+        _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
         prog(0.05, "Whisper (GPU → CPU 폴백)")
         tr = transcribe(cache, force=bool(job.params.get("force")))
         prog(1.0, f"{tr.get('backend')} {len(tr.get('segments', []))} segments")
     elif stage == "signals":
         from .signals import REGISTRY, run_signal
+        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
         names = list(REGISTRY)
         for i, name in enumerate(names):
             if job.cancel_event.is_set():
@@ -211,6 +237,8 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
     elif stage == "shorts":
         from .run import load_kernels, load_meta, load_signals  # 기존 로더 재사용
         from .shorts import make_shorts, save_shorts
+        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+        _require(cache / "item_banner.json", "E_NO_SIGNALS", "신호 결과", "signals 단계를 먼저 실행하세요.")
         meta = load_meta(vid)
         curves, events = load_signals(vid)
         cands = make_shorts(cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)))
@@ -219,6 +247,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
     elif stage == "export":
         from .render import render_shorts
         from .run import load_episode, load_meta, load_shorts, short_episode_label
+        _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
         meta = load_meta(vid)
         cands = load_shorts(vid)
         tr_p = cache / "transcript.json"
@@ -240,6 +269,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
     elif stage == "xml":
         from .export_xml import export_xml
         from .run import load_meta, load_shorts
+        _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
         meta = load_meta(vid)
         cands_p = cache / "candidates.json"
         cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
@@ -265,8 +295,9 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         from .run import load_shorts
         lab_p = project.labels / f"{vid}.shorts.csv"
         if lab_p.exists():
+            _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
             reps = evaluate_shorts(load_shorts(vid), Segments.from_csv(lab_p))
             job.log("\n".join(r.pretty() for r in reps))
         prog(1.0, "eval")
     else:
-        raise ValueError(f"unknown stage {stage}")
+        raise EngineError("E_BAD_STAGE", f"알 수 없는 단계: {stage}", f"가능: {STAGES}")

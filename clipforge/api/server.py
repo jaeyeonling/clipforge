@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+
+from ..errors import classify
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -84,9 +88,23 @@ def create_app(engine: Engine | None = None) -> FastAPI:
                     clients.discard(ws)
         asyncio.create_task(pump())
 
+    # 오류 응답은 전부 {"error": {code, message, hint, kind}} 한 형태 (UI 가 한 군데서 파싱)
+    log = logging.getLogger("clipforge.api")
+
     @app.exception_handler(ApiError)
     async def _api_error(_, e: ApiError):
-        return JSONResponse(status_code=400, content={"error": e.to_dict()})
+        return JSONResponse(status_code=404 if e.code == "E_NOT_FOUND" else 400, content={"error": e.to_dict()})
+
+    @app.exception_handler(RequestValidationError)
+    async def _bad_request(_, e: RequestValidationError):
+        msg = "; ".join(f"{'.'.join(str(x) for x in err.get('loc', []))}: {err.get('msg')}" for err in e.errors())[:400]
+        return JSONResponse(status_code=400, content={"error": {"code": "E_BAD_REQUEST", "message": msg,
+                                                                "hint": "요청 본문의 필드 이름과 형식을 확인하세요.", "kind": "user"}})
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request, e: Exception):
+        log.exception("unhandled %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"error": classify(e)})
 
     # ---- engine / episodes ----
     @app.get("/api/health")
@@ -121,6 +139,10 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @app.get("/api/jobs/{job_id}/events")
     def job_events(job_id: str, since: int = 0):
         return engine.job_events(job_id, since)
+
+    @app.get("/api/jobs/{job_id}/log")
+    def job_log(job_id: str, tail: int = 400):
+        return engine.job_log(job_id, tail)
 
     @app.post("/api/jobs/{job_id}/cancel")
     def job_cancel(job_id: str):

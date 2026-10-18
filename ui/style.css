@@ -25,7 +25,7 @@ button:disabled { opacity:.45; cursor:default; }
 .progress { position:relative; height:26px; background:#0f0e0d; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:10px 0; }
 .bar { height:100%; width:0; background:linear-gradient(90deg, #c9d04a, var(--accent)); transition:width .3s; }
 .ptext { position:absolute; inset:0; display:flex; align-items:center; padding:0 10px; font-size:12px; color:#1a1a10; mix-blend-mode:difference; color:#fff; }
-.log { background:#0f0e0d; border:1px solid var(--line); border-radius:8px; padding:8px 10px; max-height:140px; overflow:auto; font-size:11px; color:var(--muted); white-space:pre-wrap; margin:0; }
+.log { background:#0f0e0d; border:1px solid var(--line); border-radius:0 0 8px 8px; padding:6px 10px; max-height:180px; overflow:auto; font-size:11px; color:var(--muted); white-space:pre-wrap; margin:0 0 6px; font-family: Consolas, "Malgun Gothic", monospace; }
 .cands { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
 .cand { background:#0f0e0d; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
 .cand video { width:100%; aspect-ratio:9/16; background:#000; display:block; }
@@ -60,3 +60,24 @@ button.small { padding:3px 9px; font-size:12px; }
 .roi-editor input { width:100%; padding:4px 6px; font-size:12px; }
 .roi-editor .roi .name { color:var(--accent); }
 .roi-editor .btns { display:flex; gap:6px; margin-top:6px; }
+
+/* ---- 오류·로그 (§10-6) ---- */
+.ws { font-size:11px; color:#1a1a10; background:var(--red); border-radius:6px; padding:1px 7px; margin-left:8px; }
+.ver { color:var(--muted); font-weight:400; font-size:11px; margin-left:6px; }
+.alerts { display:flex; flex-direction:column; gap:6px; padding:8px 18px 0; }
+.alert { display:flex; gap:10px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:12px; background:var(--panel); }
+.alert.error { border-color:var(--red); } .alert.warn { border-color:#8a7a2a; }
+.alert .lv { font-weight:700; min-width:40px; } .alert.error .lv { color:var(--red); } .alert.warn .lv { color:#f0d36a; }
+.alert .hint { color:var(--muted); }
+.errbox { border:1px solid var(--red); background:#2a1816; border-radius:10px; padding:10px 12px; margin:6px 0 10px; font-size:13px; }
+.errbox .code { font-family:Consolas, monospace; font-size:11px; color:#ff8a80; margin-right:6px; }
+.errbox .msg { font-weight:700; } .errbox .hint { color:var(--ink); opacity:.85; margin:4px 0 8px; }
+.errbox .btns { display:flex; gap:6px; }
+.logbar { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); background:#141210; border:1px solid var(--line); border-bottom:none; border-radius:8px 8px 0 0; padding:4px 10px; }
+.logbar .grow { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.log .line { padding:1px 0; } .log .line .st { color:#6f6a5e; margin-right:6px; }
+.log .line.lv-error { color:#ff8a80; } .log .line.lv-warn { color:#f0d36a; } .log .line.lv-done { color:#b7e8a0; }
+.log.err-only .line:not(.lv-error) { display:none; }
+.jobs li { cursor:pointer; } .jobs li:hover { border-color:var(--accent); } .jobs li.active { border-color:var(--accent); }
+.jobs .dur { color:var(--muted); font-size:11px; }
+.jobs .st-cancelled { color:var(--muted); } .jobs .st-queued { color:var(--muted); }

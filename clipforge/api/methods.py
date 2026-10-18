@@ -8,17 +8,12 @@ import csv
 import json
 from pathlib import Path
 
+from ..errors import EngineError
 from ..jobs import STAGES, JobRunner
 from ..project import Project
+from ..schema import load_json
 
-
-class ApiError(Exception):
-    def __init__(self, code: str, message: str, hint: str = ""):
-        super().__init__(message)
-        self.code, self.message, self.hint = code, message, hint
-
-    def to_dict(self) -> dict:
-        return {"code": self.code, "message": self.message, "hint": self.hint}
+ApiError = EngineError      # 전송층 오류 = 엔진 오류 같은 타입 (code, message, hint, kind)
 
 
 class Engine:
@@ -77,6 +72,9 @@ class Engine:
 
     # ---- jobs ----
     def job_run(self, episode: str, stages: list[str] | None = None, params: dict | None = None) -> dict:
+        if self.project.schema_error:
+            se = self.project.schema_error
+            raise ApiError(se["code"], se["message"], se["hint"])
         if episode not in self.project.episode_ids():
             raise ApiError("E_NOT_FOUND", f"회차 없음: {episode}")
         bad = [s for s in (stages or []) if s not in STAGES]
@@ -86,13 +84,60 @@ class Engine:
         return job.to_dict()
 
     def job_get(self, job_id: str) -> dict:
-        job = self.runner.jobs.get(job_id)
-        if not job:
+        j = self.runner.jobs.get(job_id)
+        if j:
+            return j.to_dict()
+        m = self._manifests().get(job_id)
+        if not m:
             raise ApiError("E_NOT_FOUND", f"job 없음: {job_id}")
-        return job.to_dict()
+        return m
 
     def job_list(self) -> list[dict]:
-        return [j.to_dict() for j in self.runner.jobs.values()]
+        """메모리의 작업 + 이전 실행의 매니페스트(reports/jobs/*.manifest.json). 재시작해도 이력이 남는다."""
+        live = {j.id: j.to_dict() for j in self.runner.jobs.values()}
+        hist = {k: v for k, v in self._manifests().items() if k not in live}
+        rows = list(hist.values()) + list(live.values())
+        rows.sort(key=lambda r: r.get("started") or 0)
+        return rows[-50:]
+
+    def _manifests(self) -> dict[str, dict]:
+        out = {}
+        d = self.project.reports / "jobs"
+        if not d.exists():
+            return out
+        for p in d.glob("*.manifest.json"):
+            try:
+                m = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            m.setdefault("stage", "done" if m.get("status") == "done" else ""); m.setdefault("pct", 100.0 if m.get("status") == "done" else 0.0)
+            m.setdefault("message", ""); m["error"] = (m.get("error") or {}).get("message") if isinstance(m.get("error"), dict) else m.get("error")
+            m["error_info"] = m.get("error") and (json.loads(p.read_text(encoding="utf-8")).get("error"))
+            m["manifest_path"] = str(p); m["from_manifest"] = True
+            out[m["id"]] = m
+        return out
+
+    def job_log(self, job_id: str, tail: int = 400) -> dict:
+        """작업 로그(JSONL) 읽기: [{t, type, stage, level, message}]. UI 의 '로그 보기'."""
+        j = self.runner.jobs.get(job_id)
+        path = j.log_path if j else None
+        if path is None:
+            m = self._manifests().get(job_id)
+            if not m or not m.get("log_path"):
+                raise ApiError("E_NOT_FOUND", f"job 로그 없음: {job_id}")
+            path = Path(m["log_path"])
+        lines = []
+        if path.exists():
+            for raw in path.read_text(encoding="utf-8").splitlines()[-tail:]:
+                try:
+                    ev = json.loads(raw)
+                except ValueError:
+                    continue
+                if ev.get("type") in ("log", "error", "progress", "started", "queued", "done"):
+                    lines.append({"t": ev.get("t"), "type": ev["type"], "stage": ev.get("stage", ""),
+                                  "level": ev.get("level") or ("error" if ev["type"] == "error" else "info"),
+                                  "message": ev.get("message") or (f"[{ev.get('code')}] {ev.get('hint', '')}" if ev["type"] == "error" else ev["type"])})
+        return {"job_id": job_id, "path": str(path), "lines": lines}
 
     def job_cancel(self, job_id: str) -> dict:
         if not self.runner.cancel(job_id):
@@ -112,8 +157,8 @@ class Engine:
             sj = self.project.cache / vid / "shorts.json"
             if not sj.exists():
                 return []
-            return json.loads(sj.read_text(encoding="utf-8"))
-        rows = json.loads(idx_p.read_text(encoding="utf-8"))
+            return load_json(sj, "shorts")
+        rows = load_json(idx_p, "index")
         decisions = self._decisions(vid)
         for r in rows:
             key = (f"{r['start']:.1f}", f"{r['end']:.1f}")
@@ -190,7 +235,7 @@ class Engine:
             lab = self._labels_path(vid); sj = self.project.cache / vid / "shorts.json"
             if not (lab.exists() and sj.exists()):
                 continue
-            cands = [ShortCandidate(**d) for d in json.loads(sj.read_text(encoding="utf-8"))]
+            cands = [ShortCandidate(**d) for d in load_json(sj, "shorts")]
             labels = Segments.from_csv(lab)
             reps = evaluate_shorts(cands, labels)
             r = reps[0] if reps else None

@@ -14,6 +14,7 @@ import yaml
 from PIL import Image, ImageDraw
 
 from .project import Project
+from .schema import load_json
 from .signals._panels import DEFAULT_BANDS
 from .textdraw import FontStack, draw_text
 
@@ -31,7 +32,7 @@ def check(project: Project, vid: str) -> dict:
     meta_p = cache / "meta.json"
     if not meta_p.exists():
         return {"ok": False, "error": "prep 이 아직 안 됨", "checks": []}
-    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    meta = load_json(meta_p, "meta")
     checks: list[dict] = []
 
     def add(name, rate, warn, fail, detail, hint):
@@ -88,7 +89,7 @@ def check(project: Project, vid: str) -> dict:
 def preview(project: Project, vid: str, t: int | None = None, rois_override: dict | None = None) -> Path:
     """frames/<t>.jpg 위에 ROI 박스를 그려 cache/<vid>/calib_preview.png 로 저장. rois_override 는 비율 dict (저장 전 미리보기)."""
     cache = project.cache / vid
-    meta = json.loads((cache / "meta.json").read_text(encoding="utf-8"))
+    meta = load_json(cache / "meta.json", "meta")
     frames = sorted((cache / "frames").glob("*.jpg"))
     if not frames:
         raise FileNotFoundError("frames 없음 — prep 먼저")

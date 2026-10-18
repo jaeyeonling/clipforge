@@ -411,7 +411,8 @@ def make_shorts(cache: Path, events: dict[str, Segments], curves: dict[str, Curv
 
 
 def save_shorts(cands: list[ShortCandidate], path: Path) -> None:
-    path.write_text(json.dumps([asdict(c) for c in cands], ensure_ascii=False, indent=1), encoding="utf-8")
+    from .schema import write_json
+    write_json(path, "shorts", [asdict(c) for c in cands])
 
 
 def pretty(cands: list[ShortCandidate]) -> str:

@@ -34,6 +34,8 @@ from .render import render_shorts
 from .shorts import ShortCandidate, make_shorts, pretty as shorts_pretty, save_shorts
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segment, Segments, fmt_time
+from .schema import load_json
+from .errors import EngineError, classify
 from .transcribe import transcribe
 from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
@@ -42,7 +44,10 @@ CACHE, LABELS, REVIEW = ROOT / "cache", ROOT / "labels", ROOT / "review"
 
 
 def load_meta(vid: str) -> dict:
-    return json.loads((CACHE / vid / "meta.json").read_text(encoding="utf-8"))
+    p = CACHE / vid / "meta.json"
+    if not p.exists():
+        raise FileNotFoundError(f"{p} 없음 — 먼저 python -m clipforge.run prep {vid}")
+    return load_json(p, "meta")
 
 
 def load_signals(vid: str) -> tuple[dict[str, Curve], dict[str, Segments]]:
@@ -97,8 +102,8 @@ def cmd_cands(a) -> Segments:
 def load_shorts(vid: str) -> list[ShortCandidate]:
     p = CACHE / vid / "shorts.json"
     if not p.exists():
-        raise SystemExit(f"{p} 없음 — 먼저 python -m clipforge.run shorts {vid}")
-    return [ShortCandidate(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
+        raise FileNotFoundError(f"{p} 없음 — 먼저 python -m clipforge.run shorts {vid}")
+    return [ShortCandidate(**d) for d in load_json(p, "shorts")]
 
 
 def cmd_eval(a):
@@ -170,10 +175,7 @@ def cmd_export(a):
     --shorts: shorts.json 의 후보를 9:16 세로 초안으로 렌더 (review/<vid>/shorts/)."""
     meta = load_meta(a.vid)
     if a.shorts:
-        p = CACHE / a.vid / "shorts.json"
-        if not p.exists():
-            raise SystemExit(f"{p} 없음 — 먼저 python -m clipforge.run shorts {a.vid}")
-        cands = [ShortCandidate(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
+        cands = load_shorts(a.vid)
         out = REVIEW / a.vid / "shorts"
         (out / "keep").mkdir(parents=True, exist_ok=True)
         ui_p = CACHE / a.vid / "ui_state.json"
@@ -266,7 +268,7 @@ def cmd_harvest(a):
         idx_p = REVIEW / a.vid / "shorts" / "index.json"
         if not idx_p.exists():
             raise SystemExit(f"{idx_p} 없음 — export --shorts 먼저")
-        index = {r["file"]: r for r in json.loads(idx_p.read_text(encoding="utf-8"))}
+        index = {r["file"]: r for r in load_json(idx_p, "index")}
         kept = [p.name for p in (REVIEW / a.vid / "shorts" / "keep").glob("*.mp4") if p.name in index]
         lab_p = LABELS / f"{a.vid}.shorts.csv"
         import csv as _csv
@@ -340,7 +342,11 @@ def main():
     p = sp.add_parser("transcribe"); p.add_argument("vid"); p.add_argument("--backend", default=None, choices=["faster_whisper", "ffmpeg_whisper"]); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_transcribe)
 
     a = ap.parse_args()
-    a.f(a)
+    try:
+        a.f(a)
+    except (FileNotFoundError, EngineError) as e:
+        info = classify(e)
+        raise SystemExit(f"[{info['code']}] {info['message']}\n  → {info['hint']}")
 
 
 if __name__ == "__main__":

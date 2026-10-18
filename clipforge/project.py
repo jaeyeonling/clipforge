@@ -13,8 +13,11 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import __version__ as ENGINE_VERSION
+from .errors import EngineError
+from .schema import SCHEMA, load_json, load_project_file
+
 APP_ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_VERSION = 1
 
 
 def find_ffmpeg() -> Path | None:
@@ -47,6 +50,15 @@ class Project:
         self.ffmpeg_dir = ff
         if ff and str(ff) not in os.environ.get("PATH", ""):
             os.environ["PATH"] = str(ff) + os.pathsep + os.environ.get("PATH", "")
+        # 데이터 폴더 스키마 (project.json). 엔진보다 새 버전이면 읽기 전용으로 열고 health/job.run 에서 막는다.
+        self.project_info: dict = {}
+        self.schema_error: dict | None = None
+        try:
+            self.project_info = load_project_file(self.data_root)
+        except EngineError as e:
+            self.schema_error = e.to_dict()
+        self.log_path = self.reports / "engine.log"
+        _setup_logging(self.log_path)
 
     # 데이터
     @property
@@ -76,7 +88,9 @@ class Project:
     def health(self) -> dict:
         """첫 실행 진단: 도구·GPU·모델·폰트."""
         import subprocess
-        out = {"schema": SCHEMA_VERSION, "app_root": str(self.app_root), "data_root": str(self.data_root),
+        out = {"engine_version": ENGINE_VERSION, "schema": dict(SCHEMA), "project": self.project_info,
+               "schema_error": self.schema_error, "log_path": str(self.log_path),
+               "app_root": str(self.app_root), "data_root": str(self.data_root),
                "ffmpeg": str(self.ffmpeg_dir) if self.ffmpeg_dir else None, "ffmpeg_ok": False, "nvenc": False,
                "gpu": None, "whisper_gpu": False, "fonts_ok": (self.fonts / "NanumPenScript-Regular.ttf").exists(),
                "rapidocr": False}
@@ -102,6 +116,11 @@ class Project:
             out["rapidocr"] = True
         except Exception:
             pass
+        try:
+            out["disk_free_gb"] = round(shutil.disk_usage(self.data_root).free / 1e9, 1)
+        except Exception:
+            out["disk_free_gb"] = None
+        out["problems"] = health_problems(out)
         return out
 
     def episode_ids(self) -> list[str]:
@@ -110,7 +129,10 @@ class Project:
 
     def episode_info(self, vid: str) -> dict:
         meta_p = self.cache / vid / "meta.json"
-        meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
+        try:
+            meta = load_json(meta_p, "meta") if meta_p.exists() else {}
+        except EngineError:
+            meta = {}
         video = next((p for p in self.videos.glob(f"{vid}.*")), None)
         stages = {
             "prep": (self.cache / vid / "frames").exists(),
@@ -130,3 +152,45 @@ class Project:
         return {"id": vid, "video": str(video) if video else meta.get("source"), "title": title,
                 "duration": meta.get("duration"), "width": meta.get("width"), "height": meta.get("height"),
                 "game": meta.get("game"), "stages": stages}
+
+
+def health_problems(h: dict) -> list[dict]:
+    """health 결과 → 사용자에게 보여줄 문제 목록 [{level: error|warn, code, message, hint}]. UI 상단 배너의 입력."""
+    out = []
+    if h.get("schema_error"):
+        e = h["schema_error"]; out.append({"level": "error", "code": e["code"], "message": e["message"], "hint": e["hint"]})
+    if not h.get("ffmpeg_ok"):
+        out.append({"level": "error", "code": "E_FFMPEG_MISSING", "message": "ffmpeg 를 실행할 수 없습니다",
+                    "hint": "설치 폴더 bin/ 에 ffmpeg.exe·ffprobe.exe 를 두거나 CLIPFORGE_FFMPEG 환경변수로 폴더를 지정하세요."})
+    if not h.get("fonts_ok"):
+        out.append({"level": "error", "code": "E_FONTS_MISSING", "message": "제목 폰트(NanumPenScript)가 없습니다",
+                    "hint": "assets/fonts/ 폴더를 확인하세요. 없으면 쇼츠 제목 띠가 깨집니다."})
+    if not h.get("rapidocr"):
+        out.append({"level": "error", "code": "E_OCR_MISSING", "message": "RapidOCR 이 설치되지 않았습니다",
+                    "hint": "pip install -r requirements.txt 를 실행하세요. 배너·채팅 신호가 동작하지 않습니다."})
+    if h.get("ffmpeg_ok") and not h.get("nvenc"):
+        out.append({"level": "warn", "code": "W_NO_NVENC", "message": "NVENC 인코더가 없어 CPU 로 렌더합니다 (느림)",
+                    "hint": "NVIDIA GPU 와 최신 드라이버가 있으면 자동으로 NVENC 를 씁니다."})
+    if not h.get("whisper_gpu"):
+        out.append({"level": "warn", "code": "W_NO_GPU_WHISPER", "message": "전사가 CPU 로 돌아갑니다 (12분 영상 약 20분)",
+                    "hint": "CUDA 런타임(nvidia-cublas-cu12, nvidia-cudnn-cu12)을 확인하세요."})
+    if h.get("disk_free_gb") is not None and h["disk_free_gb"] < 10:
+        out.append({"level": "warn", "code": "W_DISK_LOW", "message": f"디스크 여유 {h['disk_free_gb']}GB",
+                    "hint": "4K 회차 하나의 캐시가 수 GB 입니다. cache/<회차>/frames 는 지워도 됩니다."})
+    return out
+
+
+def _setup_logging(path: Path) -> None:
+    """엔진 전역 로그(reports/engine.log, 회전 2MB×3). 작업별 JSONL 로그와 별개로, 전송층 예외·경고가 여기 쌓인다."""
+    import logging
+    from logging.handlers import RotatingFileHandler
+    log = logging.getLogger("clipforge")
+    if any(getattr(h, "baseFilename", None) == str(path) for h in log.handlers):
+        return
+    try:
+        h = RotatingFileHandler(path, maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        log.addHandler(h)
+        log.setLevel(logging.INFO)
+    except OSError:
+        pass

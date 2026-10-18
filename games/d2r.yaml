@@ -1,6 +1,7 @@
 # Diablo II: Resurrected (한국어 클라이언트, 기준 채널 방송 화면 기준)
 # ROI 는 기준 해상도에 대한 비율 [x, y, w, h] (0~1). prep 이 실제 해상도 픽셀로 변환해 meta.json 에 기록한다.
 name: d2r
+schema_version: 1
 resolution_ref: [3840, 2160]
 
 rois:

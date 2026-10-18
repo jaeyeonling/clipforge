@@ -14,6 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from .schema import write_json
 from .shorts import ShortCandidate, clean_chat
 from .timeline import fmt_time
 
@@ -196,7 +197,7 @@ def render_shorts(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int
                       "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
                       "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
                       "crop_moves": moves, "subtitle_cues": n_cues, "top_mode": mode, "top_h": top_h})
-    (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    write_json(out_dir / "index.json", "index", index)
     (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
     return index
 
@@ -257,6 +258,6 @@ def render_feed(cands: list[ShortCandidate], meta: dict, out_dir: Path, k: int |
                       "anchor": c.anchor, "score": c.score, "axes": c.axes, "evidence": c.evidence,
                       "hook_mode": c.hook_mode, "overlay_text": c.overlay_text, "hook_lines": lines,
                       "layout": "feed", "top_mode": "feed", "top_h": 0, "subtitle_cues": n_cues})
-    (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    write_json(out_dir / "index.json", "index", index)
     (out_dir / "index.md").write_text(index_md(index, meta), encoding="utf-8")
     return index

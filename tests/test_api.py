@@ -74,7 +74,7 @@ def test_http_endpoints(client, engine):
     r = client.post("/api/jobs", json={"episode": vid, "stages": ["eval"], "params": {}})
     assert r.status_code == 200 and r.json()["status"] in ("queued", "running", "done")
     assert client.get("/api/profiles/d2r").json()["rois"]["banner"]
-    assert client.get("/api/profiles/nope").status_code == 400
+    assert client.get("/api/profiles/nope").status_code == 404      # E_NOT_FOUND → 404, 그 외 ApiError → 400
     assert client.get("/media/review/../../secrets").status_code == 404
 
 

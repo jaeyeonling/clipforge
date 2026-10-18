@@ -8,9 +8,10 @@
 </head>
 <body>
 <header>
-  <div class="brand">clipforge <span class="sub">engine UI v0</span></div>
+  <div class="brand">clipforge <span class="sub">engine UI v0</span><span id="ver" class="ver"></span><span id="wsState" class="ws" hidden title="엔진과의 실시간 연결이 끊겼습니다. 자동으로 다시 연결합니다.">연결 끊김</span></div>
   <div id="health" class="health">…</div>
 </header>
+<div id="alerts" class="alerts" hidden></div>
 <main>
   <section class="col left">
     <h2>회차</h2>
@@ -47,7 +48,9 @@
       <button id="cancelBtn" disabled>취소</button>
     </div>
     <div class="progress"><div id="bar" class="bar"></div><div id="ptext" class="ptext">대기</div></div>
-    <pre id="log" class="log"></pre>
+    <div id="errorBox" class="errbox" hidden></div>
+    <div class="logbar"><span id="logTitle" class="grow">로그</span><label><input type="checkbox" id="logErrOnly"> 오류만</label><button id="logClear" class="ghost small">지우기</button></div>
+    <div id="log" class="log"></div>
     <h3>후보 (순간 순위) — 재생해 보고 keep / no 를 누르면 정답으로 저장됩니다</h3>
     <div id="cands" class="cands"></div>
   </section>
@@ -64,7 +67,7 @@
     <div id="roiEditor" class="roi-editor" hidden></div>
     <h2>지표</h2>
     <table id="metrics"><thead><tr><th>회차</th><th>라벨</th><th>keep</th><th>no</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr></thead><tbody></tbody></table>
-    <h3>작업</h3>
+    <h3>작업 <span class="meta">(클릭 → 로그, 이전 실행 포함)</span></h3>
     <ul id="jobs" class="jobs"></ul>
   </section>
 </main>

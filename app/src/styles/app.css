@@ -207,3 +207,19 @@ table.data td:last-child:has(.btn) { width: 64px; text-align: right; }
 .sidebar.drag { box-shadow: inset 0 0 0 2px var(--accent); }
 .dropzone { padding: 10px; border: 1px dashed var(--accent); border-radius: var(--r-md); color: var(--accent); text-align: center; font-size: var(--fs-sm); background: #1c1b12; }
 .ep .id .badge { margin-left: 6px; height: 16px; padding: 0 5px; }
+
+/* ---------- 후보: 키보드 포커스 · 비교 ---------- */
+.cand.focused { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cand.in-compare { box-shadow: inset 0 0 0 2px var(--info); }
+.cand .rank .cmp { margin-left: auto; background: transparent; border: 1px solid var(--line-strong); color: var(--muted); border-radius: var(--r-sm); width: 24px; height: 22px; cursor: pointer; font-size: 13px; line-height: 1; }
+.cand .rank .cmp.on { color: var(--info); border-color: var(--info); }
+.keys { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
+kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--panel-2); color: var(--ink-2); font: 11px/1.6 var(--mono); text-align: center; }
+.reason-prompt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: var(--sp-3); padding: 8px 10px; border: 1px solid var(--accent-dim); border-radius: var(--r-md); background: #1c1b12; font-size: var(--fs-sm); }
+.reason-prompt .btn kbd { margin-right: 4px; }
+.compare { margin-bottom: var(--sp-4); padding: var(--sp-3); border: 1px solid #2a4258; border-radius: var(--r-lg); background: #121a20; }
+.compare-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.compare-grid.one { grid-template-columns: 1fr; max-width: 520px; }
+.compare-item video { width: 100%; max-height: 520px; aspect-ratio: 9 / 16; background: #000; border-radius: var(--r-md); object-fit: contain; }
+.compare-item.keep video { outline: 2px solid #5f9a50; } .compare-item.no video { outline: 2px solid #8a3a34; }

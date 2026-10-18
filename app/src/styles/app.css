@@ -289,3 +289,7 @@ kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid 
 .eta { color: var(--accent); }
 .warnbox { border: 1px solid #6a5a24; background: #231f12; border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); font-size: var(--fs-sm); }
 .warnbox .hint { color: var(--muted); margin-top: 2px; }
+
+/* ---------- 라이브 미리보기 ---------- */
+.live-preview { margin-top: 10px; }
+.live-preview img { width: 100%; max-width: 480px; border-radius: var(--r-md); border: 1px solid var(--line); display: block; background: #000; }

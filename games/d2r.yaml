@@ -34,3 +34,7 @@ item_colors:   # HSV (OpenCV h 0-180). d2r-image 차용, 미검증 — d2_item_l
   green:  [56, 190, 190, 63, 255, 255]
   orange: [20, 190, 190, 23, 255, 255]
   yellow: [27, 110, 190, 33, 145, 255]
+
+# 라이브 모듈: 바닥 아이템 라벨 중 제안할 등급 (set 초록 · unique 금색 · rare 노랑 · magic 파랑). 색 임계값은 clipforge/live/detect.py
+live:
+  grades: [set, unique]

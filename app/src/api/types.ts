@@ -211,7 +211,8 @@ export interface LiveSession {
   id: string; running: boolean; started: number; frames: number; last_frame_t: number; source: string; interval: number; approval: boolean;
   obs: Record<string, unknown> | null; obs_connected: boolean; banner: string; pending: number; bookmarks: number; last_error: string | null; dir: string;
 }
-export interface LiveStatus { active: boolean; session: LiveSession | null; suggestions: LiveSuggestion[]; bookmarks: LiveBookmark[] }
+export interface LiveStatus { active: boolean; session: LiveSession | null; suggestions: LiveSuggestion[]; bookmarks: LiveBookmark[]; preview_url?: string | null }
+export interface GameInfo { key: string; name: string }
 export type LiveEvent = { session: string; t: number; type: string; [k: string]: unknown };
 
 export type Layout = "card" | "feed";

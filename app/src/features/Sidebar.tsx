@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { api } from "../api/client";
-import { DEFAULT_STAGES, KIND_LABEL, type EpisodeKind } from "../api/types";
+import { DEFAULT_STAGES, KIND_LABEL, type EpisodeKind, type GameInfo } from "../api/types";
 import { Button, cx, fmtTime } from "../components/ui";
 import { inShell, shell } from "../shell";
 import { useApp } from "../state/store";
@@ -12,6 +12,9 @@ export function Sidebar() {
   const [path, setPath] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EpisodeKind>("edited");
+  const [games, setGames] = useState<GameInfo[]>([]);
+  const [game, setGame] = useState("d2r");
+  useEffect(() => { api.games().then((g) => { setGames(g); if (g.length && !g.some((x) => x.key === game)) setGame(g[0].key); }).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const dragDepth = useRef(0);
@@ -23,12 +26,12 @@ export function Sidebar() {
     let lastId: string | null = null, ok = 0;
     for (const [i, p] of list.entries()) {
       setBusy(`${i + 1}/${list.length} 등록 중…`);
-      try { const ep = await api.addEpisode(p, list.length === 1 ? titleForSingle : "", "d2r", undefined, kind); lastId = ep.id; ok++; }
+      try { const ep = await api.addEpisode(p, list.length === 1 ? titleForSingle : "", game, undefined, kind); lastId = ep.id; ok++; }
       catch (e) { fail(e); }
     }
     setBusy(null);
     if (ok) { toast(`${ok}개 등록됨`); await refreshEpisodes(); if (lastId) selectEpisode(lastId); }
-  }, [toast, fail, refreshEpisodes, selectEpisode, kind]);
+  }, [toast, fail, refreshEpisodes, selectEpisode, kind, game]);
 
   const submit = async () => { if (path.trim()) { await register([path.trim()], title.trim()); setPath(""); setTitle(""); } };
   const pick = async () => { if (!shell) return; try { const ps = await shell.shell.pickVideos(); if (ps.length) await register(ps, title.trim()); } catch (e) { fail(e); } };
@@ -69,6 +72,11 @@ export function Sidebar() {
       </ul>
       <form className="add-form" onSubmit={(ev) => { ev.preventDefault(); submit(); }}>
         {drag && <div className="dropzone">영상을 놓으면 등록됩니다</div>}
+        {games.length > 1 && (
+          <select className="field" value={game} onChange={(e) => setGame(e.target.value)} disabled={!!busy} title="게임 프로필 (화면 영역·사전)">
+            {games.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
+          </select>
+        )}
         <select className="field" value={kind} onChange={(e) => setKind(e.target.value as EpisodeKind)} disabled={!!busy} title="편집본이면 쇼츠 후보를, 원본 녹화면 편집 포인트를 뽑습니다">
           {(Object.keys(KIND_LABEL) as EpisodeKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
         </select>

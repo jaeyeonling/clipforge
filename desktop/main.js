@@ -168,6 +168,13 @@ function subscribeEvents() {
       if (ev.type === "started" || ev.type === "progress") { jobRunning = true; updateTrayMenu(`실행 중: ${ev.stage || ""} ${Math.round(ev.pct || 0)}%`); }
       if (ev.type === "done") { jobRunning = false; updateTrayMenu("대기 중"); if (!win?.isFocused()) notify(ev.status === "cancelled" ? "작업 취소됨" : "작업 완료", `job ${ev.job_id}`); }
       if (ev.type === "error") { jobRunning = false; updateTrayMenu(`오류: ${ev.code}`); notify(`작업 오류 ${ev.code}`, `${ev.message || ""}\n${ev.hint || ""}`.trim()); }
+      // 라이브 제안: 게임 중이라 앱 창을 못 보는 사람에게 OS 알림 + 단축키 안내
+      if (ev.type === "live" && ev.event) {
+        const le = ev.event;
+        if (le.type === "suggestion" && le.status === "pending" && !win?.isFocused()) notify(`득템 제안: ${le.head || le.text} (${le.grade})`, "Ctrl+Alt+Y 배너에 추가 · Ctrl+Alt+N 무시");
+        if (le.type === "started") liveActive = true;
+        if (le.type === "stopped") liveActive = false;
+      }
     });
     ws.on("close", () => { ws = null; if (!quitting) setTimeout(connect, 2000); });
     ws.on("error", (e) => log(`ws: ${e.message}`));
@@ -351,6 +358,26 @@ ipcMain.handle("shell:info", () => {
            versions: { engine: v.engine_version || null, components: v.component_versions || {} }, packaged: app.isPackaged };
 });
 
+// ---------- OBS 실행 감지 → 라이브 시작 제안 (승인 모드: 알림만, 자동 시작 없음) ----------
+let liveActive = false, obsSeen = false, obsTimer = null;
+function obsRunning(cb) {
+  const { execFile } = require("node:child_process");
+  execFile("tasklist", ["/FI", "IMAGENAME eq obs64.exe", "/NH"], { windowsHide: true }, (err, out) => cb(!err && /obs64\.exe/i.test(String(out))));
+}
+function startObsWatch() {
+  if (obsTimer || process.platform !== "win32") return;
+  const tick = () => obsRunning((running) => {
+    if (running && !obsSeen && !liveActive) {
+      const n = new Notification({ title: "OBS 가 켜졌습니다", body: "라이브 탭에서 득템 배너 감지를 시작할까요? (알림을 누르면 엽니다)", icon: path.join(ASSETS, "icon.png") });
+      n.on("click", () => { showWindow(); win?.webContents.executeJavaScript("location.hash='#live'").catch(() => {}); });
+      try { n.show(); } catch { /* ignore */ }
+      log("obs: 감지 → 라이브 시작 제안");
+    }
+    obsSeen = running;
+  });
+  tick(); obsTimer = setInterval(tick, 30_000);
+}
+
 // ---------- 수명 ----------
 async function boot() {
   logStream = fs.createWriteStream(path.join(app.getPath("userData"), "shell.log"), { flags: "a" });
@@ -372,17 +399,24 @@ async function boot() {
     await win.loadURL(engine.url);
     subscribeEvents();
     log(`shell: ui loaded ${engine.url}`);
-    // 라이브 북마크 전역 단축키 (게임 창이 앞에 있어도 동작). 엔진이 라이브 중이 아니면 조용히 무시.
-    try {
-      const ok = globalShortcut.register("Control+Alt+M", () => {
-        const req = http.request(`${engine.url}/api/live/mark`, { method: "POST", headers: { "content-type": "application/json" } }, (res) => {
-          if (res.statusCode === 200) notify("북마크", "라이브 북마크를 남겼습니다"); res.resume();
-        });
-        req.on("error", (e) => log(`mark: ${e.message}`));
-        req.end(JSON.stringify({ note: "단축키" }));
+    // 라이브 전역 단축키 (게임 창이 앞에 있어도 동작): M 북마크 · Y 최근 제안 승인 · N 최근 제안 무시. 라이브 중이 아니면 조용히 무시.
+    const livePost = (path, body, onOk) => {
+      const req = http.request(`${engine.url}${path}`, { method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+        let data = ""; res.setEncoding("utf8"); res.on("data", (c) => (data += c));
+        res.on("end", () => { if (res.statusCode === 200) onOk?.(data); else log(`live ${path}: ${res.statusCode} ${data.slice(0, 120)}`); });
       });
-      log(`shell: globalShortcut Ctrl+Alt+M ${ok ? "ok" : "실패(다른 앱이 사용 중)"}`);
+      req.on("error", (e) => log(`live ${path}: ${e.message}`));
+      req.end(JSON.stringify(body || {}));
+    };
+    try {
+      const regs = [
+        ["Control+Alt+M", () => livePost("/api/live/mark", { note: "단축키" }, () => notify("북마크", "라이브 북마크를 남겼습니다"))],
+        ["Control+Alt+Y", () => livePost("/api/live/suggestions/latest/approve", {}, (d) => { try { const s = JSON.parse(d); notify("배너에 추가", `${s.head || s.text} 를 득템 배너에 넣었습니다`); } catch { /* ignore */ } })],
+        ["Control+Alt+N", () => livePost("/api/live/suggestions/latest/dismiss", {}, () => notify("무시", "최근 제안을 무시했습니다"))],
+      ];
+      for (const [acc, fn] of regs) log(`shell: globalShortcut ${acc} ${globalShortcut.register(acc, fn) ? "ok" : "실패(다른 앱이 사용 중)"}`);
     } catch (e) { log(`shell: globalShortcut ${e.message}`); }
+    startObsWatch();
     if (engine.cfg.mode === "runtime" && AUTO_UPDATE) {
       const upd = await checkUpdates();
       if (upd?.length) { await applyUpdates(); log(`auto-update: applied; VERSION=${JSON.stringify(C.readLocalVersion(engine.cfg.runtimeDir))}`); }

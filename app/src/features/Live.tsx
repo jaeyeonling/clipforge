@@ -24,6 +24,9 @@ export function Live() {
   const [videoPath, setVideoPath] = useState("");
   const [note, setNote] = useState("");
   const [bannerEdit, setBannerEdit] = useState<string | null>(null);
+  const [editText, setEditText] = useState<Record<string, string>>({});
+  const [previewTick, setPreviewTick] = useState(0);
+  useEffect(() => { if (!liveStatus?.active) return; const id = window.setInterval(() => { setPreviewTick((n) => n + 1); refreshLive().catch(() => {}); }, 2500); return () => window.clearInterval(id); }, [liveStatus?.active, refreshLive]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { refreshLive().catch(() => {}); }, [refreshLive]);
@@ -46,7 +49,7 @@ export function Live() {
     setObsSources(null);
     try { const r = await api.liveObsProbe(obsUrl, obsPw); setObsSources(r.text_sources); toast(`OBS ${r.obs.obs} 연결됨`); if (r.text_sources.length && !r.text_sources.includes(obsSource)) setObsSource(r.text_sources[0]); } catch (e) { fail(e); }
   };
-  const approve = useCallback(async (id: string) => { try { await api.liveApprove(id); await refreshLive(); } catch (e) { fail(e); } }, [refreshLive, fail]);
+  const approve = useCallback(async (id: string, text?: string) => { try { await api.liveApprove(id, text && text.trim() ? text.trim() : undefined); await refreshLive(); } catch (e) { fail(e); } }, [refreshLive, fail]);
   const dismiss = useCallback(async (id: string) => { try { await api.liveDismiss(id); await refreshLive(); } catch (e) { fail(e); } }, [refreshLive, fail]);
   const saveBanner = async () => {
     if (bannerEdit == null) return;
@@ -91,6 +94,12 @@ export function Live() {
             <span className="grow" style={{ flex: 1 }} />
             {active ? <Button variant="danger" onClick={stop} disabled={busy}>정지</Button> : <Button variant="primary" onClick={start} disabled={busy}>시작</Button>}
           </div>
+          {active && (
+            <div className="live-preview">
+              {st?.preview_url ? <img src={`${st.preview_url}&t=${previewTick}`} alt="캡처 미리보기" /> : <div className="novideo" style={{ aspectRatio: "16/9" }}>첫 프레임 기다리는 중…</div>}
+              <div className="muted xs" style={{ marginTop: 4 }}>지금 캡처되는 화면입니다. <b>게임이 보이지 않으면</b>(검은 화면·바탕화면) 게임을 창 모드/테두리 없는 전체화면으로 바꾸거나, 캡처 영역을 조정해야 합니다.</div>
+            </div>
+          )}
           {sess && (
             <p className="muted xs" style={{ marginTop: 8 }}>
               세션 {sess.id} · 프레임 {sess.frames} · {sess.obs_connected ? `OBS 연결됨 (${(sess.obs as { obs?: string })?.obs || ""})` : sess.obs && (sess.obs as { error?: string }).error ? `OBS 실패: ${(sess.obs as { error?: string }).error}` : "OBS 없음"} · 북마크 {sess.bookmarks}{sess.last_error ? ` · 오류: ${sess.last_error}` : ""}
@@ -99,6 +108,7 @@ export function Live() {
         </Card>
 
         <Card title={`배너 제안 · 대기 ${pending.length}`}>
+          <div className="keys" style={{ marginBottom: 6 }}>게임 중엔 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd> 최근 제안 추가 · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> 무시 (데스크톱 앱, 알림으로도 알려줍니다)</div>
           {!pending.length ? <p className="muted small">{active ? "세트·유니크 아이템 라벨이 화면에 뜨면 여기 제안이 올라옵니다." : "라이브를 시작하면 감지된 아이템이 여기 뜹니다. 승인하면 배너 텍스트와 OBS 소스에 추가됩니다."}</p> : (
             <ul className="sug-list">
               {pending.map((s) => (
@@ -107,7 +117,8 @@ export function Live() {
                     <b>{s.head || s.text}</b> <Badge tone={s.grade === "set" ? "ok" : s.grade === "unique" ? "warn" : ""}>{s.grade}</Badge>
                     <div className="muted xs">OCR "{s.text}" {Math.round(s.score * 100)}% · {new Date(s.t_wall * 1000).toLocaleTimeString("ko-KR")}{s.t_rec != null ? ` · 녹화 ${fmtTime(s.t_rec)}` : ""}</div>
                   </div>
-                  <Button size="sm" variant="primary" onClick={() => approve(s.id)}>배너에 추가</Button>
+                  <input className="field sm" style={{ width: 150 }} placeholder={s.head || s.text} value={editText[s.id] ?? ""} onChange={(e) => setEditText((m) => ({ ...m, [s.id]: e.target.value }))} title="배너에 넣을 이름을 고쳐 쓸 수 있습니다 (예: 기드참(매찬34))" onKeyDown={(e) => { if (e.key === "Enter") approve(s.id, editText[s.id]); }} />
+                  <Button size="sm" variant="primary" onClick={() => approve(s.id, editText[s.id])}>배너에 추가</Button>
                   <Button size="sm" variant="ghost" onClick={() => dismiss(s.id)}>무시</Button>
                 </li>
               ))}

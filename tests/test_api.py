@@ -194,3 +194,13 @@ def test_paths_eta_and_feedback_export(engine, tmp_path):
     import zipfile
     names = zipfile.ZipFile(r["path"]).namelist()
     assert f"labels/{vid}.shorts.csv" in names and "health.json" in names and r["files"] >= 3
+
+
+def test_games_list_and_placeholder_guard(engine, tmp_path, monkeypatch):
+    assert [g["key"] for g in engine.games_list()] == ["d2r"]
+    from clipforge.api import methods as m
+    src = tmp_path / "cloud.mp4"; src.write_bytes(b"\x00")
+    monkeypatch.setattr(m, "_is_cloud_placeholder", lambda p: True)
+    with pytest.raises(ApiError) as ei:
+        engine.episode_add(str(src), None, "", "d2r", link=False)
+    assert ei.value.code == "E_FILE_OFFLINE" and "OneDrive" in ei.value.hint

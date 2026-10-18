@@ -16,6 +16,15 @@ from ..schema import load_json
 ApiError = EngineError      # 전송층 오류 = 엔진 오류 같은 타입 (code, message, hint, kind)
 
 
+def _is_cloud_placeholder(p: Path) -> bool:
+    """OneDrive '파일 온디맨드' 자리표시자(내용이 로컬에 없음) 판정. Windows 파일 속성 RECALL_ON_DATA_ACCESS(0x400000) / OFFLINE(0x1000)."""
+    try:
+        attrs = p.stat().st_file_attributes  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        return False
+    return bool(attrs & 0x400000) or bool(attrs & 0x1000)
+
+
 class Engine:
     def __init__(self, project: Project | None = None):
         self.project = project or Project()
@@ -43,6 +52,9 @@ class Engine:
             raise ApiError("E_NOT_FOUND", f"파일 없음: {video_path}")
         if src.suffix.lower() not in self.project.VIDEO_EXTS:
             raise ApiError("E_BAD_FILE", f"영상 파일이 아닙니다: {src.name}", f"가능: {', '.join(self.project.VIDEO_EXTS)}")
+        if _is_cloud_placeholder(src):
+            raise ApiError("E_FILE_OFFLINE", f"클라우드 자리표시자 파일입니다 (아직 내려받지 않음): {src.name}",
+                           "OneDrive 에서 파일을 우클릭 → '이 장치에 항상 유지' 로 내려받은 뒤 다시 등록하세요.")
         vid = self._safe_id(vid or src.stem)
         if vid in self.project.episode_ids() and (self.project.cache / vid / "meta.json").exists():
             existing = self.project.video_path(vid)
@@ -219,6 +231,20 @@ class Engine:
                         note = r.get("note", "")
                         reason = note.split("|")[-1].strip() if "|" in note else ""
                         out[(f"{float(r['start']):.1f}", f"{float(r['end']):.1f}")] = {"label": r["label"], "reason": reason}
+        return out
+
+    def games_list(self) -> list[dict]:
+        """등록 화면의 게임 선택: games/*.yaml (common 제외)."""
+        import yaml
+        out = []
+        for p in sorted(self.project.games.glob("*.yaml")):
+            if p.stem == "common":
+                continue
+            try:
+                d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            except Exception:  # noqa: BLE001
+                d = {}
+            out.append({"key": p.stem, "name": d.get("title") or d.get("name") or p.stem})
         return out
 
     # ---- 결과물 위치 (화면의 '폴더 열기' 버튼) ----
@@ -435,8 +461,10 @@ class Engine:
     def live_status(self) -> dict:
         from ..live.source import ScreenSource  # noqa: F401 — 가져오기 확인
         s = self._live
+        prev = (s.dir / "last.jpg") if s else None
         return {"active": bool(s and s.running), "session": s.status() if s else None,
-                "suggestions": [vars(x) for x in s.suggestions[-50:]] if s else [], "bookmarks": s.bookmarks[-50:] if s else []}
+                "suggestions": [vars(x) for x in s.suggestions[-50:]] if s else [], "bookmarks": s.bookmarks[-50:] if s else [],
+                "preview_url": f"/media/live/{s.id}/last.jpg?ts={int(prev.stat().st_mtime)}" if prev and prev.exists() else None}
 
     def live_start(self, config: dict | None = None) -> dict:
         from ..live.session import LiveSession
@@ -465,6 +493,23 @@ class Engine:
             return self._live.approve(sid, text)
         except KeyError:
             raise ApiError("E_NOT_FOUND", f"제안 없음: {sid}")
+
+    def live_approve_latest(self) -> dict:
+        """전역 단축키용: 가장 최근 대기 제안을 승인."""
+        if not self._live or not self._live.running:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다")
+        s = self._live.latest_pending()
+        if not s:
+            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없습니다")
+        return self._live.approve(s.id)
+
+    def live_dismiss_latest(self) -> dict:
+        if not self._live or not self._live.running:
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다")
+        s = self._live.latest_pending()
+        if not s:
+            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없습니다")
+        return self._live.dismiss(s.id)
 
     def live_dismiss(self, sid: str) -> dict:
         if not self._live:

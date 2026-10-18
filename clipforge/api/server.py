@@ -245,6 +245,26 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     def live_mark(body: LiveMark):
         return engine.live_mark(body.note)
 
+    @app.post("/api/live/suggestions/latest/approve")
+    def live_approve_latest():
+        return engine.live_approve_latest()
+
+    @app.post("/api/live/suggestions/latest/dismiss")
+    def live_dismiss_latest():
+        return engine.live_dismiss_latest()
+
+    @app.get("/api/games")
+    def games():
+        return engine.games_list()
+
+    @app.api_route("/media/live/{sid}/{name}", methods=["GET", "HEAD"])
+    def media_live(sid: str, name: str):
+        root = (engine.project.data_root / "live").resolve()
+        p = (root / sid / name).resolve()
+        if root not in p.parents or not p.is_file() or p.suffix.lower() not in (".jpg", ".png", ".json"):
+            raise HTTPException(404)
+        return FileResponse(str(p), headers={"Cache-Control": "no-store"})
+
     @app.post("/api/live/suggestions/{sid}/approve")
     def live_approve(sid: str, body: LiveApprove):
         return engine.live_approve(sid, body.text)

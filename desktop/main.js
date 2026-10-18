@@ -16,6 +16,7 @@ const RELEASE = require("./release.config");
 
 const SMOKE = process.argv.includes("--smoke");
 const AUTO_SETUP = process.argv.includes("--auto-setup");
+const FAKE_UPDATE = process.argv.includes("--fake-update");   // 화면 점검용: 가짜 업데이트가 있는 것처럼 상태를 보낸다 (아무것도 내려받지 않음)
 const AUTO_UPDATE = process.argv.includes("--auto-update");   // 시작 직후 업데이트를 확인해 있으면 바로 적용 (자동 점검용)   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
 const ASSETS = path.join(__dirname, "assets");
 const DEFAULT_UPDATE_URL = RELEASE.updateUrl;      // GitHub Releases: <owner>/<repo> 의 최신 릴리스 자산 (release.config.js)
@@ -451,6 +452,10 @@ async function boot() {
       const tick = () => { checkUpdates().catch((e) => log(`update: ${e.message}`)); checkShellUpdate(); };
       setTimeout(tick, 10_000);
       setInterval(tick, 6 * 3600_000);
+    }
+    if (FAKE_UPDATE) {
+      pendingUpdates = [{ name: "engine-code", reason: "update", entry: { version: "9.9.9", size: 12_000_000, url: "about:blank", notes: "화면 점검용 가짜 항목" } }];
+      updateState.lastCheck = Date.now(); updateTrayMenu(null); broadcastUpdate(); log("fake-update: 가짜 대기 항목을 보냈습니다");
     }
     if (SMOKE) {
       log("smoke: ok — 5초 뒤 종료");

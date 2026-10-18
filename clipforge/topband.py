@@ -4,7 +4,7 @@
   chat  : 어두운 배경에 확대한 채팅 피드 3~4줄 (닉네임 색 + 흰 굵은 본문) (레퍼런스: 같은 채널 채팅형). 줌·채팅 앵커 기본.
           친구는 페이스캠이 없고 방송 중 채팅을 줌인하므로 채팅 피드가 곧 리액션 화면이다.
 
-폰트: assets/fonts (OFL) — NanumPenScript(손글씨), BlackHanSans(굵은 제목). 본문은 맑은 고딕 Bold.
+텍스트는 전부 textdraw.py 로만 그린다 (스트로커 금지, 글자 단위 폰트 폴백). 폰트: assets/fonts (OFL) + 맑은 고딕.
 출력 PNG 는 1080×height. 렌더가 [1:v] 로 받아 vstack 한다.
 """
 from __future__ import annotations
@@ -13,33 +13,15 @@ import hashlib
 import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-ROOT = Path(__file__).resolve().parent.parent
-FONTS = {
-    "pen": ROOT / "assets" / "fonts" / "NanumPenScript-Regular.ttf",
-    "black": ROOT / "assets" / "fonts" / "BlackHanSans-Regular.ttf",
-    "gothic": Path("C:/Windows/Fonts/malgunbd.ttf"),
-}
+from .textdraw import FontStack, draw_text, fit_size
+
 W = 1080
 TITLE_H, CHAT_H_TOP = 400, 560          # 모드별 상단 높이
-
-
-def _font(kind: str, size: int) -> ImageFont.FreeTypeFont:
-    p = FONTS.get(kind)
-    if p and p.exists():
-        return ImageFont.truetype(str(p), size)
-    return ImageFont.truetype(str(FONTS["gothic"]), size)
-
-
-def _fit(draw: ImageDraw.ImageDraw, text: str, kind: str, max_w: int, start: int, floor: int = 48) -> ImageFont.FreeTypeFont:
-    size = start
-    while size > floor:
-        f = _font(kind, size)
-        if draw.textlength(text, font=f) <= max_w:
-            return f
-        size -= 6
-    return _font(kind, floor)
+PEN = FontStack("pen", "gothic")        # 손글씨 + 폴백(가운뎃점·★ 등 손글씨체에 없는 기호)
+GOTHIC = FontStack("gothic", "gothic_regular")
+BLACK = FontStack("black", "gothic")
 
 
 def paper(w: int, h: int, seed: int = 7) -> Image.Image:
@@ -55,27 +37,20 @@ def paper(w: int, h: int, seed: int = 7) -> Image.Image:
     return img
 
 
-def title_band(lines: list[str], path: Path, height: int = TITLE_H, font_kind: str = "pen") -> Path:
-    lines = [l.replace(" · ", ", ") for l in lines if l][:2] or ["하이라이트"]   # 손글씨체에 가운뎃점 글리프 없음
+def title_band(lines: list[str], path: Path, height: int = TITLE_H, stack: FontStack = PEN) -> Path:
+    lines = [l for l in lines if l][:2] or ["하이라이트"]
     img = paper(W, height)
     d = ImageDraw.Draw(img)
-    # 두 줄이면 각 줄 높이 = height/2.3, 한 줄이면 더 크게
     start = int(height * (0.42 if len(lines) == 2 else 0.6))
-    fonts = [_fit(d, l, font_kind, W - 120, start) for l in lines]
-    heights = [f.getbbox(l)[3] - f.getbbox(l)[1] for f, l in zip(fonts, lines)]
+    sizes = [fit_size(stack, l, W - 120, start, floor=48) for l in lines]
+    boxes = [stack.height(l, s) for l, s in zip(lines, sizes)]
+    heights = [b - t for t, b in boxes]
     gap = int(height * 0.06)
     total = sum(heights) + gap * (len(lines) - 1)
     y = (height - total) // 2
-    for f, l, h in zip(fonts, lines, heights):
-        tw = d.textlength(l, font=f)
-        x = (W - tw) / 2
-        bbox = f.getbbox(l)
-        # 손글씨체는 FreeType 스트로커(stroke_width)가 일부 글리프(예: '참'의 ㅊ)를 속 빈 획으로 그린다.
-        # 윤곽선 방향과 무관하게 굵어지도록 글자를 작은 오프셋으로 여러 번 찍어 '가짜 볼드' 처리.
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                if dx * dx + dy * dy <= 5:
-                    d.text((x + dx, y - bbox[1] + dy), l, font=f, fill=(20, 20, 20))
+    for l, s, (top, _), h in zip(lines, sizes, boxes, heights):
+        x = (W - stack.width(l, s)) / 2
+        draw_text(d, (x, y - top), l, stack, s, fill=(20, 20, 20), weight=2)
         y += h + gap
     img.save(path)
     return path
@@ -87,11 +62,11 @@ def _nick_color(nick: str) -> tuple[int, int, int]:
     return palette[h % len(palette)]
 
 
-def _wrap(draw, text: str, font, max_w: int, max_lines: int = 2) -> list[str]:
+def _wrap(stack: FontStack, text: str, size: int, max_w: int, max_lines: int = 2) -> list[str]:
     words, lines, cur = text.split(" "), [], ""
     for w in words:
         cand = (cur + " " + w).strip()
-        if draw.textlength(cand, font=font) <= max_w or not cur:
+        if stack.width(cand, size) <= max_w or not cur:
             cur = cand
         else:
             lines.append(cur); cur = w
@@ -99,12 +74,11 @@ def _wrap(draw, text: str, font, max_w: int, max_lines: int = 2) -> list[str]:
             break
     if cur and len(lines) < max_lines:
         lines.append(cur)
-    # 단어 경계가 없는 긴 한국어 문자열: 글자 단위 자르기
     out = []
-    for l in lines:
-        while draw.textlength(l, font=font) > max_w and len(l) > 1:
+    for l in lines:                                 # 단어 경계 없는 긴 한국어: 글자 단위로 자른다
+        while stack.width(l, size) > max_w and len(l) > 1:
             cut = len(l)
-            while cut > 1 and draw.textlength(l[:cut], font=font) > max_w:
+            while cut > 1 and stack.width(l[:cut], size) > max_w:
                 cut -= 1
             out.append(l[:cut]); l = l[cut:]
             if len(out) == max_lines:
@@ -119,13 +93,9 @@ def chat_band(messages: list[dict], path: Path, height: int = CHAT_H_TOP, max_ms
     msgs = messages[-max_msgs:]
     img = Image.new("RGB", (W, height), (14, 14, 16))
     d = ImageDraw.Draw(img)
-    nick_f, body_f = _font("gothic", 44), _font("gothic", 58)
+    nick_size, body_size = 44, 58
     pad_x, y = 48, 36
-    blocks = []
-    for m in msgs:
-        body = _wrap(d, m.get("text", ""), body_f, W - pad_x * 2, 2)
-        blocks.append((m.get("nick", ""), body))
-    # 높이에 맞게 뒤에서부터 채운다
+    blocks = [(m.get("nick", ""), _wrap(GOTHIC, m.get("text", ""), body_size, W - pad_x * 2, 2)) for m in msgs]
     line_h = 70
     needed = lambda b: (52 if b[0] else 0) + line_h * len(b[1]) + 26
     while blocks and sum(needed(b) for b in blocks) > height - 40:
@@ -133,14 +103,13 @@ def chat_band(messages: list[dict], path: Path, height: int = CHAT_H_TOP, max_ms
     for nick, body in blocks:
         if nick:
             d.ellipse((pad_x, y + 10, pad_x + 26, y + 36), fill=_nick_color(nick))
-            d.text((pad_x + 40, y), nick, font=nick_f, fill=_nick_color(nick))
+            draw_text(d, (pad_x + 40, y), nick, GOTHIC, nick_size, fill=_nick_color(nick))
             y += 52
         for l in body:
-            d.text((pad_x, y), l, font=body_f, fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
+            draw_text(d, (pad_x, y), l, GOTHIC, body_size, fill=(255, 255, 255), outline=(0, 0, 0), outline_weight=2)
             y += line_h
         y += 26
     if not blocks:
-        f = _font("black", 72)
-        d.text((pad_x, height // 2 - 40), "채팅 반응", font=f, fill=(255, 255, 255))
+        draw_text(d, (pad_x, height // 2 - 40), "채팅 반응", BLACK, 72, fill=(255, 255, 255))
     img.save(path)
     return path

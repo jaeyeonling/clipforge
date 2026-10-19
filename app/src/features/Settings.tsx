@@ -9,7 +9,7 @@ import { COMPONENT_LABEL, human, inShell, shell, useShellInfo, useUpdateState } 
 const fmtWhen = (t: number | null) => (t ? new Date(t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "아직 안 함");
 
 export function Settings() {
-  const { health, activeJob, toast, fail, refreshHealth } = useApp();
+  const { health, activeJob, toast, fail, refreshHealth, simple, setSimple } = useApp();
   const st = useUpdateState();
   const [info, reloadInfo] = useShellInfo([st?.lastCheck, st?.applying]);
   const [checking, setChecking] = useState(false);
@@ -72,6 +72,10 @@ export function Settings() {
       </div>
 
       <div>
+        <Card title="보기 방식">
+          <label className={cx("check", !simple && "on")} data-tip={TIP.advancedMode}><input type="checkbox" checked={!simple} onChange={(e) => setSimple(!e.target.checked)} /> 고급 기능 보기</label>
+          <p className="muted xs" style={{ marginTop: 8 }}>꺼져 있으면(기본) 쇼츠 초안과 자막 두 가지만 보여요. 켜면 편집 포인트·화면 영역·기록·라이브 탭과 단계 선택, 진행 기록이 나타나요.</p>
+        </Card>
         <Card title="폴더">
           {!inShell || !info ? <p className="muted small">데이터 {health?.data_root ?? "-"}</p> : (
             <table className="data">

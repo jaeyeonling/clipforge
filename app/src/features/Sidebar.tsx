@@ -9,7 +9,7 @@ import { TIP } from "../api/tips";
 const VIDEO_RE = /\.(mp4|mkv|mov|m4v|ts|flv|webm)$/i;
 
 export function Sidebar() {
-  const { episodes, selected, selectEpisode, refreshEpisodes, registerVideos, toast, fail } = useApp();
+  const { episodes, selected, selectEpisode, refreshEpisodes, registerVideos, toast, fail, simple } = useApp();
   const [path, setPath] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EpisodeKind>("edited");
@@ -43,7 +43,7 @@ export function Sidebar() {
   return (
     <aside className={cx("sidebar", drag && "drag")} onDragEnter={onDragEnter} onDragOver={(e) => e.preventDefault()} onDragLeave={onDragLeave} onDrop={onDrop}>
       <div className="sidebar-head">
-        <h2>회차 {episodes.length ? `· ${episodes.length}` : ""}</h2>
+        <h2>{simple ? "영상" : "회차"} {episodes.length ? `· ${episodes.length}` : ""}</h2>
         <Button variant="ghost" size="sm" onClick={() => refreshEpisodes().catch(fail)} title="목록 새로고침">↻</Button>
       </div>
       <ul className="episodes">
@@ -54,10 +54,12 @@ export function Sidebar() {
             <li key={e.id} className={cx("ep", selected?.id === e.id && "active")} onClick={() => selectEpisode(e.id)}>
               <div className="id">{e.id}{e.kind === "original" && <span className="badge xs accent" title="원본 녹화 → 편집 포인트 (Phase 2)">원본</span>}{e.linked === false && <span className="badge xs" title={`원본 경로 참조: ${e.source}`}>참조</span>}</div>
               {e.title && <div className="title" title={e.title}>{e.title}</div>}
-              <div className="meta">{e.duration ? `${fmtTime(e.duration)} · ${e.width}×${e.height}` : "아직 분석 전"}{done ? ` · ${done}/${want.length} 단계 완료` : ""}</div>
-              <div className="stage-dots" title={want.map((s) => `${s}: ${e.stages?.[s] ? "완료" : "-"}`).join("\n")}>
-                {want.map((s) => <i key={s} className={cx(e.stages?.[s] && "on")} />)}
-              </div>
+              <div className="meta">{e.duration ? `${fmtTime(e.duration)} · ${e.width}×${e.height}` : "아직 분석 전"}{simple ? (e.stages?.export ? " · 초안 있음" : "") + (e.stages?.subtitles ? " · 자막 있음" : "") : done ? ` · ${done}/${want.length} 단계 완료` : ""}</div>
+              {!simple && (
+                <div className="stage-dots" title={want.map((s) => `${s}: ${e.stages?.[s] ? "완료" : "-"}`).join("\n")}>
+                  {want.map((s) => <i key={s} className={cx(e.stages?.[s] && "on")} />)}
+                </div>
+              )}
             </li>
           );
         })}
@@ -65,15 +67,17 @@ export function Sidebar() {
       </ul>
       <form className="add-form" onSubmit={(ev) => { ev.preventDefault(); submit(); }}>
         {drag && <div className="dropzone">영상을 놓으면 등록돼요</div>}
-        {games.length > 1 && (
+        {!simple && games.length > 1 && (
           <select className="field" value={game} onChange={(e) => setGame(e.target.value)} disabled={!!busy} title="게임 프로필 (화면 영역·사전)">
             {games.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
           </select>
         )}
-        <select className="field" value={kind} onChange={(e) => setKind(e.target.value as EpisodeKind)} disabled={!!busy} data-tip={TIP.kindSelect}>
-          {(Object.keys(KIND_LABEL) as EpisodeKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-        </select>
-        <input className="field" placeholder="유튜브 제목 (선택)" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!busy} data-tip={TIP.titleInput} />
+        {!simple && (
+          <select className="field" value={kind} onChange={(e) => setKind(e.target.value as EpisodeKind)} disabled={!!busy} data-tip={TIP.kindSelect}>
+            {(Object.keys(KIND_LABEL) as EpisodeKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+          </select>
+        )}
+        {!simple && <input className="field" placeholder="유튜브 제목 (선택)" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!busy} data-tip={TIP.titleInput} />}
         {inShell ? (
           <Button type="button" variant="primary" onClick={pick} disabled={!!busy}>{busy || "영상 넣기"}</Button>
         ) : (

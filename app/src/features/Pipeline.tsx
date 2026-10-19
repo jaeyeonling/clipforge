@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import { DEFAULT_STAGES, KIND_LABEL, STAGES, STAGE_LABEL, STAGE_TECH, type EpisodeKind, type Layout, type StageName } from "../api/types";
+import { DEFAULT_STAGES, KIND_LABEL, STAGES, STAGE_LABEL, STAGE_TECH, type EpisodeKind, type EpisodePaths, type Layout, type StageName } from "../api/types";
 import { Badge, Button, Card, Progress, Spinner, cx, fmtDur } from "../components/ui";
 import { inShell, shell } from "../shell";
 import { STAGE_TIP, TIP } from "../api/tips";
@@ -20,7 +20,7 @@ const STAGES_FOR: Record<EpisodeKind, StageName[]> = {
 };
 
 export function Pipeline() {
-  const { selected, activeJob, runJob, cancelJob, fail, runError, dismissError, toast, lastDone } = useApp();
+  const { selected, activeJob, runJob, cancelJob, fail, runError, dismissError, toast, lastDone, simple, tick } = useApp();
   const kind: EpisodeKind = selected?.kind || "edited";
   const [stages, setStages] = useState<Set<StageName>>(new Set(DEFAULT_STAGES.edited));
   const [layout, setLayout] = useState<Layout>("card");
@@ -40,6 +40,11 @@ export function Pipeline() {
   const ordered = STAGES.filter((s) => stages.has(s) && visible.includes(s));
   const needsFinal = ordered.includes("align") && kind === "original";
   const needsShorts = ordered.includes("align") && kind === "edited";
+
+  // 결과물 위치 (단순 모드의 '초안 보러 가기' · '자막 파일 열기')
+  const [paths, setPaths] = useState<EpisodePaths | null>(null);
+  useEffect(() => { if (selected) api.episodePaths(selected.id).then(setPaths).catch(() => setPaths(null)); else setPaths(null); }, [selected?.id, tick, lastDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openPath = (p: string) => { if (shell) shell.shell.openPath(p).catch(fail); else { navigator.clipboard?.writeText(p).catch(() => {}); toast(`경로를 복사했어요: ${p}`); } };
 
   const pickFinal = async () => { if (!shell) return; try { const ps = await shell.shell.pickVideos(); if (ps[0]) setFinalPath(ps[0]); } catch (e) { fail(e); } };
   const pickShorts = async () => { if (!shell) return; try { const ps = await shell.shell.pickVideos(); if (ps.length) setShortsPaths((cur) => [...new Set([...cur, ...ps])]); } catch (e) { fail(e); } };
@@ -71,12 +76,15 @@ export function Pipeline() {
     if (!selected) return;
     try { await runJob(selected.id, quickStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
   };
-  // 보조 버튼: 자막 파일만. 영상 읽기·전사가 안 됐으면 그것부터, 됐으면 자막 단계만
+  // 자막만: 영상 읽기·전사가 안 됐으면 그것부터, 됐으면 자막 단계만
   const subtitleStages: StageName[] = [
     ...(selected?.stages?.prep ? [] : ["prep" as const]),
     ...(selected?.stages?.transcribe ? [] : ["transcribe" as const]),
     "subtitles",
   ];
+  const subtitlesDesc = selected?.stages?.transcribe
+    ? "이미 글로 바꿔 둔 말로 자막 파일만 써요. 몇 초면 돼요."
+    : "말을 글로 바꿔 자막 파일을 만들어요. 4K 10분이면 1~2분 걸려요.";
   const subtitlesOnly = async () => {
     if (!selected) return;
     try { await runJob(selected.id, subtitleStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
@@ -98,8 +106,70 @@ export function Pipeline() {
   const state = activeJob?.status === "error" ? "error" : activeJob?.status === "done" ? "done" : "";
   const elapsed = activeJob?.started ? ((activeJob.finished || Date.now() / 1000) - activeJob.started) : 0;
 
+  const runbar = (
+    <div className="runbar" style={{ marginTop: simple ? 0 : 14 }}>
+      <div>
+        {running && activeJob.status === "running" && (
+          <div className="bigpct">{Math.round(activeJob.pct)}%<small>{STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage}{activeJob.eta_s != null && activeJob.eta_s > 0 ? ` · 약 ${fmtDur(activeJob.eta_s)} 남았어요` : ""}</small></div>
+        )}
+        <Progress pct={activeJob?.pct ?? 0} state={state} indeterminate={activeJob?.status === "queued"} />
+        <div className="status" style={{ marginTop: 6 }}>
+          {running && <Spinner />}
+          {activeJob ? (
+            <><b>{STATUS_KO[activeJob.status] || activeJob.status}</b>
+              <span>{activeJob.stage && activeJob.status === "running" ? `${STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
+              {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}
+              {!running && activeJob.status === "done" && <span className="ok">· 끝났어요</span>}
+              {!running && activeJob.status === "queued" && activeJob.eta_s != null && <span className="muted">· 예상 {fmtDur(activeJob.eta_s)}</span>}</>
+          ) : <span className="muted">{simple ? "아직 만든 적이 없어요. 위 버튼 하나면 돼요." : "아직 실행한 적이 없어요. 위 버튼 하나면 돼요."}</span>}
+          {simple && running && <><span className="grow" style={{ flex: 1 }} /><Button variant="danger" size="sm" onClick={() => cancelJob().catch(fail)}>취소</Button></>}
+        </div>
+      </div>
+    </div>
+  );
+
+  const shortsCount = paths?.shorts_count ?? 0;
+  const srt = paths?.subtitles_srt?.exists ? paths.subtitles_srt : null;
+
   return (
     <>
+      {simple ? (
+        <>
+          <Card title="쇼츠 초안" right={selected && <span className="muted xs">{selected.id}</span>}>
+            <div className="quick">
+              <div className="grow">
+                <div className="quick-title">{shortsCount ? `초안 ${shortsCount}개가 있어요` : "버튼 하나면 돼요"}</div>
+                <div className="muted small">{quickDesc}</div>
+              </div>
+              <Button variant="primary" className="cta" onClick={quickStart} disabled={!selected || running} data-tip={TIP.quickRun}>{shortsCount ? "초안 다시 만들기" : quickLabel}</Button>
+            </div>
+            {shortsCount > 0 && paths && (
+              <div className="row">
+                <Button size="sm" onClick={() => { location.hash = "#candidates"; }}>초안 보러 가기</Button>
+                <Button size="sm" variant="ghost" onClick={() => openPath(paths.shorts_dir.path)} title={paths.shorts_dir.path}>초안 폴더 열기</Button>
+                {paths.premiere_shorts.exists && <Button size="sm" variant="ghost" onClick={() => openPath(paths.premiere_shorts.path)} title={paths.premiere_shorts.path}>Premiere 파일 열기</Button>}
+              </div>
+            )}
+          </Card>
+          <Card title="자막">
+            <div className="quick">
+              <div className="grow">
+                <div className="quick-title">{srt ? "자막 파일이 준비됐어요" : "영상 전체 자막 파일"}</div>
+                <div className="muted small">{subtitlesDesc} Premiere 는 SRT 를, VEGAS Pro 는 .vegas.txt 를 가져가면 돼요.</div>
+              </div>
+              <Button variant="primary" className="cta" onClick={subtitlesOnly} disabled={!selected || running} data-tip={TIP.subtitlesOnly}>{srt ? "자막 다시 만들기" : "자막 만들기"}</Button>
+            </div>
+            {srt && paths && (
+              <div className="row">
+                <Button size="sm" onClick={() => openPath(srt.path)} title={srt.path}>자막 파일 열기 (SRT)</Button>
+                {paths.subtitles_vegas?.exists && <Button size="sm" variant="ghost" onClick={() => openPath(paths.subtitles_vegas.path)} data-tip={TIP.subtitlesVegas}>베가스용 열기</Button>}
+                <Button size="sm" variant="ghost" onClick={() => openPath(paths.subtitles_dir.path)} title={paths.subtitles_dir.path}>폴더 열기</Button>
+              </div>
+            )}
+          </Card>
+          <Card title="진행 상황">{runbar}</Card>
+        </>
+      ) : (
       <Card title={kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기"} right={selected && <span className="muted xs">{selected.id} · {KIND_LABEL[kind]}</span>}>
         <div className="quick">
           <div className="grow">
@@ -165,25 +235,9 @@ export function Pipeline() {
         </div>
         </div>
         {kind === "original" && <p className="muted xs" style={{ marginTop: 8 }}>원본은 길어서 OCR 이 무거운 신호(채팅 텍스트)와 편집본 전용 신호(컷 밀도·줌 강조)는 돌리지 않아요. 득템 배너는 화면이 바뀔 때만 읽어요.</p>}
-        <div className="runbar" style={{ marginTop: 14 }}>
-          <div>
-            {running && activeJob.status === "running" && (
-              <div className="bigpct">{Math.round(activeJob.pct)}%<small>{STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage}{activeJob.eta_s != null && activeJob.eta_s > 0 ? ` · 약 ${fmtDur(activeJob.eta_s)} 남았어요` : ""}</small></div>
-            )}
-            <Progress pct={activeJob?.pct ?? 0} state={state} indeterminate={activeJob?.status === "queued"} />
-            <div className="status" style={{ marginTop: 6 }}>
-              {running && <Spinner />}
-              {activeJob ? (
-                <><b>{STATUS_KO[activeJob.status] || activeJob.status}</b>
-                  <span>{activeJob.stage && activeJob.status === "running" ? `${STAGE_LABEL[activeJob.stage as StageName] || activeJob.stage} ${Math.round(activeJob.pct)}% · ` : ""}{activeJob.message}</span>
-                  {elapsed > 0 && <span className="muted">· {fmtDur(elapsed)}</span>}
-                  {!running && activeJob.status === "done" && <span className="ok">· 끝났어요</span>}
-                  {!running && activeJob.status === "queued" && activeJob.eta_s != null && <span className="muted">· 예상 {fmtDur(activeJob.eta_s)}</span>}</>
-              ) : <span className="muted">아직 실행한 적이 없어요. 위 버튼 하나면 돼요.</span>}
-            </div>
-          </div>
-        </div>
+        {runbar}
       </Card>
+      )}
 
       {activeJob?.status === "done" && (activeJob.warnings?.length ?? 0) > 0 && (
         <div className="warnbox" role="status">
@@ -202,7 +256,7 @@ export function Pipeline() {
         </div>
       )}
 
-      <LogPane />
+      {!simple && <LogPane />}
     </>
   );
 }

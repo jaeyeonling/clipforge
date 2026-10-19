@@ -29,6 +29,9 @@ interface Store {
   toast: (text: string, bad?: boolean, action?: { label: string; onClick: () => void }) => void;
   lastDone: DoneSignal | null;
   candCount: number;
+  /** 단순 모드(기본): 쇼츠·자막 두 가지만. 끄면 편집 포인트·화면 영역·기록·라이브·단계 선택이 보인다 (설정 탭). */
+  simple: boolean;
+  setSimple: (v: boolean) => void;
   fail: (e: unknown) => void;
   refreshHealth: () => Promise<void>;
   refreshEpisodes: () => Promise<void>;
@@ -69,6 +72,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), action ? 9000 : bad ? 6000 : 3200);
   }, []);
   const [lastDone, setLastDone] = useState<DoneSignal | null>(null);
+  const [simple, setSimpleState] = useState<boolean>(() => { try { return localStorage.getItem("cf.simple") !== "0"; } catch { return true; } });
+  const setSimple = useCallback((v: boolean) => { setSimpleState(v); try { localStorage.setItem("cf.simple", v ? "1" : "0"); } catch { /* 저장 못 해도 됨 */ } }, []);
   const settled = useRef(new Set<string>());   // 완료 처리를 끝낸 작업 id (WS 이벤트 경로와 아래 settleFast 가 겹치지 않게)
   const [candCount, setCandCount] = useState(0);
   const fail = useCallback((e: unknown) => {
@@ -219,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     health, episodes, selected, selectEpisode, jobs, activeJob, viewJobId, log, logTitle, logPath, runError, wsConnected, tick, toasts, liveStatus, liveEvents, refreshLive,
-    toast, fail, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, registerVideos, runJob, cancelJob, viewJob, clearLog, dismissError, lastDone, candCount,
+    toast, fail, simple, setSimple, refreshHealth, refreshEpisodes, refreshJobs, addEpisode, registerVideos, runJob, cancelJob, viewJob, clearLog, dismissError, lastDone, candCount,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

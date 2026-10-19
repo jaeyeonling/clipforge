@@ -15,7 +15,7 @@ const isTyping = () => { const el = document.activeElement; return !!el && ["INP
  * 판정은 labels.csv 에 바로 저장된다. 같은 버튼을 다시 누르면 해제.
  */
 export function Candidates() {
-  const { selected, tick, toast, fail } = useApp();
+  const { selected, tick, toast, fail, simple } = useApp();
   const [items, setItems] = useState<Candidate[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
@@ -91,7 +91,7 @@ export function Candidates() {
       <span className="muted xs" data-tip={TIP.outputs}>결과물</span>
       <Button size="sm" onClick={() => open(paths.shorts_dir.path)} disabled={!paths.shorts_dir.exists} title={paths.shorts_dir.path}>초안 폴더{paths.shorts_count ? ` (${paths.shorts_count})` : ""}</Button>
       <Button size="sm" onClick={() => open(paths.premiere_shorts.exists ? paths.premiere_shorts.path : paths.premiere_dir.path)} disabled={!paths.premiere_dir.exists} title={paths.premiere_shorts.path}>Premiere XML</Button>
-      <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>
+      {!simple && <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>}
       {paths.subtitles_srt?.exists && <Button size="sm" variant="ghost" onClick={() => open(paths.subtitles_srt.path)} title={`영상 전체 자막 — ${paths.subtitles_srt.path}`}>자막 파일</Button>}
       {paths.subtitles_vegas?.exists && <Button size="sm" variant="ghost" onClick={() => open(paths.subtitles_vegas.path)} data-tip={TIP.subtitlesVegas}>베가스 자막</Button>}
       {!inShell && <span className="muted xs">브라우저에서는 경로를 복사해요</span>}
@@ -110,9 +110,9 @@ export function Candidates() {
             {{ all: "전체", undecided: "아직 안 봄", keep: "쓸 만함", no: "안 씀" }[f]} <span className="count">{counts[f]}</span>
           </Button>
         ))}
-        <span className="keys" title="키보드 단축키">
+        {!simple && <span className="keys" title="키보드 단축키">
           <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>K</kbd> 쓸 만함 · <kbd>N</kbd>+<kbd>1~6</kbd> 안 씀(사유) · <kbd>Space</kbd> 재생 · <kbd>C</kbd> 비교 · <kbd>Esc</kbd> 닫기
-        </span>
+        </span>}
       </div>
       {reasonPrompt && shown[focus] && (
         <div className="sheet" role="dialog" aria-label="안 쓰는 이유">

@@ -72,7 +72,7 @@ def test_project_file_created_and_newer_blocks_jobs(tmp_path, monkeypatch):
 
 
 # ---------- jobs: 전제 조건 오류 → 코드+힌트, 매니페스트, 로그 ----------
-def _wait(engine, job_id, timeout=10.0):
+def _wait(engine, job_id, timeout=30.0):   # 빌드·렌더가 같이 돌 때 10초는 모자랐다
     t0 = time.time()
     while time.time() - t0 < timeout:
         j = engine.job_get(job_id)

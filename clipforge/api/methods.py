@@ -255,6 +255,9 @@ class Engine:
             "premiere_review": p.premiere / f"{vid}_review.xml",
             "premiere_shorts": p.premiere / f"{vid}_shorts.xml",
             "premiere_dir": p.premiere,
+            "subtitles_srt": p.premiere / vid / f"{vid}.srt",      # 영상 전체 자막 (subtitles 단계)
+            "subtitles_vtt": p.premiere / vid / f"{vid}.vtt",
+            "subtitles_dir": p.premiere / vid,
             "cache_dir": p.cache / vid,
             "labels_shorts": p.labels / f"{vid}.shorts.csv",
             "labels_editpoints": p.labels / f"{vid}.csv",

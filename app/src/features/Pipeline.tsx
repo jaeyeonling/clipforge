@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../api/client";
 import { DEFAULT_STAGES, KIND_LABEL, STAGES, STAGE_LABEL, STAGE_TECH, type EpisodeKind, type Layout, type StageName } from "../api/types";
 import { Badge, Button, Card, Progress, Spinner, cx, fmtDur } from "../components/ui";
 import { inShell, shell } from "../shell";
@@ -14,12 +15,12 @@ const PRESETS: { key: string; label: string; title: string; kinds: EpisodeKind[]
 const STATUS_KO: Record<string, string> = { queued: "대기", running: "실행 중", done: "완료", error: "오류", cancelled: "취소" };
 /** 회차 종류별로 보여줄 단계 (다른 종류의 단계는 숨긴다) */
 const STAGES_FOR: Record<EpisodeKind, StageName[]> = {
-  edited: ["prep", "transcribe", "signals", "shorts", "export", "xml", "align", "weaklabel", "eval"],
-  original: ["prep", "transcribe", "signals", "candidates", "align", "xml", "eval"],
+  edited: ["prep", "transcribe", "subtitles", "signals", "shorts", "export", "xml", "align", "weaklabel", "eval"],
+  original: ["prep", "transcribe", "subtitles", "signals", "candidates", "align", "xml", "eval"],
 };
 
 export function Pipeline() {
-  const { selected, activeJob, runJob, cancelJob, fail, runError, dismissError, toast } = useApp();
+  const { selected, activeJob, runJob, cancelJob, fail, runError, dismissError, toast, lastDone } = useApp();
   const kind: EpisodeKind = selected?.kind || "edited";
   const [stages, setStages] = useState<Set<StageName>>(new Set(DEFAULT_STAGES.edited));
   const [layout, setLayout] = useState<Layout>("card");
@@ -70,6 +71,30 @@ export function Pipeline() {
     if (!selected) return;
     try { await runJob(selected.id, quickStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
   };
+  // 보조 버튼: 자막 파일만. 영상 읽기·전사가 안 됐으면 그것부터, 됐으면 자막 단계만
+  const subtitleStages: StageName[] = [
+    ...(selected?.stages?.prep ? [] : ["prep" as const]),
+    ...(selected?.stages?.transcribe ? [] : ["transcribe" as const]),
+    "subtitles",
+  ];
+  const subtitlesOnly = async () => {
+    if (!selected) return;
+    try { await runJob(selected.id, subtitleStages, { layout, k, force: false, kind, threshold }); } catch (e) { fail(e); }
+  };
+  // 자막 단계가 끝나면 토스트에 '자막 파일 열기' 액션
+  const subsDoneAt = useRef(0);
+  useEffect(() => {
+    if (!lastDone || lastDone.at === subsDoneAt.current || !lastDone.stages.includes("subtitles")) return;
+    subsDoneAt.current = lastDone.at;
+    api.episodePaths(lastDone.episode).then((p) => {
+      if (!p.subtitles_srt?.exists) return;
+      const path = p.subtitles_srt.path;
+      toast(`자막 파일이 생겼어요 — ${lastDone.episode}.srt`, false, {
+        label: "자막 파일 열기",
+        onClick: () => { if (shell) shell.shell.openPath(path).catch(fail); else { navigator.clipboard?.writeText(path).catch(() => {}); toast(`경로를 복사했어요: ${path}`); } },
+      });
+    }).catch(() => {});
+  }, [lastDone, toast, fail]);
   const state = activeJob?.status === "error" ? "error" : activeJob?.status === "done" ? "done" : "";
   const elapsed = activeJob?.started ? ((activeJob.finished || Date.now() / 1000) - activeJob.started) : 0;
 
@@ -82,7 +107,10 @@ export function Pipeline() {
             <div className="muted small">{quickDesc}</div>
           </div>
           {running ? <Button variant="danger" className="cta" onClick={() => cancelJob().catch(fail)}>취소</Button>
-            : <Button variant="primary" className="cta" onClick={quickStart} disabled={!selected} data-tip={TIP.quickRun}>{quickLabel}</Button>}
+            : <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                <Button variant="primary" className="cta" onClick={quickStart} disabled={!selected} data-tip={TIP.quickRun}>{quickLabel}</Button>
+                <Button variant="ghost" size="sm" onClick={subtitlesOnly} disabled={!selected} data-tip={TIP.subtitlesOnly}>자막만 만들기</Button>
+              </div>}
         </div>
         <button className="adv-toggle" onClick={() => setAdvanced((v) => !v)}>{advanced ? "고급 설정 닫기 ▴" : "직접 단계를 고르거나 처음부터 다시 돌리기 ▾"}</button>
         <div hidden={!advanced}>

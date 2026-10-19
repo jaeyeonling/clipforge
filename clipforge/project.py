@@ -172,6 +172,7 @@ class Project:
         stages = {
             "prep": (self.cache / vid / "frames").exists(),
             "transcribe": (self.cache / vid / "transcript.json").exists(),
+            "subtitles": (self.premiere / vid / f"{vid}.srt").exists(),
             "signals": (self.cache / vid / "item_banner.json").exists() or (self.cache / vid / "audio_loudness.json").exists(),
             "candidates": (self.cache / vid / "candidates.json").exists(),
             "align": (self.cache / vid / "align.json").exists(),

@@ -23,8 +23,8 @@ from .errors import EngineError, classify
 from .project import Project
 from .schema import SCHEMA
 
-STAGES = ["prep", "transcribe", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"]
-# 회차 종류별 기본 단계. edited = Phase 1 (쇼츠), original = Phase 2 (편집 포인트)
+STAGES = ["prep", "transcribe", "subtitles", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"]
+# 회차 종류별 기본 단계. edited = Phase 1 (쇼츠), original = Phase 2 (편집 포인트). subtitles 는 선택 단계(영상 전체 자막 파일)라 기본에 넣지 않는다.
 DEFAULT_STAGES = {"edited": ["prep", "transcribe", "signals", "shorts", "export", "xml"],
                   "original": ["prep", "transcribe", "signals", "candidates", "align", "eval"]}
 
@@ -233,7 +233,7 @@ class JobRunner:
 
 
 # 단계별 기본 소요 (초 / 영상 1분). 4K60 11.7분 ep59 실측 기준. 매니페스트가 쌓이면 그 평균으로 대체.
-DEFAULT_RATE = {"prep": 15.0, "transcribe": 3.0, "signals": 32.0, "candidates": 0.3, "align": 1.0, "shorts": 0.5, "export": 6.0, "xml": 0.2, "weaklabel": 0.2, "eval": 0.2}
+DEFAULT_RATE = {"prep": 15.0, "transcribe": 3.0, "subtitles": 0.1, "signals": 32.0, "candidates": 0.3, "align": 1.0, "shorts": 0.5, "export": 6.0, "xml": 0.2, "weaklabel": 0.2, "eval": 0.2}
 
 
 def estimate_stage_eta(project: Project, vid: str, stages: list[str], params: dict | None = None) -> dict[str, float]:
@@ -266,6 +266,7 @@ def estimate_stage_eta(project: Project, vid: str, stages: list[str], params: di
                 rates.setdefault(st, []).append(float(sec) / (md / 60.0))
     cache = project.cache / vid
     cached = {"prep": (cache / "frames").exists(), "transcribe": (cache / "transcript.json").exists(),
+              "subtitles": (project.premiere / vid / f"{vid}.srt").exists(),
               "signals": (cache / "item_banner.json").exists() or (cache / "audio_loudness.json").exists()}
     force = bool((params or {}).get("force"))
     out = {}
@@ -339,6 +340,28 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(0.05, "Whisper (GPU → CPU 폴백)")
         tr = transcribe(cache, force=bool(job.params.get("force")))
         prog(1.0, f"{tr.get('backend')} {len(tr.get('segments', []))} segments")
+    elif stage == "subtitles":
+        # 영상 전체 자막 파일 (SRT + VTT). 쇼츠 초안 옆 .srt 와 달리 회차 하나를 통째로 — '자막만 달고 싶을 때' 경로.
+        from .subtitles import cues_for_clip, write_srt, write_vtt
+        tr_p = cache / "transcript.json"
+        _require(tr_p, "E_NO_TRANSCRIPT", "전사 결과(transcript.json)", "transcribe 단계를 먼저 실행하세요.")
+        tr = json.loads(tr_p.read_text(encoding="utf-8"))
+        segs = tr.get("segments", [])
+        try:
+            duration = float(_meta(project, vid)["duration"])
+        except Exception:  # noqa: BLE001 — meta 가 없으면 전사의 끝 시각까지
+            duration = max((float(sg.get("end", 0.0)) for sg in segs), default=0.0)
+        max_chars = int(job.params.get("max_chars", 28))          # 가로 전체 영상이라 쇼츠(18자)보다 길게
+        cues = cues_for_clip(tr, 0.0, duration, max_chars=max_chars)
+        out_dir = project.premiere / vid
+        out_dir.mkdir(parents=True, exist_ok=True)
+        write_srt(cues, out_dir / f"{vid}.srt", 0.0)
+        write_vtt(cues, out_dir / f"{vid}.vtt", 0.0)
+        if not cues:
+            job.warnings.append({"code": "W_NO_SPEECH", "message": "들리는 말이 없어 자막이 비었어요",
+                                 "hint": "영상에 목소리가 있는지, 전사(transcribe)가 제대로 됐는지 확인하세요. 파일은 만들어졌지만 큐가 0개예요."})
+        job.log(f"subtitles: {len(cues)} cues · {out_dir / (vid + '.srt')}")
+        prog(1.0, f"자막 {len(cues)}줄 → {vid}.srt / .vtt")
     elif stage == "signals":
         from .signals import REGISTRY, run_signal
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")

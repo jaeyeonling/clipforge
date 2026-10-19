@@ -103,6 +103,18 @@ def write_srt(cues: list[tuple[float, float, str]], path: Path, clip_start: floa
     return path
 
 
+def write_vtt(cues: list[tuple[float, float, str]], path: Path, clip_start: float) -> Path:
+    """WebVTT (같은 큐). 유튜브 자막 업로드·브라우저 재생용."""
+    def ts(sec):
+        sec = max(0.0, sec); h, r = divmod(sec, 3600); m, s = divmod(r, 60)
+        return f"{int(h):02d}:{int(m):02d}:{int(s):02d}.{int(round((s - int(s)) * 1000)):03d}"
+    lines = ["WEBVTT", ""]
+    for i, (a, b, t) in enumerate(cues, 1):
+        lines += [str(i), f"{ts(a - clip_start)} --> {ts(b - clip_start)}", t, ""]
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def write_ass(cues: list[tuple[float, float, str]], path: Path, clip_start: float, size: int = 58, margin_v: int = 500) -> Path:
     lines = [ASS_HEADER.format(size=size, margin_v=margin_v)]
     for a, b, t in cues:

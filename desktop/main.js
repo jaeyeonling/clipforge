@@ -177,7 +177,7 @@ function createWindow() {
   win.on("close", (e) => {
     if (quitting) return;
     e.preventDefault(); win.hide();
-    if (!app._hintShown) { app._hintShown = true; notify("트레이에서 계속 실행 중", "작업과 다운로드는 계속됩니다. 트레이 아이콘에서 다시 열거나 종료하세요."); }
+    if (!app._hintShown) { app._hintShown = true; notify("트레이에서 계속 실행 중", "작업과 다운로드는 계속돼요. 트레이 아이콘에서 다시 열거나 종료하세요."); }
   });
   win.on("closed", () => (win = null));
   return win;
@@ -274,11 +274,11 @@ function runSetup(cfg) {
           name: it.name, label: it.entry.label || it.name, size: it.entry.size, optional: !!it.entry.optional, reason: it.reason,
           selected: it.entry.optional ? gpu : true,
         }));
-        sendSetup({ type: "plan", items, desc: gpu ? "NVIDIA GPU 가 감지되어 GPU 가속을 함께 받습니다." : "NVIDIA GPU 가 없어 GPU 가속은 선택에서 뺐습니다 (CPU 로도 동작, 전사만 느립니다)." });
+        sendSetup({ type: "plan", items, desc: gpu ? "NVIDIA GPU 가 감지되어 GPU 가속을 함께 받아요." : "NVIDIA GPU 가 없어 GPU 가속은 선택에서 뺐어요 (CPU 로도 동작, 전사만 느려요)." });
       } catch (e) {
         log(`setup: manifest 실패 ${e.message}`);
-        const tokenHint = RELEASE.isPrivate && !C.githubToken() ? "\n비공개 저장소라 토큰이 필요합니다: %LOCALAPPDATA%\\clipforge\\github-token.txt 에 읽기 전용 토큰을 넣고 다시 시도하세요." : "";
-        sendSetup({ type: "plan", items: [], title: "구성요소 목록을 받지 못했습니다", desc: `${e.message}\n서버: ${updateUrl()}${tokenHint}\n네트워크를 확인한 뒤 다시 시도하세요.` });
+        const tokenHint = RELEASE.isPrivate && !C.githubToken() ? "\n비공개 저장소라 토큰이 필요해요: %LOCALAPPDATA%\\clipforge\\github-token.txt 에 읽기 전용 토큰을 넣고 다시 시도하세요." : "";
+        sendSetup({ type: "plan", items: [], title: "구성요소 목록을 받지 못했어요", desc: `${e.message}\n서버: ${updateUrl()}${tokenHint}\n네트워크를 확인한 뒤 다시 시도하세요.` });
       }
     };
     ipcMain.removeHandler("setup:ready"); ipcMain.removeHandler("setup:start"); ipcMain.removeHandler("setup:cancel");
@@ -329,7 +329,7 @@ function setupShellUpdater() {
   autoUpdater.allowDowngrade = false;
   const token = C.githubToken();
   if (RELEASE.isPrivate) {
-    if (!token) { log("shell-update: private 저장소인데 토큰이 없습니다 — 껍데기 업데이트 비활성 (github-token.txt)"); autoUpdater = null; return; }
+    if (!token) { log("shell-update: private 저장소인데 토큰이 없어요 — 껍데기 업데이트 비활성 (github-token.txt)"); autoUpdater = null; return; }
     autoUpdater.setFeedURL({ provider: "github", owner: RELEASE.owner, repo: RELEASE.repo, private: true, token });
   }
   autoUpdater.on("update-available", (info) => log(`shell-update: available ${info.version}`));
@@ -338,7 +338,7 @@ function setupShellUpdater() {
   autoUpdater.on("update-downloaded", (info) => {
     shellUpdate = { version: info.version };
     updateTrayMenu(null); broadcastUpdate();
-    notify(`앱 ${info.version} 준비됨`, "다음에 종료할 때 자동으로 설치됩니다. 지금 설치하려면 트레이 메뉴에서 선택하세요.");
+    notify(`앱 ${info.version} 준비됨`, "다음에 종료할 때 자동으로 설치돼요. 지금 설치하려면 트레이 메뉴에서 선택하세요.");
   });
 }
 async function checkShellUpdate() {
@@ -356,7 +356,7 @@ function installShellUpdate() {
 // ---------- 앱 내 업데이트 (층 A·B) ----------
 async function checkUpdates(interactive = false) {
   const cfg = engine?.cfg;
-  if (!cfg || cfg.mode !== "runtime") { if (interactive) notify("업데이트", "개발 모드에서는 업데이트를 확인하지 않습니다."); updateState.error = "dev"; broadcastUpdate(); return; }
+  if (!cfg || cfg.mode !== "runtime") { if (interactive) notify("업데이트", "개발 모드에서는 업데이트를 확인하지 않아요."); updateState.error = "dev"; broadcastUpdate(); return; }
   updateState.checking = true; updateState.error = null; broadcastUpdate();
   let manifest;
   try { manifest = await C.fetchManifest(updateUrl()); }
@@ -369,8 +369,8 @@ async function checkUpdates(interactive = false) {
   updateTrayMenu(null); broadcastUpdate();
   if (pendingUpdates.length) {
     const size = pendingUpdates.reduce((a, u) => a + (u.entry.size || 0), 0);
-    notify("업데이트 있음", `${pendingUpdates.map((u) => u.name).join(", ")} (${(size / 1e6).toFixed(0)}MB). 트레이 메뉴에서 적용하세요.${jobRunning ? " 작업이 끝난 뒤 적용됩니다." : ""}`);
-  } else if (interactive) notify("업데이트", "최신 상태입니다.");
+    notify("업데이트 있음", `${pendingUpdates.map((u) => u.name).join(", ")} (${(size / 1e6).toFixed(0)}MB). 트레이 메뉴에서 적용하세요.${jobRunning ? " 작업이 끝난 뒤 적용돼요." : ""}`);
+  } else if (interactive) notify("업데이트", "최신 상태예요.");
   return pendingUpdates;
 }
 
@@ -442,7 +442,7 @@ function startObsWatch() {
   if (obsTimer || process.platform !== "win32") return;
   const tick = () => obsRunning((running) => {
     if (running && !obsSeen && !liveActive) {
-      const n = new Notification({ title: "OBS 가 켜졌습니다", body: "라이브 탭에서 득템 배너 감지를 시작할까요? (알림을 누르면 엽니다)", icon: path.join(ASSETS, "icon.png") });
+      const n = new Notification({ title: "OBS 가 켜졌어요", body: "라이브 탭에서 득템 배너 감지를 시작할까요? (알림을 누르면 열어요)", icon: path.join(ASSETS, "icon.png") });
       n.on("click", () => { showWindow(); win?.webContents.executeJavaScript("location.hash='#live'").catch(() => {}); });
       try { n.show(); } catch { /* ignore */ }
       log("obs: 감지 → 라이브 시작 제안");
@@ -463,11 +463,11 @@ async function boot() {
   engine.onExit = (code) => {
     if (quitting) return;
     updateTrayMenu("엔진 종료됨");
-    win?.loadURL(bootHtml("엔진이 종료됐습니다", `exit code ${code}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
+    win?.loadURL(bootHtml("엔진이 종료됐어요", `exit code ${code}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
   };
   try {
     await ensureRuntime();
-    win?.loadURL(bootHtml("엔진을 시작하는 중…", "ffmpeg · GPU · 모델을 확인합니다", true));
+    win?.loadURL(bootHtml("엔진을 시작하는 중…", "ffmpeg · GPU · 모델을 확인해요", true));
     const h = await engine.start();
     updateTrayMenu(`대기 중 · v${h.engine_version}`);
     await win.loadURL(engine.url);
@@ -484,9 +484,9 @@ async function boot() {
     };
     try {
       const regs = [
-        ["Control+Alt+M", () => livePost("/api/live/mark", { note: "단축키" }, () => notify("북마크", "라이브 북마크를 남겼습니다"))],
-        ["Control+Alt+Y", () => livePost("/api/live/suggestions/latest/approve", {}, (d) => { try { const s = JSON.parse(d); notify("배너에 추가", `${s.head || s.text} 를 득템 배너에 넣었습니다`); } catch { /* ignore */ } })],
-        ["Control+Alt+N", () => livePost("/api/live/suggestions/latest/dismiss", {}, () => notify("무시", "최근 제안을 무시했습니다"))],
+        ["Control+Alt+M", () => livePost("/api/live/mark", { note: "단축키" }, () => notify("북마크", "라이브 북마크를 남겼어요"))],
+        ["Control+Alt+Y", () => livePost("/api/live/suggestions/latest/approve", {}, (d) => { try { const s = JSON.parse(d); notify("배너에 추가", `${s.head || s.text} 를 득템 배너에 넣었어요`); } catch { /* ignore */ } })],
+        ["Control+Alt+N", () => livePost("/api/live/suggestions/latest/dismiss", {}, () => notify("무시", "최근 제안을 무시했어요"))],
       ];
       for (const [acc, fn] of regs) log(`shell: globalShortcut ${acc} ${globalShortcut.register(acc, fn) ? "ok" : "실패(다른 앱이 사용 중)"}`);
     } catch (e) { log(`shell: globalShortcut ${e.message}`); }
@@ -503,7 +503,7 @@ async function boot() {
     }
     if (FAKE_UPDATE) {
       pendingUpdates = [{ name: "engine-code", reason: "update", entry: { version: "9.9.9", size: 12_000_000, url: "about:blank", notes: "화면 점검용 가짜 항목" } }];
-      updateState.lastCheck = Date.now(); updateTrayMenu(null); broadcastUpdate(); log("fake-update: 가짜 대기 항목을 보냈습니다");
+      updateState.lastCheck = Date.now(); updateTrayMenu(null); broadcastUpdate(); log("fake-update: 가짜 대기 항목을 보냈어요");
     }
     if (SMOKE) {
       log("smoke: ok — 5초 뒤 종료");
@@ -521,9 +521,9 @@ async function boot() {
   } catch (e) {
     log(`shell: boot 실패 ${e.stack || e}`);
     updateTrayMenu("엔진 시작 실패");
-    win?.loadURL(bootHtml("엔진을 시작하지 못했습니다", `${e.message}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
+    win?.loadURL(bootHtml("엔진을 시작하지 못했어요", `${e.message}\n로그: ${path.join(app.getPath("userData"), "shell.log")}`, false));
     if (SMOKE) setTimeout(() => quitApp(1), 1000);
-    else dialog.showErrorBox("clipforge", `엔진을 시작하지 못했습니다.\n${e.message}`);
+    else dialog.showErrorBox("clipforge", `엔진을 시작하지 못했어요.\n${e.message}`);
   }
 }
 

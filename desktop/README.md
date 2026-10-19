@@ -5,6 +5,7 @@ set PATH=C:\Users\jaeye\tools\node;%PATH%        # 포터블 Node 22
 npm install
 npm start                                        # 창 + 엔진(저장소 .venv). 8765 에 엔진이 이미 떠 있으면 그것에 붙음
 npm run smoke                                    # 자동 점검: 창·엔진 준비 뒤 5초 후 종료 (로그 %APPDATA%\clipforge\shell.log)
+npx electron . --smoke-setup                     # (런타임 모드) 첫 실행 설치 화면만 캡처 (%APPDATA%\clipforge\smoke-setup.png)
 npx electron . --smoke --smoke-tab=pipeline --fake-update   # 가짜 업데이트 상태로 '새 버전이 준비됐어요' 시트·배너 캡처 (%APPDATA%\clipforge\smoke.png)
 set CLIPFORGE_ENGINE_DIST=1 && npm start         # 번들 런타임(../engine-dist)으로 띄우기 (데이터는 저장소)
 npm run pack                                     # release/win-unpacked/ (설치본 없이 폴더) → win-unpacked\clipforge.exe --smoke 로 packaged 경로 점검
@@ -14,6 +15,7 @@ set CLIPFORGE_SKIP_ENGINE=1 && npm run pack      # 엔진 없이 빠른 빌드 (
 설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe ≈ 100MB.
 대용량 구성요소(파이썬 런타임·CUDA·ffmpeg·Whisper)는 첫 실행 때 `latest.json` 을 보고 받아 `%LOCALAPPDATA%\clipforge\runtime\` 에 둔다.
 데이터는 `%LOCALAPPDATA%\clipforge\data`. 제거해도 런타임·데이터는 남긴다.
+구성요소는 **3개씩 동시에** 받고(`components.apply` concurrency), 받아진 것부터 순서대로 푼다(python-base → cuda 순서 보장). 설치 화면은 기다리는 동안 서비스 소개 슬라이드 5장을 돌린다.
 
 ## 릴리스 아티팩트 · 첫 실행 흐름 점검
 ```

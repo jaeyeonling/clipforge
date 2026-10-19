@@ -56,14 +56,18 @@ function updateUrl() {
 }
 
 // ---------- 창 ----------
-const PAGE_CSS = `body{margin:0;background:#0b0a09;color:#f5f2e8;font:14px/1.5 'Malgun Gothic',system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
-.box{max-width:640px;width:92%}.brand{font-size:28px;font-weight:800;color:#f0f660;letter-spacing:-.02em}.t{margin-top:14px;font-size:16px;font-weight:700}
-.d{margin-top:6px;color:#8f8979;font-size:12px;white-space:pre-wrap}.spin{margin:18px auto 0;width:22px;height:22px;border:3px solid #2c2925;border-top-color:#f0f660;border-radius:50%;animation:s .8s linear infinite}
-@keyframes s{to{transform:rotate(360deg)}}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}td{padding:8px 6px;border-bottom:1px solid #2c2925;vertical-align:middle}
-td.n{width:28px}td.s{color:#8f8979;white-space:nowrap;text-align:right;width:90px}.bar{height:6px;background:#1a1816;border-radius:4px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:#f0f660;transition:width .2s}
-.st{font-size:11px;color:#8f8979;margin-top:2px}.ok{color:#9be28a}.bad{color:#ff7b70}.btns{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
-button{font:inherit;border-radius:6px;border:1px solid #3a3631;background:#211e1b;color:#f5f2e8;padding:8px 14px;cursor:pointer}button.p{background:#f0f660;color:#1a1a10;border-color:#f0f660;font-weight:700}button:disabled{opacity:.45;cursor:default}
-input[type=checkbox]{accent-color:#f0f660}.hint{font-size:12px;color:#8f8979;margin-top:10px}`;
+// 부팅·설치 화면 스타일: 앱 본체(tokens.css)와 같은 토스 다크 팔레트
+const PAGE_CSS = `body{margin:0;background:#17171c;color:#e8e8ea;font:15px/1.55 'Pretendard Variable',Pretendard,'Malgun Gothic',system-ui;display:flex;align-items:center;justify-content:center;height:100vh;letter-spacing:-.005em}
+.box{max-width:680px;width:92%}.brand{font-size:26px;font-weight:800;color:#f0f660;letter-spacing:-.02em}.t{margin-top:14px;font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.3}
+.d{margin-top:8px;color:#8b95a1;font-size:14px;white-space:pre-wrap;line-height:1.6}.spin{margin:22px auto 0;width:24px;height:24px;border:3px solid #34343e;border-top-color:#4593fc;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}td{padding:10px 8px;border-bottom:1px solid #2a2a32;vertical-align:middle}tr:last-child td{border-bottom:none}
+td.n{width:28px}td.s{color:#8b95a1;white-space:nowrap;text-align:right;width:90px;font-variant-numeric:tabular-nums}.bar{height:6px;background:#2a2a33;border-radius:999px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:#4593fc;border-radius:999px;transition:width .25s}
+.st{font-size:12px;color:#8b95a1;margin-top:3px}.ok{color:#4fd58b}.bad{color:#ff5a66}.btns{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;align-items:center}
+button{font:inherit;border-radius:12px;border:none;background:#2a2a33;color:#e8e8ea;padding:0 18px;height:44px;cursor:pointer;font-weight:600}button:hover{background:#34343e}button.p{background:#3182f6;color:#fff;font-weight:700;font-size:16px;padding:0 26px;height:52px;border-radius:14px}button.p:hover{background:#4593fc}button:disabled{opacity:.4;cursor:default}
+input[type=checkbox]{accent-color:#4593fc;width:16px;height:16px}.hint{font-size:13px;color:#8b95a1;margin-top:10px}
+.total{margin-top:18px;background:#202027;border-radius:16px;padding:16px 18px}.total .big{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1}.total .big small{font-size:13px;color:#8b95a1;font-weight:500;margin-left:8px;letter-spacing:0}.total .bar{margin-top:10px;height:8px}
+.intro{margin-top:14px;background:#202027;border-radius:16px;padding:18px 20px;min-height:96px;position:relative}.intro .k{font-size:12px;color:#4593fc;font-weight:700;margin-bottom:6px}.intro h3{margin:0;font-size:17px;font-weight:700;letter-spacing:-.02em}.intro p{margin:6px 0 0;color:#c5c5ca;font-size:13px;line-height:1.6}
+.intro .dots{position:absolute;right:18px;top:18px;display:flex;gap:5px}.intro .dots i{width:6px;height:6px;border-radius:50%;background:#34343e}.intro .dots i.on{background:#4593fc}.intro.fade{animation:f .35s ease}@keyframes f{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`;
 
 function dataUrl(html) { return "data:text/html;charset=utf-8," + encodeURIComponent(`<!doctype html><html lang="ko"><meta charset="utf-8"><style>${PAGE_CSS}</style><body>${html}</body></html>`); }
 
@@ -73,29 +77,58 @@ function bootHtml(title, detail, spinning) {
 
 // 첫 실행 설치 화면: 구성요소 목록·선택·진행률. 데이터는 setup:event 로 받는다.
 function setupHtml() {
-  return dataUrl(`<div class="box"><div class="brand">clipforge</div><div class="t" id="title">처음 실행: 분석 엔진 구성요소를 내려받습니다</div>
-<div class="d" id="desc">한 번만 받습니다. 이후 업데이트는 바뀐 부분만 받습니다.</div>
+  return dataUrl(`<div class="box"><div class="brand">clipforge</div><div class="t" id="title">처음 한 번, 분석 엔진을 준비해요</div>
+<div class="d" id="desc">한 번만 받아요. 이후 업데이트는 바뀐 부분만 받아요.</div>
+<div class="total" id="total" style="display:none"><div class="big"><span id="tpct">0%</span><small id="teta"></small></div><div class="bar"><i id="tbar"></i></div></div>
+<div class="intro" id="intro"><div class="dots" id="dots"></div><div class="k" id="ik"></div><h3 id="ih"></h3><p id="ip"></p></div>
 <table id="tb"></table><div class="hint" id="hint"></div>
 <div class="btns"><button id="logs">로그 폴더</button><button id="retry" style="display:none">다시 시도</button><button id="start" class="p" disabled>설치 시작</button></div></div>
 <script>
 const S = window.clipforgeShell.setup; const $ = (s) => document.querySelector(s);
 const human = (n) => n >= 1e9 ? (n/1e9).toFixed(1)+'GB' : n >= 1e6 ? Math.round(n/1e6)+'MB' : Math.round(n/1e3)+'KB';
-let items = [], running = false;
+const fmtDur = (s) => s >= 3600 ? Math.round(s/3600) + '시간 ' + Math.round((s%3600)/60) + '분' : s >= 60 ? Math.round(s/60) + '분' : Math.round(s) + '초';
+let items = [], running = false, t0 = 0;
+// 기다리는 동안 보여줄 소개 — 앱이 무엇을 해 주는지, 어떻게 쓰는지
+const SLIDES = [
+  ['이 앱이 하는 일', '편집본 하나 넣으면 쇼츠 초안이 나와요', '득템 배너·리액션·채팅이 겹치는 순간을 찾아 세로(9:16) 초안을 순위대로 만들어요. 4K 10분이면 약 10분.'],
+  ['쓰는 법', '쓸 만함 / 안 씀만 눌러 주세요', '판정은 기억돼서 다음 회차부터 취향에 맞춰 가요. 키보드 K / N 으로도 돼요.'],
+  ['가져가기', 'Premiere로 바로 가져가요', '세로 시퀀스 XML과, 원본 전체에 후보 트랙·마커가 붙은 리뷰 시퀀스를 만들어요. 초안 mp4 와 자막도 폴더에 있어요.'],
+  ['방송 중', '라이브 탭은 득템 배너를 도와줘요', '세트·유니크 템 이름을 읽어 "배너에 추가?" 하고 물어봐요. 승인한 것만 OBS 로 나가요. Ctrl+Alt+M 은 북마크.'],
+  ['지금 받는 것', '이 다운로드는 한 번뿐이에요', '파이썬 런타임·FFmpeg·음성 인식 모델(·GPU 가속)을 받아요. 이후엔 바뀐 부분만 받고 재설치는 없어요. 창을 닫아도 트레이에서 계속 받아요.'],
+];
+let slide = 0;
+function showSlide(i) {
+  slide = i % SLIDES.length; const [k, h, p] = SLIDES[slide];
+  $('#ik').textContent = k; $('#ih').textContent = h; $('#ip').textContent = p;
+  $('#dots').innerHTML = SLIDES.map((_, j) => '<i class="' + (j === slide ? 'on' : '') + '"></i>').join('');
+  const el = $('#intro'); el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
+}
+showSlide(0); setInterval(() => showSlide(slide + 1), 6000);
 function render() {
   $('#tb').innerHTML = items.map((it, i) => \`<tr data-n="\${it.name}"><td class="n"><input type="checkbox" \${it.selected ? 'checked' : ''} \${it.optional && !running ? '' : 'disabled'} data-i="\${i}"></td>
     <td><div>\${it.label}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || (it.reason === 'update' ? '업데이트' : '새로 설치')}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
-  const total = items.filter((x) => x.selected).reduce((a, x) => a + (x.size || 0), 0);
-  $('#hint').textContent = running ? '' : '선택한 구성요소 합계 ' + human(total) + ' — 네트워크 속도에 따라 수 분~수십 분 걸립니다. 받는 동안 창을 닫아도 계속됩니다.';
-  $('#start').disabled = running || !items.some((x) => x.selected);
+  const sel = items.filter((x) => x.selected);
+  const total = sel.reduce((a, x) => a + (x.size || 0), 0);
+  $('#hint').textContent = running ? '받는 동안 창을 닫아도 트레이에서 계속 받아요.' : '선택한 구성요소 합계 ' + human(total) + ' — 네트워크 속도에 따라 수 분~수십 분 걸려요. 여러 개를 동시에 받아요.';
+  $('#start').disabled = running || !sel.length;
   document.querySelectorAll('input[data-i]').forEach((el) => el.onchange = () => { items[Number(el.dataset.i)].selected = el.checked; render(); });
+  // 전체 진행률: 받은 바이트 / 받을 바이트, 남은 시간은 지금까지 속도로
+  if (running && total) {
+    const done = sel.reduce((a, x) => a + (x.done || (x.pct === 100 ? x.size : 0) || 0), 0);
+    const pct = Math.min(100, Math.round(100 * done / total));
+    const el = (Date.now() - t0) / 1000, rate = el > 2 ? done / el : 0, left = rate > 0 ? (total - done) / rate : 0;
+    $('#total').style.display = ''; $('#tpct').textContent = pct + '%'; $('#tbar').style.width = pct + '%';
+    $('#teta').textContent = sel.every((x) => x.finished) ? '다 됐어요. 엔진을 시작해요' : (pct >= 100 ? '받았어요. 푸는 중…' : (left > 0 ? '약 ' + fmtDur(left) + ' 남았어요 · ' + human(rate) + '/s' : '속도 재는 중…'));
+  }
 }
 S.onEvent((ev) => {
   if (ev.type === 'plan') { items = ev.items; $('#title').textContent = ev.title || $('#title').textContent; if (ev.desc) $('#desc').textContent = ev.desc; render(); return; }
   const it = items.find((x) => x.name === ev.name); if (!it) return;
-  if (ev.type === 'start') { running = true; it.status = '받는 중…'; it.pct = 0; }
-  if (ev.type === 'download') { it.pct = ev.total ? Math.round(100 * ev.done / ev.total) : 0; it.status = ev.cached ? '이미 받음' : '받는 중 ' + human(ev.done) + ' / ' + human(ev.total); }
-  if (ev.type === 'install') { it.status = ev.phase === 'extract' ? '푸는 중' + (ev.pct != null ? ' ' + ev.pct + '%' : '') : '교체 중'; it.pct = 100; }
-  if (ev.type === 'done') { it.status = '<span class="ok">완료</span>'; it.pct = 100; }
+  if (ev.type === 'start') { if (!running) { running = true; t0 = Date.now(); } it.status = '받는 중…'; it.pct = 0; it.done = 0; }
+  if (ev.type === 'download') { it.done = ev.done; it.pct = ev.total ? Math.round(100 * ev.done / ev.total) : 0; it.status = ev.cached ? '이미 받음' : '받는 중 ' + human(ev.done) + ' / ' + human(ev.total); }
+  if (ev.type === 'downloaded') { it.done = it.size; it.pct = 100; it.status = '받았어요 · 설치 차례 기다리는 중'; }
+  if (ev.type === 'install') { it.done = it.size; it.status = ev.phase === 'extract' ? '푸는 중' + (ev.pct != null ? ' ' + ev.pct + '%' : '') : '교체 중'; it.pct = 100; }
+  if (ev.type === 'done') { it.done = it.size; it.finished = true; it.status = '<span class="ok">완료</span>'; it.pct = 100; }
   if (ev.type === 'error') { running = false; it.status = '<span class="bad">실패: ' + ev.message + '</span>'; $('#retry').style.display = ''; }
   render();
 });
@@ -258,7 +291,13 @@ function runSetup(cfg) {
       abort = new AbortController();
       updateTrayMenu("구성요소 내려받는 중");
       try {
-        await C.apply(cfg.runtimeDir, items, { downloadDir: cfg.downloads, signal: abort.signal, onEvent: (ev) => { sendSetup(ev); if (ev.type === "download" && ev.total) updateTrayMenu(`내려받는 중 ${ev.name} ${Math.round(100 * ev.done / ev.total)}%`); } });
+        const prog = new Map();      // 항목별 받은 바이트 → 트레이에는 전체 퍼센트
+        const totalBytes = items.reduce((a, it) => a + (it.entry.size || 0), 0) || 1;
+        await C.apply(cfg.runtimeDir, items, { downloadDir: cfg.downloads, signal: abort.signal, onEvent: (ev) => {
+          sendSetup(ev);
+          if (ev.type === "download") { prog.set(ev.name, ev.done); updateTrayMenu(`내려받는 중 ${Math.round(100 * [...prog.values()].reduce((a, b) => a + b, 0) / totalBytes)}%`); }
+          if (ev.type === "install") updateTrayMenu(`설치 중 ${ev.name}`);
+        } });
         log("setup: 완료");
         setupState = null; resolve();
       } catch (e) {
@@ -269,6 +308,13 @@ function runSetup(cfg) {
     };
     win.loadURL(setupHtml());
     showWindow();
+    if (process.argv.includes("--smoke-setup")) {     // 화면 점검: 설치 화면이 그려진 뒤 캡처하고 종료
+      setTimeout(async () => {
+        try { const img = await win.webContents.capturePage(); const out = path.join(app.getPath("userData"), "smoke-setup.png"); fs.writeFileSync(out, img.toPNG()); log(`smoke-setup: 캡처 ${out}`); }
+        catch (e) { log(`smoke-setup: 캡처 실패 ${e.message}`); }
+        quitApp();
+      }, 4000);
+    }
   });
 }
 
@@ -337,11 +383,13 @@ async function applyUpdates() {
   // 1) 먼저 내려받는다 (엔진은 계속 떠 있음 → 화면이 진행률을 보여준다)
   const zips = {};
   try {
-    for (const u of items) {
+    const prog = new Map();                       // 여러 개를 동시에 받고 진행률은 합쳐서
+    const total = items.reduce((a, u) => a + (u.entry.size || 0), 0);
+    await Promise.all(items.map(async (u) => {
       const zip = path.join(cfg.downloads, path.basename(new URL(u.entry.url).pathname));
-      await C.download(u.entry, zip, (pr) => { updateState.progress = { name: u.name, done: pr.done, total: pr.total }; broadcastUpdate(); });
+      await C.download(u.entry, zip, (pr) => { prog.set(u.name, pr.done); updateState.progress = { name: items.length > 1 ? `${items.length}개` : u.name, done: [...prog.values()].reduce((a, b) => a + b, 0), total }; broadcastUpdate(); });
       zips[u.name] = zip;
-    }
+    }));
   } catch (e) {
     log(`update: 다운로드 실패 ${e.stack || e}`);
     updateState.applying = false; updateState.progress = null; updateState.error = e.message; broadcastUpdate();

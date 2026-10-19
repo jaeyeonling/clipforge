@@ -271,15 +271,40 @@ async function seedFromResources(runtimeDir, seedDir) {
 }
 
 /** 전체 계획 실행. onEvent({type, name, ...}) 로 진행 상황을 화면에 보낸다. */
-async function apply(runtimeDir, items, { downloadDir, onEvent, signal }) {
-  for (const item of items) {
-    const zip = path.join(downloadDir, path.basename(new URL(item.entry.url).pathname));
-    onEvent({ type: "start", name: item.name, size: item.entry.size, reason: item.reason });
-    await download(item.entry, zip, (p) => onEvent({ type: "download", name: item.name, ...p }), signal);
-    await install(runtimeDir, item, zip, (p) => onEvent({ type: "install", name: item.name, ...p }));
-    onEvent({ type: "done", name: item.name });
-    try { await fsp.unlink(zip); } catch { /* keep */ }
-  }
+/** 구성요소 받기+설치.
+ *  다운로드는 최대 concurrency 개를 동시에(네트워크는 연결당 속도가 제한되는 일이 많다), 설치(압축 해제·교체)는 items 순서대로 —
+ *  python-base 가 Lib 를 바꾼 뒤에 cuda 가 그 안(Lib/site-packages/nvidia)에 들어가야 하고, 디스크는 하나라 병렬 해제가 이득이 없다.
+ *  어떤 항목의 다운로드가 끝나면 다른 항목이 아직 받는 중이어도 바로 설치를 시작한다(받기와 풀기가 겹친다).
+ *  하나라도 실패하면 나머지 다운로드를 끊고 그 오류를 던진다. */
+async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurrency = 3 }) {
+  const ac = new AbortController();
+  const onAbort = () => ac.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const zipOf = (item) => path.join(downloadDir, path.basename(new URL(item.entry.url).pathname));
+  const downloaded = new Map(items.map((it) => { let res, rej; const p = new Promise((a, b) => { res = a; rej = b; }); p.catch(() => {}); return [it.name, { p, res, rej }]; }));
+  const queue = items.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      try {
+        onEvent({ type: "start", name: item.name, size: item.entry.size, reason: item.reason });
+        await download(item.entry, zipOf(item), (p) => onEvent({ type: "download", name: item.name, ...p }), ac.signal);
+        onEvent({ type: "downloaded", name: item.name });
+        downloaded.get(item.name).res();
+      } catch (e) { ac.abort(); downloaded.get(item.name).rej(e); throw e; }
+    }
+  };
+  const workers = Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, worker));
+  workers.catch(() => {});
+  try {
+    for (const item of items) {                       // 설치는 순서대로, 각 항목은 받아지는 대로
+      await downloaded.get(item.name).p;
+      await install(runtimeDir, item, zipOf(item), (p) => onEvent({ type: "install", name: item.name, ...p }));
+      onEvent({ type: "done", name: item.name });
+      try { await fsp.unlink(zipOf(item)); } catch { /* keep */ }
+    }
+    await workers;
+  } finally { signal?.removeEventListener("abort", onAbort); }
 }
 
 function fileUrl(p) { return pathToFileURL(p).toString(); }

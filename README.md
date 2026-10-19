@@ -31,7 +31,8 @@ pip install -r requirements.txt
 ```powershell
 python -m clipforge.app            # http://127.0.0.1:8765 가 브라우저로 열림 (127.0.0.1 전용, 외부 접근 없음)
 ```
-회차 등록 → 단계 선택(전체 / 순위만) → 실행(진행률·로그) → 후보 초안 재생 → keep / no(사유) 판정이 `labels/` 에 바로 저장 → 지표.
+영상 넣기 → 실행 탭의 버튼 하나(처음은 전체, 이후는 캐시 재사용) → 쇼츠 초안 탭에서 재생 → 쓸 만함 / 안 씀(이유) 판정이 `labels/` 에 바로 저장 → 기록 탭 점수.
+화면은 토스 결(중성 다크 면, 파란 주요 버튼, 테두리 없는 카드, 큰 숫자, '~해요' 문구)로 맞춰져 있고, 낯선 말에 마우스를 올리면 설명(`app/src/api/tips.ts`)이 뜬다. 친구용 사용 안내는 [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 엔진 API 는 `/api/*`(HTTP) + `/ws`(이벤트), 데스크톱 껍데기용 stdio 전송은 `python -m clipforge.api.stdio`.
 캘리브레이션 패널에서 ROI 적중률 점검·미리보기·수치 편집이 가능하다. 테스트: `python -m pytest -q tests` (ffmpeg/GPU 불필요), 폰트 검사: `python scripts/check_fonts.py`.
 

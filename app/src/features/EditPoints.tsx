@@ -95,7 +95,7 @@ export function EditPoints() {
 
   if (!selected) return <Empty title="회차를 선택하세요" />;
   if (!data) return <div className="row"><Spinner /> <span className="muted">편집 포인트 읽는 중…</span></div>;
-  if (!data.candidates.length && !kept.length) return <Empty title="편집 포인트 후보가 없어요">원본 회차에서 파이프라인(신호 → candidates)을 실행하면 여기 떠요. 편집본(최종본)이 있으면 align 으로 정답을 만들어 recall 을 봐요.</Empty>;
+  if (!data.candidates.length && !kept.length) return <Empty title="아직 편집 포인트가 없어요">실행 탭에서 '편집 포인트 뽑기'를 누르면 후보가 여기에 떠요. 편집본을 같이 넣으면 정답을 자동으로 만들어 얼마나 찾았는지도 보여줘요.</Empty>;
 
   const rep = data.report; const al = data.align;
   const total = data.candidates.reduce((a, c) => a + (c.end - c.start), 0);

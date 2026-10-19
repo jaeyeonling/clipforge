@@ -5,6 +5,7 @@ set PATH=C:\Users\jaeye\tools\node;%PATH%        # 포터블 Node 22
 npm install
 npm start                                        # 창 + 엔진(저장소 .venv). 8765 에 엔진이 이미 떠 있으면 그것에 붙음
 npm run smoke                                    # 자동 점검: 창·엔진 준비 뒤 5초 후 종료 (로그 %APPDATA%\clipforge\shell.log)
+npx electron . --smoke --smoke-tab=pipeline --fake-update   # 가짜 업데이트 상태로 '새 버전이 준비됐어요' 시트·배너 캡처 (%APPDATA%\clipforge\smoke.png)
 set CLIPFORGE_ENGINE_DIST=1 && npm start         # 번들 런타임(../engine-dist)으로 띄우기 (데이터는 저장소)
 npm run pack                                     # release/win-unpacked/ (설치본 없이 폴더) → win-unpacked\clipforge.exe --smoke 로 packaged 경로 점검
 npm run dist                                     # release/clipforge-Setup-<ver>.exe (NSIS, 사용자 설치, UAC 없음)
@@ -36,7 +37,7 @@ private 저장소라 **사용자 PC 에 읽기 전용 토큰**이 필요하다: 
 토큰을 `%LOCALAPPDATA%\clipforge\github-token.txt` 에 저장(한 줄). 없으면 첫 실행 화면이 안내한다. 저장소를 public 으로 바꾸면 토큰이 필요 없다.
 
 ## 파일
-- `main.js` 창·트레이·알림·첫 실행 설치·업데이트 적용, `engine.js` 엔진 사이드카(모드: runtime/dist/venv), `components.js` 구성요소 다운로드·설치·롤백, `preload.js` IPC 브리지, `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).
+- `main.js` 창·트레이·알림·첫 실행 설치·업데이트 적용·오른쪽 클릭 복사/붙여넣기 메뉴·편집/보기 메뉴(숨김, 단축키만), `engine.js` 엔진 사이드카(모드: runtime/dist/venv), `components.js` 구성요소 다운로드·설치·롤백, `preload.js` IPC 브리지, `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).
 
 ## electron-builder 가 Windows 비관리자에서 멈출 때
 `winCodeSign` 7z 안의 macOS 심볼릭 링크 때문에 추출이 실패하고 3번 재시도 뒤 멈춘다 (개발자 모드나 관리자 권한이 없으면 심볼릭 링크를 못 만든다).

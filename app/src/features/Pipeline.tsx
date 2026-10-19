@@ -45,8 +45,8 @@ export function Pipeline() {
   const start = async () => {
     if (!selected) return;
     if (!ordered.length) return fail(new Error("단계를 하나 이상 선택하세요"));
-    if (needsFinal && !finalPath.trim()) { toast("align 에는 최종본(편집본) 파일이 필요해요", true); return; }
-    if (needsShorts && !shortsPaths.length) { toast("쇼츠 역매핑에는 친구 쇼츠 파일이 필요해요", true); return; }
+    if (needsFinal && !finalPath.trim()) { toast("편집본 파일을 골라 주세요. 원본의 어느 구간이 살아남았는지 맞춰 보려면 필요해요", true); return; }
+    if (needsShorts && !shortsPaths.length) { toast("쇼츠 파일을 골라 주세요. 이 회차에서 잘라 올린 쇼츠를 주면 정답으로 기록해요", true); return; }
     try { await runJob(selected.id, ordered, { layout, k, force, kind, threshold, final: needsFinal ? finalPath.trim() : undefined, shorts: needsShorts ? shortsPaths : undefined }); } catch (e) { fail(e); }
   };
   const retry = async () => {
@@ -57,10 +57,12 @@ export function Pipeline() {
 
   const [advanced, setAdvanced] = useState(false);
   // 한 버튼: 처음이면 전체, 이미 처리했으면 캐시 재사용(순위만 / 포인트만)
-  const quickStages: StageName[] = !selected?.stages?.prep ? DEFAULT_STAGES[kind]
+  // 영상 읽기·전사·신호가 모두 끝난 회차만 캐시를 재사용한다 (prep 만 끝난 회차는 처음부터)
+  const analyzed = (["prep", "transcribe", "signals"] as StageName[]).every((s) => !!selected?.stages?.[s]);
+  const quickStages: StageName[] = !analyzed ? DEFAULT_STAGES[kind]
     : kind === "edited" ? ["shorts", "export", "xml", "eval"] : ["candidates", "eval"];
   const quickLabel = kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기";
-  const quickDesc = !selected?.stages?.prep
+  const quickDesc = !analyzed
     ? (kind === "edited" ? "영상을 읽고, 말을 글로 바꾸고, 득템·채팅·소리가 겹치는 순간을 찾아 세로 초안까지 만들어요. 4K 10분이면 약 10분 걸려요."
        : "영상을 읽고 신호를 찾아 편집할 구간 후보를 뽑아요. 원본 길이의 약 1/8 시간이 걸려요.")
     : (kind === "edited" ? "이미 읽어 둔 결과로 초안만 다시 만들어요. 1~2분이면 돼요." : "이미 읽어 둔 신호로 편집 포인트만 다시 뽑아요. 몇 초면 돼요.");
@@ -76,7 +78,7 @@ export function Pipeline() {
       <Card title={kind === "edited" ? "쇼츠 초안 만들기" : "편집 포인트 뽑기"} right={selected && <span className="muted xs">{selected.id} · {KIND_LABEL[kind]}</span>}>
         <div className="quick">
           <div className="grow">
-            <div className="quick-title">{!selected?.stages?.prep ? "버튼 하나면 돼요" : "다시 만들 준비가 됐어요"}</div>
+            <div className="quick-title">{!analyzed ? "버튼 하나면 돼요" : "다시 만들 준비가 됐어요"}</div>
             <div className="muted small">{quickDesc}</div>
           </div>
           {running ? <Button variant="danger" className="cta" onClick={() => cancelJob().catch(fail)}>취소</Button>

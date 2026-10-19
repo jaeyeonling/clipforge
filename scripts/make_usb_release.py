@@ -56,15 +56,16 @@ def main() -> None:
         "rem 이 cmd 가 있는 폴더를 file:// 주소로 적는다 (USB 드라이브 문자가 달라도 됨)\r\n"
         "set P=%~dp0\r\nset P=%P:~0,-1%\r\nset P=%P:\\=/%\r\n"
         "echo file:///%P%> \"%D%\\update-url.txt\"\r\n"
-        "echo 등록 완료: file:///%P%\r\necho 이제 clipforge 를 실행하세요. 구성요소를 이 폴더에서 읽습니다.\r\npause\r\n",
+        "echo 등록 완료: file:///%P%\r\necho 이제 clipforge 를 실행하세요. 구성요소를 이 폴더에서 읽어요.\r\npause\r\n",
         encoding="utf-8")
     (out / "설치안내.txt").write_text(
         f"clipforge {ver} 오프라인 설치\r\n\r\n"
         "1) 1-clipforge-Setup-*.exe 실행 → 'Windows의 PC 보호' 창이 뜨면 [추가 정보] → [실행]\r\n"
-        "2) 2-구성요소-위치-등록.cmd 더블클릭 (이 폴더 위치를 앱에 알려줍니다)\r\n"
-        "3) clipforge 실행 → 첫 화면에서 [설치 시작] → 이 폴더에서 구성요소를 복사합니다 (3~4분)\r\n\r\n"
-        "USB 를 다른 드라이브 문자로 꽂았으면 2) 를 다시 실행하세요.\r\n"
-        "나중에 온라인 업데이트로 바꾸려면 %LOCALAPPDATA%\\clipforge\\update-url.txt 를 지우면 됩니다.\r\n",
+        "2) 2-구성요소-위치-등록.cmd 더블클릭 (이 폴더 위치를 앱에 알려줘요)\r\n"
+        "3) clipforge 실행 → 첫 화면에서 [설치 시작] → 이 폴더에서 구성요소를 복사해요 (3~4분)\r\n\r\n"
+        "USB 를 다른 드라이브 문자로 꽂았으면 2) 를 다시 실행해 주세요.\r\n"
+        "나중에 온라인 업데이트로 바꾸려면 %LOCALAPPDATA%\\clipforge\\update-url.txt 를 지우면 돼요.\r\n"
+        "막히면 앱의 [도움말] 탭이나 docs/USER_GUIDE.md 를 보세요.\r\n",
         encoding="utf-8")
     total = sum(f.stat().st_size for f in out.iterdir() if f.is_file())
     print(f"[usb] {out}  {total / 1e9:.2f}GB  " + ", ".join(f.name for f in sorted(out.iterdir())))

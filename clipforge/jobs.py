@@ -202,7 +202,7 @@ class JobRunner:
             for i, stage in enumerate(job.stages):
                 if job.cancel_event.is_set():
                     job.status, job.finished = "cancelled", time.time()
-                    job.emit({"type": "done", "status": "cancelled"}); return
+                    job.emit({"type": "done", "status": "cancelled", "episode": job.episode}); return
                 base = 100.0 * i / len(job.stages)
                 span = 100.0 / len(job.stages)
                 job.progress(stage, base, f"{stage} 시작")
@@ -221,13 +221,13 @@ class JobRunner:
             job.status, job.finished = "done", time.time()
             job.eta_s = 0.0
             job.progress("done", 100.0, "완료")
-            job.emit({"type": "done", "status": "done", "warnings": job.warnings, "stages": job.stages})
+            job.emit({"type": "done", "status": "done", "warnings": job.warnings, "stages": job.stages, "episode": job.episode})
         except (Exception, SystemExit) as e:  # noqa: BLE001
             job.status, job.finished = "error", time.time()
             info = classify(e)
             job.error, job.error_info = info["message"], info
             job.emit({"type": "log", "stage": job.stage, "level": "error", "message": traceback.format_exc()})
-            job.emit({"type": "error", "stage": job.stage, **info})
+            job.emit({"type": "error", "stage": job.stage, "episode": job.episode, **info})
         finally:
             job.write_manifest()
 

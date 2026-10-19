@@ -117,6 +117,7 @@ export interface EngineEvent {
   job_id: string;
   t: number;
   type: "queued" | "started" | "progress" | "log" | "done" | "error";
+  episode?: string;
   stage?: string;
   pct?: number;
   message?: string;

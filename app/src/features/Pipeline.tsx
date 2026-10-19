@@ -84,7 +84,7 @@ export function Pipeline() {
   // 자막 단계가 끝나면 토스트에 '자막 파일 열기' 액션
   const subsDoneAt = useRef(0);
   useEffect(() => {
-    if (!lastDone || lastDone.at === subsDoneAt.current || !lastDone.stages.includes("subtitles")) return;
+    if (!lastDone || !lastDone.episode || lastDone.at === subsDoneAt.current || !lastDone.stages.includes("subtitles")) return;
     subsDoneAt.current = lastDone.at;
     api.episodePaths(lastDone.episode).then((p) => {
       if (!p.subtitles_srt?.exists) return;

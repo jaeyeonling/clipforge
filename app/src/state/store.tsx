@@ -69,6 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), action ? 9000 : bad ? 6000 : 3200);
   }, []);
   const [lastDone, setLastDone] = useState<DoneSignal | null>(null);
+  const settled = useRef(new Set<string>());   // 완료 처리를 끝낸 작업 id (WS 이벤트 경로와 아래 settleFast 가 겹치지 않게)
   const [candCount, setCandCount] = useState(0);
   const fail = useCallback((e: unknown) => {
     console.error(e);
@@ -117,7 +118,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLog([]); setLogTitle(`${episode} · ${j.id}`); setLogPath(j.log_path || "");
     toast(`시작: ${stages.map((s) => STAGE_LABEL[s] || s).join(" → ")}`);
     await refreshJobs();
-  }, [refreshJobs, toast]);
+    // 캐시만 있는 단계(자막만 등)는 수십 ms 에 끝나 WS 이벤트가 activeJobId 를 기억하기 전에 지나간다 → 이미 끝난 작업이면 결과를 직접 읽어 같은 처리를 한다
+    const j2 = j.status === "done" || j.status === "error" ? j : await api.job(j.id).catch(() => j);
+    if ((j2.status === "done" || j2.status === "error") && !settled.current.has(j2.id)) {
+      settled.current.add(j2.id);
+      try {
+        const lg = await api.jobLog(j2.id);
+        setLog(lg.lines.map((l) => ({ ...l, level: l.level === "error" ? "error" : l.type === "done" ? "done" : l.level })));
+      } catch { /* 로그는 없어도 됨 */ }
+      if (j2.status === "error" && j2.error_info) { setRunError({ info: j2.error_info, job: j2 }); toast(`오류 ${j2.error_info.code}: ${j2.error_info.message}`, true); }
+      else {
+        const warns = j2.warnings || [];
+        if (warns.length) toast(`완료 — 주의 ${warns.length}건: ${warns[0].message}`, true); else toast("완료");
+        setLastDone({ episode: j2.episode, stages: j2.stages as string[], warnings: warns, at: Date.now() });
+      }
+      setTick((n) => n + 1);
+      refreshEpisodes().catch(() => {});
+    }
+  }, [refreshJobs, refreshEpisodes, toast]);
 
   const cancelJob = useCallback(async () => {
     if (!activeJobId) return;
@@ -154,12 +172,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setJobs((js) => js.map((j) => (j.id === ev.job_id ? { ...j, status: "running", stage: ev.stage || j.stage, pct: ev.pct ?? j.pct, message: ev.message || "" } : j)));
     }
     if (ev.type === "done" || ev.type === "error") {
-      if (ev.type === "error" && mine) {
+      if (ev.type === "error" && mine && !settled.current.has(ev.job_id)) {
+        settled.current.add(ev.job_id);
         const info: ErrorInfo = { code: ev.code || "E_INTERNAL", message: ev.message || "", hint: ev.hint || "", kind: ev.kind || "internal" };
         setLog((l) => [...l, { t: ev.t, type: "error", stage: ev.stage || "", level: "error", message: `${info.code}: ${info.message}${info.hint ? "\n→ " + info.hint : ""}` }]);
         setRunError({ info, job: jobs.find((j) => j.id === ev.job_id) ?? null });
         toast(`오류 ${info.code}: ${info.message}`, true);
-      } else if (mine) {
+      } else if (mine && !settled.current.has(ev.job_id)) {
+        settled.current.add(ev.job_id);
         setLog((l) => [...l, { t: ev.t, type: "done", stage: "", level: "done", message: ev.status === "cancelled" ? "취소됨" : "완료" }]);
         const warns = ev.warnings || [];
         if (ev.status === "cancelled") toast("취소됨");
@@ -167,7 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else toast("완료");
         if (ev.status === "done") {
           const j = jobs.find((x) => x.id === ev.job_id);
-          setLastDone({ episode: j?.episode || "", stages: (ev.stages || j?.stages || []) as string[], warnings: warns, at: Date.now() });
+          setLastDone({ episode: ev.episode || j?.episode || "", stages: (ev.stages || j?.stages || []) as string[], warnings: warns, at: Date.now() });   // jobs 목록이 아직 이 작업을 모를 수 있어 이벤트의 episode 를 우선
         }
       }
       setTick((n) => n + 1);

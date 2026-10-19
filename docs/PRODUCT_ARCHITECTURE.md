@@ -224,6 +224,9 @@
 
 **구현 상태**: ✅ (1) `scripts/build_engine_dist.py --release DIR --release-components` : engine-code zip + 구성요소 zip(python-base/cuda/ffmpeg/whisper) + latest.json(sha256·size·label·optional) ✅ (2) `desktop/components.js` : fetchManifest(https/file) · present(파일로 설치 판정) · plan(missing/update) · download(이어받기·sha256) · install(7za → `_staging` → 경로 교체, 실패 시 `_prev` 복원; python-base 교체 시 cuda 폴더 보존) · seedFromResources(동봉 엔진 코드 심기) ✅ (2') `desktop/main.js` : 첫 실행 설치 화면(IPC), 10초 뒤·6시간마다 확인 → 알림 + 트레이 "업데이트 적용"(작업 중이면 비활성) → 엔진 중지·교체·재시작 · ⬜ (3) React 화면의 업데이트 배너/카드 (지금은 트레이·알림) · ✅ (4) electron-updater 로 C 층(`main.js setupShellUpdater`) · ✅ 호스팅 = GitHub private(위) · ⬜ 저장소 생성·첫 릴리스 업로드(gh auth 뒤).
 
+### 9.3 화면 결 (2026-10-20): 토스 철학
+사용자 요청으로 토스의 원칙을 따른다 — **한 화면 한 가지 일·버튼 하나**(실행 탭 히어로 + `.btn.cta`), **테두리 대신 면과 여백**(1px 테두리 없음, 배경 톤 3단계, 10/14/20px 모서리), **큰 숫자**(진행률 `.bigpct`, 기록 `.stat`), **바텀 시트**(안 쓰는 이유·업데이트 재시작 묻기 `.sheet`), **말하듯 쓰기**('~해요'체, 다음 행동을 문장으로 먼저). 색은 토스 다크 팔레트(`tokens.css`: 중성 회색 면, 파란 주요 버튼 #3182f6), 브랜드 노랑은 `--brand` 로 워드마크·순위에만. 설명 문장은 `app/src/api/tips.ts` 에 모으고 요소에는 `data-tip` 만 붙인다(App.tsx `useTooltips` 가 body 고정 박스 하나를 옮겨 띄움). 헤더의 환경 칩 7개는 상태 칩 하나로 줄이고 자세한 건 설정 탭.
+
 ## 10. 지금 코드에서 바꿔야 할 것 (리팩터링 목록, 우선순위 순)
 
 진행 (2026-10-18 밤): ✅ 1 설정 객체(`project.py`: 앱/데이터 폴더 분리, ffmpeg 자동 탐색, health 진단) · ✅ 2 Job 러너(`jobs.py`: 단계 큐, 진행률[prep 는 프레임 수 폴링, export 는 클립 단위], 취소, 작업 로그 파일, 오류 코드+힌트) · ✅ 3 API(`api/methods.py` 전송 무관, `api/server.py` HTTP+WebSocket+미디어 Range, `api/stdio.py` JSON Lines) · ✅ 4 판정 I/O(`decision.set` → labels.csv) · ◐ UI v0(`ui/`: 빌드 없는 로컬 웹 화면 — 회차·실행·후보 리뷰·판정·지표). **UI 스택 결정**: 1차는 엔진이 직접 서빙하는 로컬 웹 UI. 데스크톱 껍데기(Tauri/WPF)는 stdio 또는 HTTP 로 같은 API 를 쓴다. ✅ 5 캘리브레이션(`calibrate.py`: 배너 OCR·패널 제목·채팅·HUD 적중률 점검 + ROI 박스 미리보기 + ROI 수치 편집/프로필 저장, UI 패널) · ✅ 7 테스트 뼈대(`tests/`: pytest 17개 — timeline/adapters/candidates/배너 전이/lexicon/weaklabel/subtitles/textdraw/발화 경계/채팅 교정 + API: Engine·HTTP·판정·프로필 검증). ✅ 6 오류·로그(`errors.py`: 모든 예외 → {code, message, hint, kind=user|internal}, 단계 전제조건은 EngineError 로 명시[E_NO_PREP/E_NO_SHORTS/…]; Job 은 끝날 때 run 매니페스트(reports/jobs/<id>.manifest.json: 파라미터·단계별 소요·오류·엔진/스키마 버전)를 쓰고 재시작 후에도 job.list 가 이력을 보여줌; `job.log` 메서드/`/api/jobs/{id}/log`; HTTP 오류는 검증 실패·미처리 예외까지 전부 {"error":{…}} 한 형태(404=E_NOT_FOUND, 400=사용자 오류, 500=내부); reports/engine.log 회전 로그; UI: 상단 문제 배너(health.problems), 오류 카드(코드·힌트·같은 설정으로 다시 실행·로그 보기), 레벨별 색 로그+오류만 필터, 작업 이력 클릭→로그, WS 끊김 표시) · ✅ 8 스키마 버전(`schema.py`: project.json(데이터 루트)·meta·shorts·index·게임 프로필에 schema_version, v0(키 없음/맨 리스트)→v1 마이그레이션은 메모리에서, 엔진보다 새 파일은 E_SCHEMA_NEWER 로 거부하고 job.run 차단; labels.csv 는 열 구조가 스키마라 project.json 의 labels_schema 로 관리). **§10 리팩터링 8개 전부 완료 → 로드맵 1단계(엔진화) 닫힘.** ep59 캘리브레이션 결과: 배너 68% / 패널 40% / 채팅 92% / HUD 99% → 전부 pass.
@@ -245,11 +248,11 @@
 |---|---|---|
 | 0. 검증 | 편집본 5~10편에서 현재 파이프라인 지표 | hit@3 ≥ 0.8, 거절 상위3 ≤ 1 (라벨 30개+) |
 | 1. 엔진화 | §10 의 1~8 | `run` 한 번에 끝, RPC 로 UI 없이도 호출 가능, 테스트 통과 |
-| 2. UI v1 | 회차 추가 → 실행 → 리뷰(재생·판정) → 내보내기 | 친구가 설명 없이 한 회차 처리 |
+| 2. UI v1 | 회차 추가 → 실행 → 리뷰(재생·판정) → 내보내기 — **구현됨(2026-10-19~20)**: 온보딩(시작 화면·'다음' 진행 띠·도움말 탭), 한 버튼 실행, 토스 결 UI(§9.3), 툴팁 설명, '~해요' 문구, 오른쪽 클릭 복사 | 친구가 설명 없이 한 회차 처리 (실사용 확인 전) |
 | 3. Premiere 검증 | XML 임포트·세로 시퀀스·SRT 캡션 | 친구 Premiere 에서 실사용 1회 |
 | 4. 라이브 v1 | 득템 배너 자동 갱신(승인 모드) + 북마크 — **구현됨(2026-10-19, docs/design/LIVE.md)**: 바닥 아이템 라벨 감지(세트·유니크, CPU) → 제안 카드 승인 → 배너 텍스트·OBS 소스 갱신, 북마크(단축키·채팅 폭주·승인), 녹화 타임코드. 실방송 검증은 친구 PC 에서 | 방송 1회 무사고, 오탐 0 |
 | 5. Phase 2 | 원본 VOD → 편집 포인트 — **파이프라인 구현됨(2026-10-19)**: 회차 종류 original, 원본용 신호 세트(common.yaml pipelines), 배너 OCR 변화 감지 모드, 단계 candidates/align/eval, 편집 포인트 탭(원본 재생·kept/no). 실측은 원본 VOD 입수 뒤 | recall ≥ 0.95, coverage ≤ 10% |
-| 6. 배포 | 설치본·업데이트·고지 | 깨끗한 PC 설치 성공 |
+| 6. 배포 | 설치본·업데이트·고지 — 구현됨: 슬림 NSIS + 첫 실행 구성요소 다운로드, 앱 내 업데이트(배너 + '새 버전이 준비됐어요' 시트, 작업 중 잠금), USB 오프라인 묶음. 남은 것: `gh auth login` 뒤 첫 릴리스 업로드, 깨끗한 PC 실제 설치, 코드 서명(SmartScreen) | 깨끗한 PC 설치 성공 |
 
 ## 12. 결정 요청
 

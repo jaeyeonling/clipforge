@@ -115,6 +115,33 @@ def write_vtt(cues: list[tuple[float, float, str]], path: Path, clip_start: floa
     return path
 
 
+def vegas_timecode(sec: float, fps: float) -> str:
+    """VEGAS Pro 타임코드 hh:mm:ss:ff. 29.97/59.94 는 SMPTE 드롭 프레임(hh:mm:ss;ff)으로 — 10분 영상에서 0.6초 밀리는 걸 막는다."""
+    sec = max(0.0, sec)
+    nominal = int(round(fps))
+    frame = int(round(sec * fps))
+    drop = nominal != 0 and abs(fps - nominal) > 0.01 and nominal in (30, 60)
+    if drop:
+        drop_frames = int(round(fps * 0.066666))             # 30→2, 60→4
+        per_10min = int(round(fps * 600)); per_min = nominal * 60 - drop_frames
+        d, m = divmod(frame, per_10min)
+        frame += drop_frames * 9 * d + (drop_frames * ((m - drop_frames) // per_min) if m > drop_frames else 0)
+    ff = frame % nominal; total_s = frame // nominal
+    hh, r = divmod(total_s, 3600); mm, ss = divmod(r, 60)
+    return f"{hh:02d}:{mm:02d}:{ss:02d}{';' if drop else ':'}{ff:02d}"
+
+
+def write_vegas_txt(cues: list[tuple[float, float, str]], path: Path, clip_start: float, fps: float) -> Path:
+    """VEGAS Pro '삽입 → 파일에서 자막 삽입'용 탭 구분 TXT: 시작, 끝, 길이, 텍스트. 프로젝트 fps 가 영상과 같아야 타임코드가 맞는다."""
+    lines = []
+    for a, b, t in cues:
+        a, b = a - clip_start, b - clip_start
+        t = re.sub(r"[\t\r\n]+", " ", t).strip()
+        lines.append("\t".join([vegas_timecode(a, fps), vegas_timecode(b, fps), vegas_timecode(b - a, fps), t]))
+    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    return path
+
+
 def write_ass(cues: list[tuple[float, float, str]], path: Path, clip_start: float, size: int = 58, margin_v: int = 500) -> Path:
     lines = [ASS_HEADER.format(size=size, margin_v=margin_v)]
     for a, b, t in cues:

@@ -342,26 +342,28 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, f"{tr.get('backend')} {len(tr.get('segments', []))} segments")
     elif stage == "subtitles":
         # 영상 전체 자막 파일 (SRT + VTT). 쇼츠 초안 옆 .srt 와 달리 회차 하나를 통째로 — '자막만 달고 싶을 때' 경로.
-        from .subtitles import cues_for_clip, write_srt, write_vtt
+        from .subtitles import cues_for_clip, write_srt, write_vegas_txt, write_vtt
         tr_p = cache / "transcript.json"
         _require(tr_p, "E_NO_TRANSCRIPT", "전사 결과(transcript.json)", "transcribe 단계를 먼저 실행하세요.")
         tr = json.loads(tr_p.read_text(encoding="utf-8"))
         segs = tr.get("segments", [])
         try:
-            duration = float(_meta(project, vid)["duration"])
-        except Exception:  # noqa: BLE001 — meta 가 없으면 전사의 끝 시각까지
-            duration = max((float(sg.get("end", 0.0)) for sg in segs), default=0.0)
+            meta = _meta(project, vid)
+            duration = float(meta["duration"]); fps = float(meta.get("fps") or 30.0)
+        except Exception:  # noqa: BLE001 — meta 가 없으면 전사의 끝 시각까지, 30fps 가정
+            duration = max((float(sg.get("end", 0.0)) for sg in segs), default=0.0); fps = 30.0
         max_chars = int(job.params.get("max_chars", 28))          # 가로 전체 영상이라 쇼츠(18자)보다 길게
         cues = cues_for_clip(tr, 0.0, duration, max_chars=max_chars)
         out_dir = project.premiere / vid
         out_dir.mkdir(parents=True, exist_ok=True)
         write_srt(cues, out_dir / f"{vid}.srt", 0.0)
         write_vtt(cues, out_dir / f"{vid}.vtt", 0.0)
+        write_vegas_txt(cues, out_dir / f"{vid}.vegas.txt", 0.0, fps)       # VEGAS Pro 는 SRT 대신 TXT/CSV 만 공식 지원
         if not cues:
             job.warnings.append({"code": "W_NO_SPEECH", "message": "들리는 말이 없어 자막이 비었어요",
                                  "hint": "영상에 목소리가 있는지, 전사(transcribe)가 제대로 됐는지 확인하세요. 파일은 만들어졌지만 큐가 0개예요."})
         job.log(f"subtitles: {len(cues)} cues · {out_dir / (vid + '.srt')}")
-        prog(1.0, f"자막 {len(cues)}줄 → {vid}.srt / .vtt")
+        prog(1.0, f"자막 {len(cues)}줄 → {vid}.srt / .vtt / .vegas.txt ({fps:.2f}fps)")
     elif stage == "signals":
         from .signals import REGISTRY, run_signal
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")

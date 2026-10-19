@@ -93,6 +93,7 @@ export function Candidates() {
       <Button size="sm" onClick={() => open(paths.premiere_shorts.exists ? paths.premiere_shorts.path : paths.premiere_dir.path)} disabled={!paths.premiere_dir.exists} title={paths.premiere_shorts.path}>Premiere XML</Button>
       <Button size="sm" variant="ghost" onClick={() => open(paths.premiere_review.path)} disabled={!paths.premiere_review.exists} title="원본 전체 + 후보 트랙 + 마커 시퀀스">리뷰 XML</Button>
       {paths.subtitles_srt?.exists && <Button size="sm" variant="ghost" onClick={() => open(paths.subtitles_srt.path)} title={`영상 전체 자막 — ${paths.subtitles_srt.path}`}>자막 파일</Button>}
+      {paths.subtitles_vegas?.exists && <Button size="sm" variant="ghost" onClick={() => open(paths.subtitles_vegas.path)} data-tip={TIP.subtitlesVegas}>베가스 자막</Button>}
       {!inShell && <span className="muted xs">브라우저에서는 경로를 복사해요</span>}
     </div>
   );

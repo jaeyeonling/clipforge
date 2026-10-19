@@ -41,7 +41,7 @@ export const STAGE_LABEL: Record<StageName, string> = {
 };
 /** 단계의 기술 이름 설명 (고급 설정에서 작게) */
 export const STAGE_TECH: Record<StageName, string> = {
-  prep: "prep · 오디오·프레임·크롭 추출", transcribe: "transcribe · Whisper", subtitles: "subtitles · SRT/VTT", signals: "signals · 배너 OCR·채팅·음량·줌", candidates: "candidates",
+  prep: "prep · 오디오·프레임·크롭 추출", transcribe: "transcribe · Whisper", subtitles: "subtitles · SRT/VTT/VEGAS TXT", signals: "signals · 배너 OCR·채팅·음량·줌", candidates: "candidates",
   align: "align · 오디오 지문", shorts: "shorts · 순간 순위", export: "export · NVENC 렌더", xml: "xml · xmeml", weaklabel: "weaklabel", eval: "eval · hit@K / recall",
 };
 export const ANCHOR_LABEL: Record<string, string> = { item: "득템", chat: "채팅", zoom: "줌", note: "메모", speech: "발화", loud: "음량", motion: "움직임", cut: "컷" };
@@ -133,7 +133,7 @@ export interface EngineEvent {
 
 export interface PathInfo { path: string; exists: boolean }
 export interface EpisodePaths {
-  shorts_dir: PathInfo; premiere_review: PathInfo; premiere_shorts: PathInfo; premiere_dir: PathInfo; subtitles_srt: PathInfo; subtitles_vtt: PathInfo; subtitles_dir: PathInfo; cache_dir: PathInfo;
+  shorts_dir: PathInfo; premiere_review: PathInfo; premiere_shorts: PathInfo; premiere_dir: PathInfo; subtitles_srt: PathInfo; subtitles_vtt: PathInfo; subtitles_vegas: PathInfo; subtitles_dir: PathInfo; cache_dir: PathInfo;
   labels_shorts: PathInfo; labels_editpoints: PathInfo; data_dir: PathInfo; shorts_count: number; video: string;
 }
 

@@ -22,7 +22,7 @@ module.exports = {
   productName: "clipforge",
   copyright: "clipforge. 제3자 고지는 resources/engine/THIRD_PARTY_NOTICES.md (FFmpeg GPL 등은 첫 실행 때 내려받는 구성요소에 포함)",
   directories: { output: "release", buildResources: "assets" },
-  files: ["main.js", "preload.js", "engine.js", "components.js", "assets/**", "package.json"],
+  files: ["main.js", "preload.js", "engine.js", "components.js", "release.config.js", "assets/**", "package.json"],
   asar: true,
   extraResources: [
     ...(skipEngine ? [] : [{ from: ENGINE, to: "engine", filter: [...CODE, "!**/__pycache__/**"] }]),

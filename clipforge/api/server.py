@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -147,6 +147,7 @@ class LocalOnlyMiddleware:
 
 
 def create_app(engine: Engine | None = None, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS) -> FastAPI:
+    """엔진 앱. 라우트는 영역별 함수에 있고, 여기서는 이벤트 중계(Job 스레드 → /ws)와 조립만 한다."""
     engine = engine or Engine()
     clients: set[WebSocket] = set()
     loop_holder: dict = {}
@@ -186,8 +187,26 @@ def create_app(engine: Engine | None = None, allowed_hosts: tuple[str, ...] = LO
 
     app = FastAPI(title="clipforge engine", version=__version__, lifespan=lifespan)
     app.add_middleware(LocalOnlyMiddleware, allowed_hosts=allowed_hosts)
+    _add_error_handlers(app)
+    for router in (_episode_routes(engine), _job_routes(engine), _live_routes(engine), _media_routes(engine)):
+        app.include_router(router)
 
-    # 오류 응답은 전부 {"error": {code, message, hint, kind}} 한 형태 (UI 가 한 군데서 파싱)
+    @app.websocket("/ws")
+    async def ws(websocket: WebSocket):
+        await websocket.accept()
+        clients.add(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            clients.discard(websocket)
+
+    _add_ui(app, engine.project.ui_dir)  # "/" 에 붙으므로 마지막
+    return app
+
+
+def _add_error_handlers(app: FastAPI) -> None:
+    """오류 응답은 전부 {"error": {code, message, hint, kind}} 한 형태 (UI 가 한 군데서 파싱)."""
     log = logging.getLogger("clipforge.api")
 
     @app.exception_handler(ApiError)
@@ -214,204 +233,218 @@ def create_app(engine: Engine | None = None, allowed_hosts: tuple[str, ...] = LO
         log.exception("unhandled %s %s", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"error": classify(e)})
 
-    # ---- engine / episodes ----
-    @app.get("/api/health")
+
+def _episode_routes(engine: Engine) -> APIRouter:
+    """엔진 상태 · 회차 · 후보와 판정 · 편집 포인트 · 화면 영역 · 지표."""
+    r = APIRouter()
+
+    @r.get("/api/health")
     def health():
         return engine.health()
 
-    @app.get("/api/episodes")
-    def episodes():
-        return engine.episode_list()
-
-    @app.get("/api/episodes/{vid}")
-    def episode(vid: str):
-        return engine.episode_get(vid)
-
-    @app.post("/api/episodes")
-    def episode_add(body: AddEpisode):
-        return engine.episode_add(body.video_path, body.id, body.title, body.game, body.link, body.kind)
-
-    # ---- jobs ----
-    @app.post("/api/jobs")
-    def job_run(body: RunJob):
-        return engine.job_run(body.episode, body.stages, body.params)
-
-    @app.get("/api/jobs")
-    def job_list():
-        return engine.job_list()
-
-    @app.get("/api/jobs/{job_id}")
-    def job_get(job_id: str):
-        return engine.job_get(job_id)
-
-    @app.get("/api/jobs/{job_id}/events")
-    def job_events(job_id: str, since: int = 0):
-        return engine.job_events(job_id, since)
-
-    @app.get("/api/jobs/{job_id}/log")
-    def job_log(job_id: str, tail: int = 400):
-        return engine.job_log(job_id, tail)
-
-    @app.post("/api/jobs/{job_id}/cancel")
-    def job_cancel(job_id: str):
-        return engine.job_cancel(job_id)
-
-    # ---- candidates / decisions / metrics ----
-    @app.get("/api/episodes/{vid}/candidates")
-    def candidates(vid: str):
-        return engine.candidates_list(vid)
-
-    @app.post("/api/episodes/{vid}/decision")
-    def decision(vid: str, body: Decision):
-        return engine.decision_set(vid, body.start, body.end, body.label, body.reason, body.file, body.kind)
-
-    @app.get("/api/episodes/{vid}/editpoints")
-    def editpoints(vid: str):
-        return engine.editpoints_list(vid)
-
-    @app.get("/api/episodes/{vid}/paths")
-    def episode_paths(vid: str):
-        return engine.episode_paths(vid)
-
-    @app.post("/api/feedback/export")
-    def feedback_export():
-        return engine.feedback_export()
-
-    @app.get("/api/episodes/{vid}/kept")
-    def kept_list(vid: str):
-        return engine.kept_list(vid)
-
-    @app.put("/api/episodes/{vid}/kept")
-    def kept_set(vid: str, body: KeptSet):
-        return engine.kept_set(vid, body.start, body.end, body.label, body.new_start, body.new_end)
-
-    @app.post("/api/episodes/{vid}/kept")
-    def kept_add(vid: str, body: KeptAdd):
-        return engine.kept_add(vid, body.start, body.end, body.label, body.note)
-
-    @app.delete("/api/episodes/{vid}/kept")
-    def kept_delete(vid: str, start: float, end: float):
-        return engine.kept_delete(vid, start, end)
-
-    @app.get("/api/label-categories")
-    def label_categories(game: str | None = None):
-        return engine.label_categories(game)
-
-    # ---- live ----
-    @app.get("/api/live")
-    def live_status():
-        return engine.live_status()
-
-    @app.post("/api/live/start")
-    def live_start(body: LiveStart):
-        return engine.live_start(body.config)
-
-    @app.post("/api/live/stop")
-    def live_stop():
-        return engine.live_stop()
-
-    @app.post("/api/live/mark")
-    def live_mark(body: LiveMark):
-        return engine.live_mark(body.note)
-
-    @app.post("/api/live/suggestions/latest/approve")
-    def live_approve_latest():
-        return engine.live_approve_latest()
-
-    @app.post("/api/live/suggestions/latest/dismiss")
-    def live_dismiss_latest():
-        return engine.live_dismiss_latest()
-
-    @app.get("/api/games")
+    @r.get("/api/games")
     def games():
         return engine.games_list()
 
-    @app.api_route("/media/live/{sid}/{name}", methods=["GET", "HEAD"])
-    def media_live(sid: str, name: str):
-        root = (engine.project.data_root / "live").resolve()
-        p = (root / sid / name).resolve()
-        if root not in p.parents or not p.is_file() or p.suffix.lower() not in (".jpg", ".png", ".json"):
-            raise HTTPException(404)
-        return FileResponse(str(p), headers={"Cache-Control": "no-store"})
+    @r.get("/api/episodes")
+    def episodes():
+        return engine.episode_list()
 
-    @app.post("/api/live/suggestions/{sid}/approve")
+    @r.get("/api/episodes/{vid}")
+    def episode(vid: str):
+        return engine.episode_get(vid)
+
+    @r.post("/api/episodes")
+    def episode_add(body: AddEpisode):
+        return engine.episode_add(body.video_path, body.id, body.title, body.game, body.link, body.kind)
+
+    @r.get("/api/episodes/{vid}/paths")
+    def episode_paths(vid: str):
+        return engine.episode_paths(vid)
+
+    @r.get("/api/episodes/{vid}/candidates")
+    def candidates(vid: str):
+        return engine.candidates_list(vid)
+
+    @r.post("/api/episodes/{vid}/decision")
+    def decision(vid: str, body: Decision):
+        return engine.decision_set(vid, body.start, body.end, body.label, body.reason, body.file, body.kind)
+
+    @r.get("/api/episodes/{vid}/editpoints")
+    def editpoints(vid: str):
+        return engine.editpoints_list(vid)
+
+    @r.get("/api/episodes/{vid}/kept")
+    def kept_list(vid: str):
+        return engine.kept_list(vid)
+
+    @r.put("/api/episodes/{vid}/kept")
+    def kept_set(vid: str, body: KeptSet):
+        return engine.kept_set(vid, body.start, body.end, body.label, body.new_start, body.new_end)
+
+    @r.post("/api/episodes/{vid}/kept")
+    def kept_add(vid: str, body: KeptAdd):
+        return engine.kept_add(vid, body.start, body.end, body.label, body.note)
+
+    @r.delete("/api/episodes/{vid}/kept")
+    def kept_delete(vid: str, start: float, end: float):
+        return engine.kept_delete(vid, start, end)
+
+    @r.get("/api/episodes/{vid}/calibrate")
+    def calibrate_check(vid: str):
+        return engine.calibrate_check(vid)
+
+    @r.post("/api/episodes/{vid}/calibrate/preview")
+    def calibrate_preview(vid: str, body: PreviewReq):
+        return engine.calibrate_preview(vid, body.t, body.rois)
+
+    @r.get("/api/profiles/{game}")
+    def profile_get(game: str):
+        return engine.profile_get(game)
+
+    @r.put("/api/profiles/{game}")
+    def profile_set(game: str, body: ProfileSet):
+        return engine.profile_set(game, body.rois, body.panel_bands)
+
+    @r.get("/api/label-categories")
+    def label_categories(game: str | None = None):
+        return engine.label_categories(game)
+
+    @r.post("/api/feedback/export")
+    def feedback_export():
+        return engine.feedback_export()
+
+    @r.get("/api/metrics")
+    def metrics():
+        return engine.metrics_summary()
+
+    @r.get("/api/preference")
+    def preference():
+        return engine.preference()
+
+    return r
+
+
+def _job_routes(engine: Engine) -> APIRouter:
+    """분석 작업 실행 · 조회 · 취소. 진행 이벤트는 /ws 로도 온다."""
+    r = APIRouter()
+
+    @r.post("/api/jobs")
+    def job_run(body: RunJob):
+        return engine.job_run(body.episode, body.stages, body.params)
+
+    @r.get("/api/jobs")
+    def job_list():
+        return engine.job_list()
+
+    @r.get("/api/jobs/{job_id}")
+    def job_get(job_id: str):
+        return engine.job_get(job_id)
+
+    @r.get("/api/jobs/{job_id}/events")
+    def job_events(job_id: str, since: int = 0):
+        return engine.job_events(job_id, since)
+
+    @r.get("/api/jobs/{job_id}/log")
+    def job_log(job_id: str, tail: int = 400):
+        return engine.job_log(job_id, tail)
+
+    @r.post("/api/jobs/{job_id}/cancel")
+    def job_cancel(job_id: str):
+        return engine.job_cancel(job_id)
+
+    return r
+
+
+def _live_routes(engine: Engine) -> APIRouter:
+    """라이브 감지 세션과 제안 승인. 'latest' 경로는 {sid} 보다 먼저 등록해야 한다."""
+    r = APIRouter()
+
+    @r.get("/api/live")
+    def live_status():
+        return engine.live_status()
+
+    @r.post("/api/live/start")
+    def live_start(body: LiveStart):
+        return engine.live_start(body.config)
+
+    @r.post("/api/live/stop")
+    def live_stop():
+        return engine.live_stop()
+
+    @r.post("/api/live/mark")
+    def live_mark(body: LiveMark):
+        return engine.live_mark(body.note)
+
+    @r.post("/api/live/suggestions/latest/approve")
+    def live_approve_latest():
+        return engine.live_approve_latest()
+
+    @r.post("/api/live/suggestions/latest/dismiss")
+    def live_dismiss_latest():
+        return engine.live_dismiss_latest()
+
+    @r.post("/api/live/suggestions/{sid}/approve")
     def live_approve(sid: str, body: LiveApprove):
         return engine.live_approve(sid, body.text)
 
-    @app.post("/api/live/suggestions/{sid}/dismiss")
+    @r.post("/api/live/suggestions/{sid}/dismiss")
     def live_dismiss(sid: str):
         return engine.live_dismiss(sid)
 
-    @app.put("/api/live/banner")
+    @r.put("/api/live/banner")
     def live_banner(body: LiveBanner):
         return engine.live_banner(body.items)
 
-    @app.post("/api/live/obs/probe")
+    @r.post("/api/live/obs/probe")
     def live_obs_probe(body: ObsProbe):
         return engine.live_obs_inputs(body.url, body.password)
 
-    # 원본/편집본 영상 자체 (편집 포인트 검토용 재생). Range 지원.
-    @app.api_route("/media/video/{vid}", methods=["GET", "HEAD"])
+    return r
+
+
+def _serve_under(root: Path, rel: str, suffixes: tuple[str, ...] | None = None, **kw) -> FileResponse:
+    """root 아래 파일만 내준다 (../ 로 빠져나가거나 허용하지 않은 확장자면 404)."""
+    root = root.resolve()
+    p = (root / rel).resolve()
+    if root not in p.parents or not p.is_file() or (suffixes and p.suffix.lower() not in suffixes):
+        raise HTTPException(404)
+    return FileResponse(str(p), **kw)
+
+
+def _media_routes(engine: Engine) -> APIRouter:
+    """영상 · 초안 · 미리보기 이미지 (API 문서에는 넣지 않는다). HEAD 도 받아야 브라우저 <video> 가 메타데이터를 읽는다. Range 지원."""
+    r = APIRouter()
+    no_store = {"Cache-Control": "no-store"}
+
+    @r.api_route("/media/video/{vid}", methods=["GET", "HEAD"], include_in_schema=False)
     def media_video(vid: str):
-        p = engine.project.video_path(vid)
+        p = engine.project.video_path(vid)  # 원본/편집본 영상 자체 (편집 포인트 검토용 재생)
         if not p:
             raise HTTPException(404)
         return FileResponse(str(p), media_type="video/mp4")
 
-    @app.get("/api/episodes/{vid}/calibrate")
-    def calibrate_check(vid: str):
-        return engine.calibrate_check(vid)
-
-    @app.post("/api/episodes/{vid}/calibrate/preview")
-    def calibrate_preview(vid: str, body: PreviewReq):
-        return engine.calibrate_preview(vid, body.t, body.rois)
-
-    @app.get("/api/profiles/{game}")
-    def profile_get(game: str):
-        return engine.profile_get(game)
-
-    @app.put("/api/profiles/{game}")
-    def profile_set(game: str, body: ProfileSet):
-        return engine.profile_set(game, body.rois, body.panel_bands)
-
-    @app.api_route("/media/cache/{path:path}", methods=["GET", "HEAD"])
-    def media_cache(path: str):
-        root = engine.project.cache.resolve()
-        p = (root / path).resolve()
-        if root not in p.parents or not p.is_file() or p.suffix.lower() not in (".png", ".jpg", ".json"):
-            raise HTTPException(404)
-        return FileResponse(str(p), headers={"Cache-Control": "no-store"})
-
-    @app.get("/api/metrics")
-    def metrics():
-        return engine.metrics_summary()
-
-    @app.get("/api/preference")
-    def preference():
-        return engine.preference()
-
-    # ---- media (초안 mp4 등, review/ 아래만). HEAD 도 받아야 브라우저 <video> 가 메타데이터를 읽는다 ----
-    @app.api_route("/media/review/{path:path}", methods=["GET", "HEAD"])
+    @r.api_route("/media/review/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def media(path: str):
-        root = engine.project.review.resolve()
-        p = (root / path).resolve()
-        if root not in p.parents or not p.is_file():
-            raise HTTPException(404)
-        return FileResponse(str(p))
+        return _serve_under(engine.project.review, path)
 
-    # ---- websocket events ----
-    @app.websocket("/ws")
-    async def ws(websocket: WebSocket):
-        await websocket.accept()
-        clients.add(websocket)
-        try:
-            while True:
-                await websocket.receive_text()
-        except WebSocketDisconnect:
-            clients.discard(websocket)
+    @r.api_route("/media/cache/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    def media_cache(path: str):
+        return _serve_under(engine.project.cache, path, (".png", ".jpg", ".json"), headers=no_store)
 
-    # ---- UI ----
-    # index.html 은 캐시 금지 (빌드마다 자산 해시가 바뀌므로 오래된 index 가 옛 JS 를 가리키면 안 된다). 해시 붙은 assets/ 는 길게 캐시.
+    @r.api_route("/media/live/{sid}/{name}", methods=["GET", "HEAD"], include_in_schema=False)
+    def media_live(sid: str, name: str):
+        return _serve_under(
+            engine.project.data_root / "live", f"{sid}/{name}", (".jpg", ".png", ".json"), headers=no_store
+        )
+
+    return r
+
+
+def _add_ui(app: FastAPI, ui_dir: Path | None) -> None:
+    """화면 정적 파일. index.html 은 캐시 금지 (빌드마다 자산 해시가 바뀌므로 오래된 index 가 옛 JS 를 가리키면 안 된다).
+    해시 붙은 assets/ 는 길게 캐시."""
+
     @app.middleware("http")
     async def _ui_cache_headers(request, call_next):
         resp = await call_next(request)
@@ -422,7 +455,6 @@ def create_app(engine: Engine | None = None, allowed_hosts: tuple[str, ...] = LO
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
-    ui_dir: Path | None = engine.project.ui_dir
     if ui_dir:
         app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")
     else:
@@ -430,8 +462,6 @@ def create_app(engine: Engine | None = None, allowed_hosts: tuple[str, ...] = LO
         @app.get("/", response_class=HTMLResponse, include_in_schema=False)
         def _no_ui() -> str:
             return NO_UI_PAGE
-
-    return app
 
 
 # 화면 빌드(app/dist)가 없을 때: 엔진 API 는 살아 있고, 화면을 만드는 방법을 알려 준다.

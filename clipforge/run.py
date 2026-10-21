@@ -29,11 +29,11 @@ from .errors import EngineError, classify
 from .eval_shorts import evaluate_shorts
 from .evaluate import evaluate
 from .export_xml import export_xml
+from .jobs import render_episode_shorts
 from .lexicon import Lexicon, banner_tokens, report_md
 from .preprocess import preprocess
 from .profiles import load_profile
 from .project import Project
-from .render import render_shorts
 from .schema import load_json
 from .shorts import ShortCandidate, make_shorts, save_shorts
 from .shorts import pretty as shorts_pretty
@@ -44,7 +44,6 @@ from .weaklabel import (
     load_episode,
     load_slang,
     match_banner,
-    short_episode_label,
     title_keywords,
     write_weak_labels,
 )
@@ -240,54 +239,29 @@ def cmd_export(a):
     --shorts: shorts.json 의 후보를 9:16 세로 초안으로 렌더 (review/<vid>/shorts/)."""
     meta = load_meta(a.vid)
     if a.shorts:
-        cands = load_shorts(a.vid)
-        out = REVIEW / a.vid / "shorts"
-        (out / "keep").mkdir(parents=True, exist_ok=True)
-        ui_p = CACHE / a.vid / "ui_state.json"
-        ui = (
-            [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
-            if ui_p.exists()
-            else None
-        )
-        if ui is None:
+        cache = CACHE / a.vid
+        if not (cache / "ui_state.json").exists():
             print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라가요)")
-        tr_p = CACHE / a.vid / "transcript.json"
-        tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
-        if tr is None:
+        if not (cache / "transcript.json").exists():
             print("  (transcript.json 없음 — 대사 자막 생략. python -m clipforge.run transcribe 로 전사 먼저)")
-        chat_p = CACHE / a.vid / "chat_text.json"
-        chat = (
-            [
-                {"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")}
-                for s in Segments.load(chat_p).items
-            ]
-            if chat_p.exists()
-            else None
-        )
-        ep = load_episode(a.vid, _PROJECT.episodes_csv) or {}
-        label = short_episode_label(ep.get("title", "")) or a.vid
         # 기본(card + title) = 확정 포맷 → shorts/. 그 외 실험 렌더는 shorts_<layout|top>/ 로 분리
         if a.layout == "feed":
             out = REVIEW / a.vid / "shorts_feed"
-            (out / "keep").mkdir(parents=True, exist_ok=True)
         elif a.top != "title":
             out = REVIEW / a.vid / f"shorts_{a.top}"
-            (out / "keep").mkdir(parents=True, exist_ok=True)
-        idx = render_shorts(
-            cands,
-            meta,
+        else:
+            out = REVIEW / a.vid / "shorts"
+        idx = render_episode_shorts(
+            _PROJECT,
+            a.vid,
             out,
             k=a.k,
-            cx=a.cx,
-            ui=ui,
-            ease=a.ease,
-            transcript=tr,
-            subs=not a.no_subs,
-            chat=chat,
-            top_mode=a.top,
             layout=a.layout,
+            top=a.top,
             brand=a.brand,
-            episode_label=label,
+            cx=a.cx,
+            ease=a.ease,
+            subs=not a.no_subs,
         )
         print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
         return

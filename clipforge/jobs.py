@@ -649,21 +649,31 @@ def _stage_shorts(project: Project, job: Job, prog: Callable[[float, str], None]
     prog(1.0, f"쇼츠 후보 {len(cands)}개를 골랐어요")
 
 
-def _stage_export(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
-    """세로 초안 렌더."""
-    from .timeline import Segments
-
-    vid = job.episode
-    cache = project.cache / vid
+def render_episode_shorts(
+    project: Project,
+    vid: str,
+    out: Path,
+    *,
+    k: int,
+    layout: str = "card",
+    top: str = "title",
+    brand: str = "디아블로2 하이라이트",
+    cx: float = 0.5,
+    ease: float = 0.0,
+    subs: bool = True,
+    progress: Callable[[float, str], None] | None = None,
+) -> list[dict]:
+    """회차의 쇼츠 후보를 세로 초안으로 렌더한다. 입력(후보 · 전사 · 방송 채팅 · 화면 상태 · 회차 이름)을 캐시에서 모은다.
+    전사 · 채팅 · 화면 상태는 없으면 그 요소만 빠진다. 앱의 export 단계와 CLI 가 함께 쓴다."""
     from .render import render_shorts
+    from .timeline import Segments
     from .weaklabel import load_episode, short_episode_label
 
+    cache = project.cache / vid
     _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
-    meta = _meta(project, vid)
-    cands = _shorts(project, vid)
     tr_p = cache / "transcript.json"
-    tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
     chat_p = cache / "chat_text.json"
+    ui_p = cache / "ui_state.json"
     chat = (
         [
             {"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")}
@@ -672,29 +682,44 @@ def _stage_export(project: Project, job: Job, prog: Callable[[float, str], None]
         if chat_p.exists()
         else None
     )
-    ui_p = cache / "ui_state.json"
     ui = (
         [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
         if ui_p.exists()
         else None
     )
     ep = load_episode(vid, project.episodes_csv) or {}
-    out = project.review / vid / "shorts"
-    (out / "keep").mkdir(parents=True, exist_ok=True)
-    (out / "no").mkdir(parents=True, exist_ok=True)
-    prog(0.05, "세로 초안을 만드는 중이에요")
-    idx = render_shorts(
-        cands,
-        meta,
+    for sub in ("keep", "no"):
+        (out / sub).mkdir(parents=True, exist_ok=True)
+    return render_shorts(
+        _shorts(project, vid),
+        _meta(project, vid),
         out,
-        k=int(job.params.get("k", 5)),
-        transcript=tr,
-        chat=chat,
+        k=k,
+        cx=cx,
         ui=ui,
-        layout=job.params.get("layout", "card"),
-        top_mode=job.params.get("top", "title"),
-        brand=job.params.get("brand", "디아블로2 하이라이트"),
+        ease=ease,
+        transcript=json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None,
+        subs=subs,
+        chat=chat,
+        top_mode=top,
+        layout=layout,
+        brand=brand,
         episode_label=short_episode_label(ep.get("title", "")) or vid,
+        progress=progress,
+    )
+
+
+def _stage_export(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """세로 초안 렌더."""
+    prog(0.05, "세로 초안을 만드는 중이에요")
+    idx = render_episode_shorts(
+        project,
+        job.episode,
+        project.review / job.episode / "shorts",
+        k=int(job.params.get("k", 5)),
+        layout=job.params.get("layout", "card"),
+        top=job.params.get("top", "title"),
+        brand=job.params.get("brand", "디아블로2 하이라이트"),
         progress=lambda f, m="": prog(0.05 + 0.9 * f, m),
     )
     prog(1.0, f"세로 초안 {len(idx)}개를 만들었어요")

@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.join(__dirname, "..");
+// 파일 목록만 본다. 엔진 번들(engine-dist/)이 없는 CI 에서도 설정을 불러올 수 있게 엔진 검사를 끈다.
+process.env.CLIPFORGE_SKIP_ENGINE = "1";
 const cfg = require(path.join(ROOT, "electron-builder.config.js"));
 
 function localRequires(file) {

@@ -32,7 +32,7 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Fix
 
 - 사용자에게 보이는 문장은 `~해요` 체로 짧게 쓰고, 다음 행동을 먼저 말해요.
 - 라벨은 짧게, 설명은 `app/src/api/tips.ts` 에 모으고 요소에는 `data-tip` 만 붙여요.
-- `app/src/api/copy.test.ts` 가 딱딱한 `~습니다` 체를 잡아요.
+- 화면 문구는 `app/src/api/copy.test.ts`, 엔진이 화면으로 보내는 오류·진행 문구는 `tests/test_copy.py` 가 딱딱한 `~습니다` 체를 잡아요.
 
 ## 커밋
 

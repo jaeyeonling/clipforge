@@ -155,3 +155,9 @@ def test_health_problems_levels():
     codes = {p["code"]: p["level"] for p in health_problems(h2)}
     assert codes == {"E_FFMPEG_MISSING": "error", "W_NO_WHISPER_MODEL": "warn", "W_DISK_LOW": "warn"}
     assert all(p["hint"] for p in health_problems(h2))
+
+
+def test_every_stage_has_a_function():
+    from clipforge.jobs import STAGE_FNS, STAGES
+
+    assert list(STAGE_FNS) == STAGES  # 같은 순서, 빠짐 없이

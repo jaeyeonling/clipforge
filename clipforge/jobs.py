@@ -376,371 +376,437 @@ def _require(path: Path, code: str, what: str, stage_hint: str) -> None:
 
 
 # ---------- 단계 실행 (run.py 의 cmd_* 와 동일한 동작) ----------
-def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str], None]) -> None:
+def _stage_prep(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """영상 읽기: 한 번의 디코드로 오디오 · 1초 프레임 · 화면 영역 원본 크롭 · 장면 전환을 뽑는다."""
+    vid = job.episode
+    cache = project.cache / vid
+    from .preprocess import preprocess
 
+    video = project.video_path(vid)
+    if video is None:
+        raise EngineError(
+            "E_FILE_MISSING",
+            f"회차 {vid} 의 영상을 찾지 못했어요",
+            "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.",
+        )
+    kind = episode_kind(project, vid, job.params)
+    pcfg = pipeline_cfg(project, kind, episode_game_of(project, vid))
+    prog(0.02, f"영상을 읽는 중이에요 ({'편집본' if kind == 'edited' else '원본'})")
+    # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
+    done_flag = threading.Event()
+    err: list[BaseException] = []
+
+    def work():
+        try:
+            preprocess(
+                video,
+                project.cache,
+                force=bool(job.params.get("force")),
+                game=job.params.get("game"),
+                proxy=bool(job.params.get("proxy")),
+                vid=vid,
+                kind=kind,
+                scene_cuts=job.params.get("scene_cuts", pcfg.get("scene_cuts")),
+            )
+        except BaseException as e:
+            err.append(e)
+        finally:
+            done_flag.set()
+
+    th = threading.Thread(target=work, daemon=True)
+    th.start()
+    expected = None
+    while not done_flag.wait(2.0):
+        meta_p = cache / "meta.json"
+        if expected is None and meta_p.exists():
+            try:
+                m = json.loads(meta_p.read_text(encoding="utf-8"))
+                expected = max(1, int(m["duration"] * float(m.get("frames", {}).get("fps", 1.0))))
+            except Exception:
+                pass
+        if expected:
+            n = len(list((cache / "frames").glob("*.jpg"))) if (cache / "frames").exists() else 0
+            prog(0.05 + 0.9 * min(1.0, n / expected), f"화면 {n}/{expected}장을 읽었어요")
+        if job.cancel_event.is_set():
+            job.log("취소 요청 — 현재 ffmpeg 패스가 끝나면 멈춰요")
+    if err:
+        raise err[0]
+    prog(1.0, "영상 읽기가 끝났어요")
+
+
+def _stage_transcribe(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """말을 글로: faster-whisper 전사 → transcript.json."""
+    cache = project.cache / job.episode
+    from .transcribe import transcribe
+
+    _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
+    prog(0.05, "말을 글로 바꾸는 중이에요")
+    tr = transcribe(cache, force=bool(job.params.get("force")))
+    prog(
+        1.0,
+        f"말 {len(tr.get('segments', []))}마디를 글로 바꿨어요 ({'GPU' if tr.get('device') == 'cuda' else 'CPU'})",
+    )
+
+
+def _stage_subtitles(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """자막 파일: 영상 전체 자막을 SRT · VTT · VEGAS 텍스트로."""
+    vid = job.episode
+    cache = project.cache / vid
+    # 영상 전체 자막 파일 (SRT + VTT). 쇼츠 초안 옆 .srt 와 달리 회차 하나를 통째로 — '자막만 달고 싶을 때' 경로.
+    from .subtitles import cues_for_clip, write_srt, write_vegas_txt, write_vtt
+
+    tr_p = cache / "transcript.json"
+    _require(tr_p, "E_NO_TRANSCRIPT", "전사 결과(transcript.json)", "transcribe 단계를 먼저 실행하세요.")
+    tr = json.loads(tr_p.read_text(encoding="utf-8"))
+    segs = tr.get("segments", [])
+    try:
+        meta = _meta(project, vid)
+        duration = float(meta["duration"])
+        fps = float(meta.get("fps") or 30.0)
+    except Exception:
+        duration = max((float(sg.get("end", 0.0)) for sg in segs), default=0.0)
+        fps = 30.0
+    max_chars = int(job.params.get("max_chars", 28))  # 가로 전체 영상이라 쇼츠(18자)보다 길게
+    cues = cues_for_clip(tr, 0.0, duration, max_chars=max_chars)
+    out_dir = project.premiere / vid
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_srt(cues, out_dir / f"{vid}.srt", 0.0)
+    write_vtt(cues, out_dir / f"{vid}.vtt", 0.0)
+    write_vegas_txt(cues, out_dir / f"{vid}.vegas.txt", 0.0, fps)  # VEGAS Pro 는 SRT 대신 TXT/CSV 만 공식 지원
+    if not cues:
+        job.warnings.append(
+            {
+                "code": "W_NO_SPEECH",
+                "message": "들리는 말이 없어 자막이 비었어요",
+                "hint": "영상에 목소리가 있는지, 전사(transcribe)가 제대로 됐는지 확인하세요. 파일은 만들어졌지만 큐가 0개예요.",
+            }
+        )
+    job.log(f"subtitles: {len(cues)} cues · {out_dir / (vid + '.srt')}")
+    prog(1.0, f"자막 {len(cues)}줄을 만들었어요 (SRT · VTT · VEGAS)")
+
+
+def _stage_signals(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """순간 신호: 회차 종류·게임에 맞는 신호 묶음을 돌리고, 화면 영역 적중률이 낮으면 경고를 남긴다."""
+    vid = job.episode
+    cache = project.cache / vid
+    from .signals import REGISTRY, run_signal
+
+    _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+    kind = episode_kind(project, vid, job.params)
+    want = job.params.get("signals") or pipeline_cfg(project, kind, episode_game_of(project, vid)).get("signals", "all")
+    names = list(REGISTRY) if want == "all" else [n for n in want if n in REGISTRY]
+    job.log(f"signals [{kind}]: {', '.join(names)}")
+    for i, name in enumerate(names):
+        if job.cancel_event.is_set():
+            return
+        prog(i / len(names), f"{SIGNAL_LABEL.get(name, name)} 찾는 중이에요")
+        run_signal(name, cache, bool(job.params.get("force")))
+    # 신호가 끝나면 ROI 적중률을 자동 점검 — 화면 레이아웃이 바뀐 회차를 사람이 모르고 지나가지 않게
+    try:
+        from .calibrate import check as calib_check
+
+        rep = calib_check(project, vid)
+        bad = [c for c in rep.get("checks", []) if c.get("status") in ("fail", "warn")]
+        if rep.get("ok") and bad:
+            job.warnings.append(
+                {
+                    "code": "W_CALIBRATION",
+                    "message": "화면 영역(ROI) 점검에서 경고: " + ", ".join(f"{c['name']} {c['status']}" for c in bad),
+                    "hint": "캘리브레이션 탭에서 미리보기를 확인하세요. 오버레이 위치가 바뀐 회차면 ROI 를 조정하고 prep 을 다시 실행해요.",
+                }
+            )
+            job.emit({"type": "log", "stage": "signals", "level": "warn", "message": job.warnings[-1]["message"]})
+        else:
+            job.log("캘리브레이션 점검 통과" if rep.get("ok") else f"캘리브레이션 점검 생략: {rep.get('error', '')}")
+    except Exception as e:
+        job.log(f"캘리브레이션 점검 실패(무시): {str(e)[:120]}")
+    prog(1.0, f"순간 신호 {len(names)}가지를 찾았어요")
+
+
+def _stage_candidates(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """편집 포인트 후보 (원본): 신호 가중합 → 구간."""
+    vid = job.episode
+    cache = project.cache / vid
+    # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터
+    from .candidates import SIGNAL_WEIGHTS, make_candidates
+    from .profiles import load_profile
+
+    _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+    meta = _meta(project, vid)
+    curves, events = _signals(project, vid)
+    if not curves and not events:
+        raise EngineError("E_NO_SIGNALS", "신호 결과가 없어요", "signals 단계를 먼저 실행하세요.")
+    weights = dict(SIGNAL_WEIGHTS)
+    weights.update(job.params.get("weights") or {})
+    kernels = load_profile(meta.get("game", "d2r")).get("events", {}) or {}
+    segs = make_candidates(
+        curves, meta["duration"], weights, events, kernels, threshold=float(job.params.get("threshold", 1.5))
+    )
+    segs.save(cache / "candidates.json")
+    cov = segs.total_duration() / max(1.0, meta["duration"])
+    job.log(f"candidates: {len(segs.items)}개, coverage {cov:.1%}, signals={segs.meta.get('signals')}")
+    prog(1.0, f"편집 포인트 후보 {len(segs.items)}개 · 원본의 {cov:.0%}")
+
+
+def _stage_align(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """정답 만들기: 편집본(또는 올린 쇼츠)을 원본·편집본 오디오에 정렬해 살아남은 구간을 라벨로."""
+    vid = job.episode
+    cache = project.cache / vid
+    # Phase 2 정답: 최종본 ↔ 원본 정렬 → labels/<vid>.csv kept
+    from .align import (
+        align_files,
+        align_shorts,
+        collect_shorts,
+        extract_audio,
+        pretty,
+        pretty_shorts,
+        write_labels,
+        write_shorts_labels,
+    )
+
+    final = job.params.get("final")
+    shorts = job.params.get("shorts")
+    if not final and not shorts:
+        raise EngineError(
+            "E_BAD_PARAMS",
+            "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요해요",
+            "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
+        )
+    _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
+    if shorts:
+        files = collect_shorts(shorts if isinstance(shorts, list) else [shorts])
+        if not files:
+            raise EngineError("E_FILE_MISSING", f"쇼츠 파일이 없어요: {shorts}", "mp4 파일이나 폴더 경로를 확인하세요.")
+        res = align_shorts(
+            cache / "audio.wav", files, cache, progress=lambda f, m="": prog(0.05 + (0.45 if final else 0.9) * f, m)
+        )
+        n = write_shorts_labels(project.labels / f"{vid}.shorts.csv", res)
+        job.log(pretty_shorts(res))
+        (cache / "align_shorts.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "file": r["file"],
+                        "path": r["path"],
+                        "segments": [s.to_dict() for s in r["segments"]],
+                        "matched_frac": r["diag"]["matched_frac"],
+                    }
+                    for r in res
+                ],
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+        if not final:
+            prog(1.0, f"쇼츠 {len(files)}개를 맞춰 정답 {n}구간을 찾았어요")
+            return
+    fp = Path(str(final))
+    if (project.cache / str(final) / "audio.wav").exists():
+        final_wav, final_name = project.cache / str(final) / "audio.wav", str(final)
+    elif fp.is_file():
+        prog(0.02, "편집본에서 소리를 꺼내는 중이에요")
+        final_wav, final_name = extract_audio(fp, cache / "align" / f"{fp.stem}.wav"), fp.name
+    else:
+        raise EngineError(
+            "E_FILE_MISSING",
+            f"최종본을 찾지 못했어요: {final}",
+            "영상 파일 경로 또는 prep 된 회차 id 를 확인하세요.",
+        )
+    segs, diag = align_files(
+        cache / "audio.wav", final_wav, cache_dir=cache, progress=lambda f, m="": prog(0.05 + 0.9 * f, m)
+    )
+    (cache / "align.json").write_text(
+        json.dumps(
+            {"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1
+        ),
+        encoding="utf-8",
+    )
+    n = write_labels(project.labels / f"{vid}.csv", segs, final_name)
+    job.log(pretty(segs, diag))
+    prog(1.0, f"정답 구간 {n}개 · 편집본의 {diag['matched_frac'] * 100:.0f}%를 원본에서 찾았어요")
+
+
+def _stage_shorts(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """쇼츠 후보: 판정으로 맞춘 축 가중치로 앵커 → 창 → 점수 → 같은 순간 하나만."""
+    vid = job.episode
+    cache = project.cache / vid
+    from .preference import current_preference
+    from .shorts import make_shorts, save_shorts
+
+    _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+    _require(cache / "item_banner.json", "E_NO_SIGNALS", "신호 결과", "signals 단계를 먼저 실행하세요.")
+    meta = _meta(project, vid)
+    curves, events = _signals(project, vid)
+    # 지금까지의 판정(모든 회차)으로 축 가중치를 맞춘다. 판정이 적으면 기본값 그대로.
+    pref = current_preference(project.labels, project.cache, save_to=project.reports / "preference.json")
+    job.log(
+        f"판정 반영: {pref.reason} (쓸 만함 {pref.n_keep} · 안 씀 {pref.n_no})"
+        + (" — " + " · ".join(f"{k} {v:.2f}" for k, v in pref.weights.items()) if pref.learned else "")
+    )
+    cands = make_shorts(cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)), weights=pref.weights)
+    save_shorts(cands, cache / "shorts.json")
+    prog(1.0, f"쇼츠 후보 {len(cands)}개를 골랐어요")
+
+
+def _stage_export(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """세로 초안 렌더."""
     from .timeline import Segments
 
     vid = job.episode
     cache = project.cache / vid
-    if stage == "prep":
-        from .preprocess import preprocess
+    from .render import render_shorts
+    from .weaklabel import load_episode, short_episode_label
 
-        video = project.video_path(vid)
-        if video is None:
-            raise EngineError(
-                "E_FILE_MISSING",
-                f"회차 {vid} 의 영상을 찾지 못했어요",
-                "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.",
-            )
-        kind = episode_kind(project, vid, job.params)
-        pcfg = pipeline_cfg(project, kind, episode_game_of(project, vid))
-        prog(0.02, f"영상을 읽는 중이에요 ({'편집본' if kind == 'edited' else '원본'})")
-        # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
-        done_flag = threading.Event()
-        err: list[BaseException] = []
+    _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
+    meta = _meta(project, vid)
+    cands = _shorts(project, vid)
+    tr_p = cache / "transcript.json"
+    tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
+    chat_p = cache / "chat_text.json"
+    chat = (
+        [
+            {"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")}
+            for s in Segments.load(chat_p).items
+        ]
+        if chat_p.exists()
+        else None
+    )
+    ui_p = cache / "ui_state.json"
+    ui = (
+        [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
+        if ui_p.exists()
+        else None
+    )
+    ep = load_episode(vid, project.episodes_csv) or {}
+    out = project.review / vid / "shorts"
+    (out / "keep").mkdir(parents=True, exist_ok=True)
+    (out / "no").mkdir(parents=True, exist_ok=True)
+    prog(0.05, "세로 초안을 만드는 중이에요")
+    idx = render_shorts(
+        cands,
+        meta,
+        out,
+        k=int(job.params.get("k", 5)),
+        transcript=tr,
+        chat=chat,
+        ui=ui,
+        layout=job.params.get("layout", "card"),
+        top_mode=job.params.get("top", "title"),
+        brand=job.params.get("brand", "디아블로2 하이라이트"),
+        episode_label=short_episode_label(ep.get("title", "")) or vid,
+        progress=lambda f, m="": prog(0.05 + 0.9 * f, m),
+    )
+    prog(1.0, f"세로 초안 {len(idx)}개를 만들었어요")
 
-        def work():
-            try:
-                preprocess(
-                    video,
-                    project.cache,
-                    force=bool(job.params.get("force")),
-                    game=job.params.get("game"),
-                    proxy=bool(job.params.get("proxy")),
-                    vid=vid,
-                    kind=kind,
-                    scene_cuts=job.params.get("scene_cuts", pcfg.get("scene_cuts")),
-                )
-            except BaseException as e:
-                err.append(e)
-            finally:
-                done_flag.set()
 
-        th = threading.Thread(target=work, daemon=True)
-        th.start()
-        expected = None
-        while not done_flag.wait(2.0):
-            meta_p = cache / "meta.json"
-            if expected is None and meta_p.exists():
-                try:
-                    m = json.loads(meta_p.read_text(encoding="utf-8"))
-                    expected = max(1, int(m["duration"] * float(m.get("frames", {}).get("fps", 1.0))))
-                except Exception:
-                    pass
-            if expected:
-                n = len(list((cache / "frames").glob("*.jpg"))) if (cache / "frames").exists() else 0
-                prog(0.05 + 0.9 * min(1.0, n / expected), f"화면 {n}/{expected}장을 읽었어요")
-            if job.cancel_event.is_set():
-                job.log("취소 요청 — 현재 ffmpeg 패스가 끝나면 멈춰요")
-        if err:
-            raise err[0]
-        prog(1.0, "영상 읽기가 끝났어요")
-    elif stage == "transcribe":
-        from .transcribe import transcribe
+def _stage_xml(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """Premiere 파일 (세로 시퀀스 · 리뷰 시퀀스)."""
+    from .timeline import Segments
 
-        _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
-        prog(0.05, "말을 글로 바꾸는 중이에요")
-        tr = transcribe(cache, force=bool(job.params.get("force")))
-        prog(
-            1.0,
-            f"말 {len(tr.get('segments', []))}마디를 글로 바꿨어요 ({'GPU' if tr.get('device') == 'cuda' else 'CPU'})",
+    vid = job.episode
+    cache = project.cache / vid
+    from .export_xml import export_xml
+
+    meta = _meta(project, vid)
+    cands_p = cache / "candidates.json"
+    cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
+    ui_p = cache / "ui_state.json"
+    ui = (
+        [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
+        if ui_p.exists()
+        else None
+    )
+    shorts = _shorts(project, vid) if (cache / "shorts.json").exists() else []
+    if not shorts and not cands.items:
+        raise EngineError(
+            "E_NO_SHORTS",
+            "후보가 없어요 (shorts.json / candidates.json)",
+            "shorts 또는 candidates 단계를 먼저 실행하세요.",
         )
-    elif stage == "subtitles":
-        # 영상 전체 자막 파일 (SRT + VTT). 쇼츠 초안 옆 .srt 와 달리 회차 하나를 통째로 — '자막만 달고 싶을 때' 경로.
-        from .subtitles import cues_for_clip, write_srt, write_vegas_txt, write_vtt
+    export_xml(meta, cands, shorts, ui, project.premiere, vid, k=int(job.params.get("k", 5)))
+    prog(1.0, "Premiere 파일을 만들었어요")
 
-        tr_p = cache / "transcript.json"
-        _require(tr_p, "E_NO_TRANSCRIPT", "전사 결과(transcript.json)", "transcribe 단계를 먼저 실행하세요.")
-        tr = json.loads(tr_p.read_text(encoding="utf-8"))
-        segs = tr.get("segments", [])
-        try:
-            meta = _meta(project, vid)
-            duration = float(meta["duration"])
-            fps = float(meta.get("fps") or 30.0)
-        except Exception:
-            duration = max((float(sg.get("end", 0.0)) for sg in segs), default=0.0)
-            fps = 30.0
-        max_chars = int(job.params.get("max_chars", 28))  # 가로 전체 영상이라 쇼츠(18자)보다 길게
-        cues = cues_for_clip(tr, 0.0, duration, max_chars=max_chars)
-        out_dir = project.premiere / vid
-        out_dir.mkdir(parents=True, exist_ok=True)
-        write_srt(cues, out_dir / f"{vid}.srt", 0.0)
-        write_vtt(cues, out_dir / f"{vid}.vtt", 0.0)
-        write_vegas_txt(cues, out_dir / f"{vid}.vegas.txt", 0.0, fps)  # VEGAS Pro 는 SRT 대신 TXT/CSV 만 공식 지원
-        if not cues:
-            job.warnings.append(
-                {
-                    "code": "W_NO_SPEECH",
-                    "message": "들리는 말이 없어 자막이 비었어요",
-                    "hint": "영상에 목소리가 있는지, 전사(transcribe)가 제대로 됐는지 확인하세요. 파일은 만들어졌지만 큐가 0개예요.",
-                }
-            )
-        job.log(f"subtitles: {len(cues)} cues · {out_dir / (vid + '.srt')}")
-        prog(1.0, f"자막 {len(cues)}줄을 만들었어요 (SRT · VTT · VEGAS)")
-    elif stage == "signals":
-        from .signals import REGISTRY, run_signal
 
-        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
-        kind = episode_kind(project, vid, job.params)
-        want = job.params.get("signals") or pipeline_cfg(project, kind, episode_game_of(project, vid)).get(
-            "signals", "all"
-        )
-        names = list(REGISTRY) if want == "all" else [n for n in want if n in REGISTRY]
-        job.log(f"signals [{kind}]: {', '.join(names)}")
-        for i, name in enumerate(names):
-            if job.cancel_event.is_set():
-                return
-            prog(i / len(names), f"{SIGNAL_LABEL.get(name, name)} 찾는 중이에요")
-            run_signal(name, cache, bool(job.params.get("force")))
-        # 신호가 끝나면 ROI 적중률을 자동 점검 — 화면 레이아웃이 바뀐 회차를 사람이 모르고 지나가지 않게
-        try:
-            from .calibrate import check as calib_check
+def _stage_weaklabel(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """제목의 득템 이름으로 약한 정답."""
+    from .timeline import Segments
 
-            rep = calib_check(project, vid)
-            bad = [c for c in rep.get("checks", []) if c.get("status") in ("fail", "warn")]
-            if rep.get("ok") and bad:
-                job.warnings.append(
-                    {
-                        "code": "W_CALIBRATION",
-                        "message": "화면 영역(ROI) 점검에서 경고: "
-                        + ", ".join(f"{c['name']} {c['status']}" for c in bad),
-                        "hint": "캘리브레이션 탭에서 미리보기를 확인하세요. 오버레이 위치가 바뀐 회차면 ROI 를 조정하고 prep 을 다시 실행해요.",
-                    }
-                )
-                job.emit({"type": "log", "stage": "signals", "level": "warn", "message": job.warnings[-1]["message"]})
-            else:
-                job.log(
-                    "캘리브레이션 점검 통과" if rep.get("ok") else f"캘리브레이션 점검 생략: {rep.get('error', '')}"
-                )
-        except Exception as e:
-            job.log(f"캘리브레이션 점검 실패(무시): {str(e)[:120]}")
-        prog(1.0, f"순간 신호 {len(names)}가지를 찾았어요")
-    elif stage == "candidates":
-        # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터
-        from .candidates import SIGNAL_WEIGHTS, make_candidates
-        from .profiles import load_profile
+    vid = job.episode
+    cache = project.cache / vid
+    from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
-        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
+    meta = _meta(project, vid)
+    ep = load_episode(vid, project.episodes_csv)
+    title = job.params.get("title") or (ep or {}).get("title")
+    if title and (cache / "item_banner.json").exists():
+        kws = title_keywords(title, load_slang(meta.get("game", "d2r")))
+        matches = match_banner(kws, Segments.load(cache / "item_banner.json"))
+        write_weak_labels(vid, matches, project.labels, duration=meta["duration"])
+        prog(1.0, f"제목에서 정답 {len(matches)}개를 찾았어요")
+    else:
+        prog(1.0, "제목이 없어 건너뛰었어요")
+
+
+def _stage_eval(project: Project, job: Job, prog: Callable[[float, str], None]) -> None:
+    """점수: 쇼츠 hit@K · MRR, 편집 포인트 recall · coverage."""
+    from .timeline import Segments
+
+    vid = job.episode
+    cache = project.cache / vid
+    from .eval_shorts import evaluate_shorts
+    from .evaluate import evaluate
+
+    done = []
+    lab_p = project.labels / f"{vid}.shorts.csv"
+    if lab_p.exists() and (cache / "shorts.json").exists():
+        reps = evaluate_shorts(_shorts(project, vid), Segments.from_csv(lab_p))
+        job.log("[shorts]\n" + "\n".join(r.pretty() for r in reps))
+        done.append("shorts")
+    lab2 = project.labels / f"{vid}.csv"
+    if lab2.exists() and (cache / "candidates.json").exists():
         meta = _meta(project, vid)
-        curves, events = _signals(project, vid)
-        if not curves and not events:
-            raise EngineError("E_NO_SIGNALS", "신호 결과가 없어요", "signals 단계를 먼저 실행하세요.")
-        weights = dict(SIGNAL_WEIGHTS)
-        weights.update(job.params.get("weights") or {})
-        kernels = load_profile(meta.get("game", "d2r")).get("events", {}) or {}
-        segs = make_candidates(
-            curves, meta["duration"], weights, events, kernels, threshold=float(job.params.get("threshold", 1.5))
-        )
-        segs.save(cache / "candidates.json")
-        cov = segs.total_duration() / max(1.0, meta["duration"])
-        job.log(f"candidates: {len(segs.items)}개, coverage {cov:.1%}, signals={segs.meta.get('signals')}")
-        prog(1.0, f"편집 포인트 후보 {len(segs.items)}개 · 원본의 {cov:.0%}")
-    elif stage == "align":
-        # Phase 2 정답: 최종본 ↔ 원본 정렬 → labels/<vid>.csv kept
-        from .align import (
-            align_files,
-            align_shorts,
-            collect_shorts,
-            extract_audio,
-            pretty,
-            pretty_shorts,
-            write_labels,
-            write_shorts_labels,
-        )
-
-        final = job.params.get("final")
-        shorts = job.params.get("shorts")
-        if not final and not shorts:
-            raise EngineError(
-                "E_BAD_PARAMS",
-                "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요해요",
-                "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
-            )
-        _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
-        if shorts:
-            files = collect_shorts(shorts if isinstance(shorts, list) else [shorts])
-            if not files:
-                raise EngineError(
-                    "E_FILE_MISSING", f"쇼츠 파일이 없어요: {shorts}", "mp4 파일이나 폴더 경로를 확인하세요."
-                )
-            res = align_shorts(
-                cache / "audio.wav", files, cache, progress=lambda f, m="": prog(0.05 + (0.45 if final else 0.9) * f, m)
-            )
-            n = write_shorts_labels(project.labels / f"{vid}.shorts.csv", res)
-            job.log(pretty_shorts(res))
-            (cache / "align_shorts.json").write_text(
-                json.dumps(
-                    [
-                        {
-                            "file": r["file"],
-                            "path": r["path"],
-                            "segments": [s.to_dict() for s in r["segments"]],
-                            "matched_frac": r["diag"]["matched_frac"],
-                        }
-                        for r in res
-                    ],
-                    ensure_ascii=False,
-                    indent=1,
-                ),
-                encoding="utf-8",
-            )
-            if not final:
-                prog(1.0, f"쇼츠 {len(files)}개를 맞춰 정답 {n}구간을 찾았어요")
-                return
-        fp = Path(str(final))
-        if (project.cache / str(final) / "audio.wav").exists():
-            final_wav, final_name = project.cache / str(final) / "audio.wav", str(final)
-        elif fp.is_file():
-            prog(0.02, "편집본에서 소리를 꺼내는 중이에요")
-            final_wav, final_name = extract_audio(fp, cache / "align" / f"{fp.stem}.wav"), fp.name
-        else:
-            raise EngineError(
-                "E_FILE_MISSING",
-                f"최종본을 찾지 못했어요: {final}",
-                "영상 파일 경로 또는 prep 된 회차 id 를 확인하세요.",
-            )
-        segs, diag = align_files(
-            cache / "audio.wav", final_wav, cache_dir=cache, progress=lambda f, m="": prog(0.05 + 0.9 * f, m)
-        )
-        (cache / "align.json").write_text(
+        rep = evaluate(Segments.load(cache / "candidates.json"), Segments.from_csv(lab2), meta["duration"])
+        job.log("[editpoints]\n" + rep.pretty())
+        done.append("editpoints")
+        (project.reports / f"{vid}_editpoints_eval.json").write_text(
             json.dumps(
-                {"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1
+                {
+                    "recall": rep.recall,
+                    "precision": rep.precision,
+                    "coverage": rep.coverage,
+                    "n_labels": rep.n_labels,
+                    "n_candidates": rep.n_candidates,
+                    "missed": [{"start": m.start, "end": m.end, "label": m.label} for m in rep.missed],
+                },
+                ensure_ascii=False,
+                indent=1,
             ),
             encoding="utf-8",
         )
-        n = write_labels(project.labels / f"{vid}.csv", segs, final_name)
-        job.log(pretty(segs, diag))
-        prog(1.0, f"정답 구간 {n}개 · 편집본의 {diag['matched_frac'] * 100:.0f}%를 원본에서 찾았어요")
-    elif stage == "shorts":
-        from .preference import current_preference
-        from .shorts import make_shorts, save_shorts
+    if not done:
+        job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없어요")
+    prog(1.0, "점수를 매겼어요" if done else "점수를 매길 정답이 아직 없어요")
 
-        _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
-        _require(cache / "item_banner.json", "E_NO_SIGNALS", "신호 결과", "signals 단계를 먼저 실행하세요.")
-        meta = _meta(project, vid)
-        curves, events = _signals(project, vid)
-        # 지금까지의 판정(모든 회차)으로 축 가중치를 맞춘다. 판정이 적으면 기본값 그대로.
-        pref = current_preference(project.labels, project.cache, save_to=project.reports / "preference.json")
-        job.log(
-            f"판정 반영: {pref.reason} (쓸 만함 {pref.n_keep} · 안 씀 {pref.n_no})"
-            + (" — " + " · ".join(f"{k} {v:.2f}" for k, v in pref.weights.items()) if pref.learned else "")
-        )
-        cands = make_shorts(
-            cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)), weights=pref.weights
-        )
-        save_shorts(cands, cache / "shorts.json")
-        prog(1.0, f"쇼츠 후보 {len(cands)}개를 골랐어요")
-    elif stage == "export":
-        from .render import render_shorts
-        from .weaklabel import load_episode, short_episode_label
 
-        _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
-        meta = _meta(project, vid)
-        cands = _shorts(project, vid)
-        tr_p = cache / "transcript.json"
-        tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
-        chat_p = cache / "chat_text.json"
-        chat = (
-            [
-                {"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")}
-                for s in Segments.load(chat_p).items
-            ]
-            if chat_p.exists()
-            else None
-        )
-        ui_p = cache / "ui_state.json"
-        ui = (
-            [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
-            if ui_p.exists()
-            else None
-        )
-        ep = load_episode(vid, project.episodes_csv) or {}
-        out = project.review / vid / "shorts"
-        (out / "keep").mkdir(parents=True, exist_ok=True)
-        (out / "no").mkdir(parents=True, exist_ok=True)
-        prog(0.05, "세로 초안을 만드는 중이에요")
-        idx = render_shorts(
-            cands,
-            meta,
-            out,
-            k=int(job.params.get("k", 5)),
-            transcript=tr,
-            chat=chat,
-            ui=ui,
-            layout=job.params.get("layout", "card"),
-            top_mode=job.params.get("top", "title"),
-            brand=job.params.get("brand", "디아블로2 하이라이트"),
-            episode_label=short_episode_label(ep.get("title", "")) or vid,
-            progress=lambda f, m="": prog(0.05 + 0.9 * f, m),
-        )
-        prog(1.0, f"세로 초안 {len(idx)}개를 만들었어요")
-    elif stage == "xml":
-        from .export_xml import export_xml
+# 단계 이름 → 함수. 새 단계는 _stage_<이름> 을 만들고 여기와 STAGES 에 더한다.
+STAGE_FNS: dict[str, Callable[[Project, Job, Callable[[float, str], None]], None]] = {
+    "prep": _stage_prep,
+    "transcribe": _stage_transcribe,
+    "subtitles": _stage_subtitles,
+    "signals": _stage_signals,
+    "candidates": _stage_candidates,
+    "align": _stage_align,
+    "shorts": _stage_shorts,
+    "export": _stage_export,
+    "xml": _stage_xml,
+    "weaklabel": _stage_weaklabel,
+    "eval": _stage_eval,
+}
 
-        meta = _meta(project, vid)
-        cands_p = cache / "candidates.json"
-        cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
-        ui_p = cache / "ui_state.json"
-        ui = (
-            [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
-            if ui_p.exists()
-            else None
-        )
-        shorts = _shorts(project, vid) if (cache / "shorts.json").exists() else []
-        if not shorts and not cands.items:
-            raise EngineError(
-                "E_NO_SHORTS",
-                "후보가 없어요 (shorts.json / candidates.json)",
-                "shorts 또는 candidates 단계를 먼저 실행하세요.",
-            )
-        export_xml(meta, cands, shorts, ui, project.premiere, vid, k=int(job.params.get("k", 5)))
-        prog(1.0, "Premiere 파일을 만들었어요")
-    elif stage == "weaklabel":
-        from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
-        meta = _meta(project, vid)
-        ep = load_episode(vid, project.episodes_csv)
-        title = job.params.get("title") or (ep or {}).get("title")
-        if title and (cache / "item_banner.json").exists():
-            kws = title_keywords(title, load_slang(meta.get("game", "d2r")))
-            matches = match_banner(kws, Segments.load(cache / "item_banner.json"))
-            write_weak_labels(vid, matches, project.labels, duration=meta["duration"])
-            prog(1.0, f"제목에서 정답 {len(matches)}개를 찾았어요")
-        else:
-            prog(1.0, "제목이 없어 건너뛰었어요")
-    elif stage == "eval":
-        from .eval_shorts import evaluate_shorts
-        from .evaluate import evaluate
-
-        done = []
-        lab_p = project.labels / f"{vid}.shorts.csv"
-        if lab_p.exists() and (cache / "shorts.json").exists():
-            reps = evaluate_shorts(_shorts(project, vid), Segments.from_csv(lab_p))
-            job.log("[shorts]\n" + "\n".join(r.pretty() for r in reps))
-            done.append("shorts")
-        lab2 = project.labels / f"{vid}.csv"
-        if lab2.exists() and (cache / "candidates.json").exists():
-            meta = _meta(project, vid)
-            rep = evaluate(Segments.load(cache / "candidates.json"), Segments.from_csv(lab2), meta["duration"])
-            job.log("[editpoints]\n" + rep.pretty())
-            done.append("editpoints")
-            (project.reports / f"{vid}_editpoints_eval.json").write_text(
-                json.dumps(
-                    {
-                        "recall": rep.recall,
-                        "precision": rep.precision,
-                        "coverage": rep.coverage,
-                        "n_labels": rep.n_labels,
-                        "n_candidates": rep.n_candidates,
-                        "missed": [{"start": m.start, "end": m.end, "label": m.label} for m in rep.missed],
-                    },
-                    ensure_ascii=False,
-                    indent=1,
-                ),
-                encoding="utf-8",
-            )
-        if not done:
-            job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없어요")
-        prog(1.0, "점수를 매겼어요" if done else "점수를 매길 정답이 아직 없어요")
-    else:
+def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str], None]) -> None:
+    fn = STAGE_FNS.get(stage)
+    if fn is None:
         raise EngineError("E_BAD_STAGE", f"알 수 없는 단계: {stage}", f"가능: {STAGES}")
+    fn(project, job, prog)

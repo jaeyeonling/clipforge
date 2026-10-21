@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -36,3 +37,32 @@ def synth_wav(tmp_path):
         w.setframerate(sr)
         w.writeframes((x * 32767).astype(np.int16).tobytes())
     return p
+
+
+def draw_drop_label(text: str = "카이트 쉴드", color=(0, 255, 0), size=(1920, 1080), at=(900, 520), seed: int = 1):
+    """합성 게임 화면: 어두운 바닥 위 검은 상자에 등급색 아이템 이름 (디아블로2 바닥 라벨 모양). text=None 이면 라벨 없음."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+
+    a = np.random.default_rng(seed).normal(40, 12, (size[1], size[0], 3)).clip(0, 255).astype(np.uint8)
+    frame = Image.fromarray(a)
+    if text:
+        malgun = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "malgun.ttf"
+        font_path = malgun if malgun.exists() else ROOT / "assets" / "fonts" / "BlackHanSans-Regular.ttf"
+        d = ImageDraw.Draw(frame)
+        font = ImageFont.truetype(str(font_path), 20)
+        left, top, right, bottom = d.textbbox((0, 0), text, font=font)
+        x, y = at
+        d.rectangle([x, y, x + right - left + 12, y + bottom - top + 8], fill=(8, 8, 8))
+        d.text((x + 6 - left, y + 4 - top), text, font=font, fill=color)
+    return frame
+
+
+@pytest.fixture
+def live_frames(tmp_path):
+    """20장짜리 프레임 폴더: 5~14번째에만 세트 아이템 라벨이 보인다 (실제 방송 프레임 없이 라이브 감지를 검증)."""
+    d = tmp_path / "frames"
+    d.mkdir()
+    for i in range(20):
+        draw_drop_label("카이트 쉴드" if 5 <= i < 15 else None, seed=i).save(d / f"{i:06d}.jpg", quality=92)
+    return d

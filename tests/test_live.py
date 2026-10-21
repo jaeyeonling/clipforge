@@ -1,4 +1,4 @@
-"""라이브 모듈: 감지(ep59 프레임, 있을 때만) · 세션 루프(프레임 소스, OBS 없이) · OBS 클라이언트(가짜 서버)."""
+"""라이브 모듈: 감지(합성 프레임 + 실제 프레임은 있을 때만) · 세션 루프(프레임 소스, OBS 없이) · OBS 클라이언트(가짜 서버)."""
 
 import asyncio
 import base64
@@ -12,6 +12,20 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FRAMES = ROOT / "cache" / "ep59" / "frames"
+
+
+def test_drop_labels_on_synthetic_frame():
+    from conftest import draw_drop_label
+
+    from clipforge.live.detect import LabelOCR, drop_labels
+
+    im = draw_drop_label("카이트 쉴드")
+    labs = drop_labels(im)
+    assert len(labs) == 1 and labs[0].grade == "set", [l.to_dict() for l in labs]
+    LabelOCR().read(im, labs[0])
+    assert labs[0].text.replace(" ", "") == "카이트쉴드" and labs[0].score > 0.7
+    assert labs[0].item.get("head") == "카이트쉴드"
+    assert drop_labels(draw_drop_label(None)) == []  # 라벨 없는 화면에서는 아무것도 안 잡는다
 
 
 def test_drop_labels_on_real_frames():
@@ -34,9 +48,7 @@ def test_drop_labels_on_real_frames():
         assert drop_labels(Image.open(FRAMES / f"{idx:06d}.jpg").convert("RGB")) == [], idx
 
 
-def test_session_frames_source_suggests_and_bookmarks(tmp_project):
-    if not (FRAMES / "000180.jpg").exists():
-        pytest.skip("ep59 frames 없음")
+def test_session_frames_source_suggests_and_bookmarks(tmp_project, live_frames):
     from clipforge.live.session import LiveSession
 
     events = []
@@ -44,9 +56,9 @@ def test_session_frames_source_suggests_and_bookmarks(tmp_project):
         tmp_project,
         {
             "source": "frames",
-            "frames_dir": str(FRAMES),
-            "start": 160,
-            "end": 180,
+            "frames_dir": str(live_frames),
+            "start": 0,
+            "end": 20,
             "interval": 0.0,
             "approval": True,
             "chat_burst_thr": 0.05,
@@ -171,16 +183,14 @@ def test_obs_client_auth_and_requests():
     c.close()
 
 
-def test_live_api_roundtrip(tmp_project):
-    if not (FRAMES / "000180.jpg").exists():
-        pytest.skip("ep59 frames 없음")
+def test_live_api_roundtrip(tmp_project, live_frames):
     from clipforge.api.methods import ApiError, Engine
 
     e = Engine(tmp_project)
     assert e.live_status()["active"] is False
     with pytest.raises(ApiError):
         e.live_mark("x")
-    st = e.live_start({"source": "frames", "frames_dir": str(FRAMES), "start": 165, "end": 175, "interval": 0.0})
+    st = e.live_start({"source": "frames", "frames_dir": str(live_frames), "start": 3, "end": 13, "interval": 0.0})
     assert st["running"] is True
     for _ in range(300):
         if not e.live_status()["active"]:

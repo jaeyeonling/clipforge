@@ -58,4 +58,4 @@ node_modules\7zip-bin\win\x64\7za.exe x -y -o%C%\winCodeSign-2.6.0 -xr!darwin %C
 ```
 
 (폴더 이름 `winCodeSign-2.6.0` 은 app-builder.exe 가 기대하는 이름. 버전이 바뀌면 `findstr winCodeSign- node_modules\app-builder-bin\win\x64\app-builder.exe` 로 확인.)
-코드 서명은 하지 않는다(인증서 없음) — 설치본 첫 실행 때 SmartScreen "추가 정보 → 실행". `CLIPFORGE_NO_RCEDIT=1` 이면 아이콘·버전 정보 삽입도 건너뛴다.
+코드 서명은 환경변수로 켠다 (`signing.js`, 설정은 [docs/CODE_SIGNING.md](../docs/CODE_SIGNING.md)). 설정이 없으면 서명 없이 만들고, 첫 실행 때 SmartScreen "추가 정보 → 실행" 이 뜬다. `CLIPFORGE_NO_RCEDIT=1` 이면 아이콘·버전 정보 삽입과 서명을 함께 건너뛴다.

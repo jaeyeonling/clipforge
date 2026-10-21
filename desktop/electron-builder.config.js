@@ -8,12 +8,19 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
+const { signingConfig } = require("./signing");
 
 const ENGINE = path.resolve(__dirname, "..", "engine-dist");
 const skipEngine = process.env.CLIPFORGE_SKIP_ENGINE === "1";
 if (!skipEngine && !fs.existsSync(path.join(ENGINE, "clipforge", "app.py"))) {
   throw new Error(`engine-dist 가 없습니다: ${ENGINE} — 먼저 python scripts/build_engine_dist.py`);
 }
+// 코드 서명: 환경변수에 인증서 설정이 있으면 서명하고, 없으면 서명 없이 만든다 (signing.js · docs/CODE_SIGNING.md)
+const signing = signingConfig();
+console.log(
+  `[sign] ${signing.mode === "none" ? "서명 없이 빌드해요 (설정: docs/CODE_SIGNING.md)" : `서명 방식: ${signing.mode}`}`,
+);
+
 const CODE = [
   "clipforge/**",
   "games/**",
@@ -38,12 +45,13 @@ module.exports = {
     { from: "node_modules/7zip-bin/win/x64/7za.exe", to: "7za.exe" },
     { from: "node_modules/7zip-bin/LICENSE", to: "7za-LICENSE.txt" },
   ],
-  // 서명 없음(코드 서명 인증서는 배포 결정 뒤). rcedit 로 아이콘·버전 정보는 넣는다.
+  // rcedit 로 아이콘·버전 정보를 넣고, 서명 설정이 있으면 같은 단계에서 서명한다.
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
     icon: "assets/icon.ico",
     artifactName: "${productName}-Setup-${version}.${ext}",
     signAndEditExecutable: process.env.CLIPFORGE_NO_RCEDIT !== "1",
+    ...signing.win,
   },
   nsis: {
     oneClick: false,

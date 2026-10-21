@@ -65,7 +65,7 @@ Read more: [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [ENGINE.md](docs/ENGINE.md
 
 ## Install
 
-Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). The installer is not code-signed yet, so SmartScreen asks for "More info → Run anyway". On first launch it downloads a few GB of engine components; the setup screen shows the size and time left. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
+Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). Until releases are code-signed (signing is wired up; see docs/CODE_SIGNING.md), SmartScreen asks for "More info → Run anyway". On first launch it downloads a few GB of engine components; the setup screen shows the size and time left. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
 
 ## Develop
 

@@ -7,6 +7,7 @@
 | | [ARCHITECTURE.md](ARCHITECTURE.md) | 프로세스 구조 · 엔진 모듈 · 파이프라인 · API · 데이터 폴더 · 배포와 업데이트 · 품질 |
 | | [ENGINE.md](ENGINE.md) | 분석 코어: 신호 · 쇼츠 후보와 점수 · 판정 학습 · 렌더 · 편집 포인트 · 평가 |
 | | [GAME_PROFILE.md](GAME_PROFILE.md) | 다른 게임 추가하기: 프로필 · 화면 영역 · 어휘 · 신호 묶음 |
+| | [CODE_SIGNING.md](CODE_SIGNING.md) | 설치본 코드 서명: 인증서 고르기 · 설정 · 릴리스 확인 · 게시자 바꾸기 |
 | | [../CONTRIBUTING.md](../CONTRIBUTING.md) | 코드 규칙 · 올리기 전 검사 · 문구 규칙 |
 
 ## 설계 문서 (기능 하나를 깊게)

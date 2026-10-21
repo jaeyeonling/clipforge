@@ -2,7 +2,8 @@
 
     python scripts/publish_github.py runtime            # 런타임 릴리스 runtime-YYYY.MM: 구성요소 zip 4개 (처음 한 번, 이후 런타임이 바뀔 때만)
     python scripts/publish_github.py app [--notes "…"]   # 앱 릴리스 v<version>: Setup.exe + blockmap + latest.yml + engine-code zip + latest.json
-    옵션: --dry-run (업로드 없이 만들 것만 출력)  --runtime-tag runtime-2026.10 (앱 릴리스의 매니페스트가 가리킬 런타임 태그; 기본 = 가장 최근 runtime-* 릴리스)
+    옵션: --dry-run (업로드 없이 만들 것만 출력)  --require-signed (설치본이 신뢰되는 서명이 아니면 멈춤. docs/CODE_SIGNING.md)
+           --runtime-tag runtime-2026.10 (앱 릴리스의 매니페스트가 가리킬 런타임 태그; 기본 = 가장 최근 runtime-* 릴리스)
 
 전제: gh auth login 완료, engine-dist 구성 완료(build_engine_dist.py), app/dist 빌드 완료.
 순서: runtime 을 먼저 올린다 → app 을 올린다 (latest.json 의 구성요소 URL 이 runtime 릴리스를 가리켜야 하므로).
@@ -130,6 +131,17 @@ def cmd_runtime(a, cfg) -> None:
         )
 
 
+def authenticode(path: Path) -> tuple[str, str]:
+    """Windows 서명 상태 (Valid · NotSigned · UnknownError(신뢰 안 되는 인증서) …) 와 서명자."""
+    ps = (
+        f"$s = Get-AuthenticodeSignature -LiteralPath '{path}'; "
+        "Write-Output ($s.Status.ToString() + '|' + [string]$s.SignerCertificate.Subject)"
+    )
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True).stdout.strip()
+    status, _, subject = out.partition("|")
+    return status or "Unknown", subject
+
+
 def cmd_app(a, cfg) -> None:
     slug = f"{cfg['owner']}/{cfg['repo']}"
     ver = engine_version()
@@ -171,6 +183,14 @@ def cmd_app(a, cfg) -> None:
     if missing:
         raise SystemExit(f"빠진 아티팩트: {missing}")
     print(f"[publish] {tag}: " + ", ".join(f"{p.name} ({p.stat().st_size / 1e6:.1f}MB)" for p in assets))
+    setup = next(p for p in assets if p.name.endswith(".exe"))
+    status, signer = authenticode(setup)
+    print(
+        f"[publish] 설치본 서명: {status}"
+        + (f" — {signer}" if signer else " (Windows 가 '알 수 없는 게시자'로 경고해요)")
+    )
+    if a.require_signed and status != "Valid":
+        raise SystemExit("--require-signed: 설치본이 신뢰되는 서명이 아니에요. docs/CODE_SIGNING.md 를 보세요")
     if a.dry_run:
         return
     notes = a.notes or f"clipforge {ver}. 런타임 {rt}."
@@ -198,6 +218,7 @@ def main() -> None:
     ap.add_argument("--runtime-tag")
     ap.add_argument("--notes")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--require-signed", action="store_true", help="설치본이 신뢰되는 서명이 아니면 올리지 않는다")
     a = ap.parse_args()
     if not Path(GH).exists() and not shutil.which("gh"):
         raise SystemExit("gh CLI 가 없어요. PATH 에 gh 를 두거나 CLIPFORGE_GH_DIR 로 폴더를 알려 주세요")

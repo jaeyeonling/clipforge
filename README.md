@@ -128,7 +128,7 @@ docs/             사용 안내 · 설계 문서
 
 - 검증됨: 편집본 → 쇼츠 초안 · 자막 전체 흐름, 첫 실행 설치(깨끗한 런타임 폴더), 앱 내 업데이트 화면.
 - 실사용 확인 전: Premiere XML 가져오기, 원본 VOD 편집 포인트 실측, 라이브 탭 실방송.
-- 코드 서명이 없어 설치할 때 SmartScreen 경고가 떠요.
+- 설치본 서명은 연결돼 있고 인증서를 정하는 중이에요. 그 전 버전은 설치할 때 SmartScreen 경고가 떠요 ([CODE_SIGNING.md](docs/CODE_SIGNING.md)).
 
 변경 내역은 [CHANGELOG.md](CHANGELOG.md) 에 있어요.
 

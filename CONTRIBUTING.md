@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Fix
 
 ## 코드 규칙
 
-- **엔진**: 단계는 `clipforge/jobs.py` 의 `JobRunner` 에, 신호는 `clipforge/signals/` 플러그인으로 넣어요. 사용자에게 보일 오류는 `EngineError(code, message, hint)` 로 던지면 화면이 원인과 할 일을 보여줘요.
+- **엔진**: 새 단계는 `clipforge/jobs.py` 에 `_stage_<이름>(project, job, prog)` 함수를 만들고 `STAGE_FNS` 와 `STAGES` 에 더해요 (테스트가 둘이 어긋나면 잡아요). 신호는 `clipforge/signals/` 플러그인으로 넣어요. 사용자에게 보일 오류는 `EngineError(code, message, hint)` 로 던지면 화면이 원인과 할 일을 보여줘요.
 - **화면**: 규칙(어떤 단계를 돌릴지 등)은 컴포넌트 밖 순수 함수로 두고 테스트해요 (`app/src/api/plan.ts` 참고).
 - **데스크톱**: 패키징에 들어가는 파일은 `electron-builder.config.js` 의 `files` 에 있어야 해요. 테스트가 빠진 파일을 잡아요.
 

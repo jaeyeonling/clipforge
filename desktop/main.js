@@ -327,11 +327,10 @@ function setupShellUpdater() {
   autoUpdater.autoDownload = true;              // 껍데기는 ~90MB, 조용히 받아 둔다
   autoUpdater.autoInstallOnAppQuit = true;      // 종료 때 설치. 강제 재시작은 하지 않는다 (방송 방해 금지)
   autoUpdater.allowDowngrade = false;
+  // 토큰이 있으면 비공개 피드, 없으면 공개 피드(app-update.yml). 저장소를 public 으로 바꾸면 토큰 없이 그대로 동작한다.
   const token = C.githubToken();
-  if (RELEASE.isPrivate) {
-    if (!token) { log("shell-update: private 저장소인데 토큰이 없어요 — 껍데기 업데이트 비활성 (github-token.txt)"); autoUpdater = null; return; }
-    autoUpdater.setFeedURL({ provider: "github", owner: RELEASE.owner, repo: RELEASE.repo, private: true, token });
-  }
+  if (token) autoUpdater.setFeedURL({ provider: "github", owner: RELEASE.owner, repo: RELEASE.repo, private: true, token });
+  else if (RELEASE.isPrivate) log("shell-update: 토큰이 없어 공개 피드로 확인해요 (저장소가 비공개면 실패하고 다음 확인 때 다시 시도)");
   autoUpdater.on("update-available", (info) => log(`shell-update: available ${info.version}`));
   autoUpdater.on("update-not-available", () => log("shell-update: 최신"));
   autoUpdater.on("error", (e) => log(`shell-update: error ${e?.message || e}`));

@@ -16,6 +16,7 @@ const {
   nativeImage,
   ipcMain,
   globalShortcut,
+  powerSaveBlocker,
 } = require("electron");
 const http = require("node:http");
 const fs = require("node:fs");
@@ -155,7 +156,15 @@ const S = window.clipforgeShell.setup; const $ = (s) => document.querySelector(s
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const human = (n) => n >= 1e9 ? (n/1e9).toFixed(1)+'GB' : n >= 1e6 ? Math.round(n/1e6)+'MB' : Math.round(n/1e3)+'KB';
 const fmtDur = (s) => s >= 3600 ? Math.round(s/3600) + '시간 ' + Math.round((s%3600)/60) + '분' : s >= 60 ? Math.round(s/60) + '분' : Math.round(s) + '초';
-let items = [], running = false, t0 = 0;
+let items = [], running = false, free = null;
+// 남은 시간은 최근 20초 속도로: 이어 받은 양이나 처음 몇 초의 느린 연결에 휘둘리지 않게
+const samples = [];
+function recentRate(done) {
+  const now = Date.now(); samples.push([now, done]);
+  while (samples.length > 2 && now - samples[0][0] > 20000) samples.shift();
+  const [t, d] = samples[0], dt = (now - t) / 1000;
+  return dt > 2 ? Math.max(0, (done - d) / dt) : 0;
+}
 // 기다리는 동안 보여줄 소개 — 앱이 무엇을 해 주는지, 어떻게 쓰는지
 const SLIDES = [
   ['이 앱이 하는 일', '편집본 하나 넣으면 쇼츠 초안이 나와요', '득템 배너·리액션·채팅이 겹치는 순간을 찾아 세로(9:16) 초안을 순위대로 만들어요. 4K 10분이면 약 10분.'],
@@ -172,32 +181,52 @@ function showSlide(i) {
   const el = $('#intro'); el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
 }
 showSlide(0); setInterval(() => showSlide(slide + 1), 6000);
+setInterval(() => running && render(), 1000); // 남은 시간 · 기다림 표시를 이벤트가 없어도 갱신
+const idle = (it) => it.have >= it.size ? '받아 둠 · 풀기만 하면 돼요' : it.have ? human(it.have) + ' 받아 둠 · 이어 받아요' : it.reason === 'update' ? '업데이트' : '새로 설치';
 function render() {
   $('#tb').innerHTML = items.map((it, i) => \`<tr data-n="\${esc(it.name)}"><td class="n"><input type="checkbox" \${it.selected ? 'checked' : ''} \${it.optional && !running ? '' : 'disabled'} data-i="\${i}"></td>
-    <td><div>\${esc(it.label)}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || (it.reason === 'update' ? '업데이트' : '새로 설치')}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
+    <td><div>\${esc(it.label)}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || idle(it)}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
   const sel = items.filter((x) => x.selected);
   const total = sel.reduce((a, x) => a + (x.size || 0), 0);
-  $('#hint').textContent = running ? '받는 동안 창을 닫아도 트레이에서 계속 받아요.' : '선택한 구성요소 합계 ' + human(total) + ' — 네트워크 속도에 따라 수 분~수십 분 걸려요. 여러 개를 동시에 받아요.';
-  $('#start').disabled = running || !sel.length;
+  // 필요한 공간: 받을 zip + 풀린 파일 (넉넉히 잡는다). 모자라면 시작 전에 알린다 — 수십 분 받은 뒤 실패하지 않게
+  const have = sel.reduce((a, x) => a + (x.have || 0), 0);
+  const need = Math.round(total * 2.2) - have, short = free != null && free < need;
+  const room = free != null ? ' · 필요한 공간 약 ' + human(need) + ' / 남은 공간 ' + human(free) : '';
+  $('#hint').innerHTML = running
+    ? '받는 동안 창을 닫아도 트레이에서 계속 받아요. 끊겨도 받은 데서부터 이어 받아요.'
+    : short
+      ? '<span class="bad">디스크 공간이 모자라요' + esc(room) + '. 공간을 비운 뒤 다시 열어 주세요.</span>'
+      : esc('받을 양 ' + human(Math.max(0, total - have)) + (have ? ' (' + human(have) + ' 받아 둠)' : '') + room + ' — 회선에 따라 수 분~수십 분 걸려요.');
+  $('#start').disabled = running || !sel.length || short;
+  $('#start').textContent = running ? '설치하는 중…' : have ? '이어 받기' : '설치 시작';
+  // 몇 초째 진척이 없으면 멈춘 게 아니라 기다리는 중임을 알린다 (응답 없는 연결은 엔진 쪽에서 끊고 이어 받는다)
+  if (running) document.querySelectorAll('#tb tr').forEach((tr, i) => {
+    const it = items[i];
+    if (it?.seen && !it.retrying && it.pct < 100 && Date.now() - it.seen > 8000) tr.querySelector('.st').textContent = '서버 응답을 기다리는 중… (' + human(it.done || 0) + ' 받음)';
+  });
   document.querySelectorAll('input[data-i]').forEach((el) => el.onchange = () => { items[Number(el.dataset.i)].selected = el.checked; render(); });
   // 전체 진행률: 받은 바이트 / 받을 바이트, 남은 시간은 지금까지 속도로
   if (running && total) {
     const done = sel.reduce((a, x) => a + (x.done || (x.pct === 100 ? x.size : 0) || 0), 0);
     const pct = Math.min(100, Math.round(100 * done / total));
-    const el = (Date.now() - t0) / 1000, rate = el > 2 ? done / el : 0, left = rate > 0 ? (total - done) / rate : 0;
+    const rate = recentRate(done), left = rate > 0 ? (total - done) / rate : 0;
+    const fin = sel.filter((x) => x.finished).length, waiting = sel.some((x) => x.retrying);
     $('#total').style.display = ''; $('#tpct').textContent = pct + '%'; $('#tbar').style.width = pct + '%';
-    $('#teta').textContent = sel.every((x) => x.finished) ? '다 됐어요. 엔진을 시작해요' : (pct >= 100 ? '받았어요. 푸는 중…' : (left > 0 ? '약 ' + fmtDur(left) + ' 남았어요 · ' + human(rate) + '/s' : '속도 재는 중…'));
+    $('#teta').textContent = fin === sel.length ? '다 됐어요. 엔진을 시작해요'
+      : (waiting ? '연결을 다시 잡는 중… · ' : '') + (pct >= 100 ? '받았어요. 푸는 중…' : (left > 0 ? '약 ' + fmtDur(left) + ' 남았어요 · ' + human(rate) + '/s' : '속도 재는 중…'))
+        + ' · ' + fin + '/' + sel.length + ' 완료';
   }
 }
 S.onEvent((ev) => {
-  if (ev.type === 'plan') { items = ev.items; $('#title').textContent = ev.title || $('#title').textContent; if (ev.desc) $('#desc').textContent = ev.desc; render(); return; }
+  if (ev.type === 'plan') { items = ev.items.map((x) => ({ ...x, pct: x.have ? Math.round(100 * x.have / x.size) : 0 })); free = ev.free ?? null; $('#title').textContent = ev.title || $('#title').textContent; if (ev.desc) $('#desc').textContent = ev.desc; render(); return; }
   const it = items.find((x) => x.name === ev.name); if (!it) return;
-  if (ev.type === 'start') { if (!running) { running = true; t0 = Date.now(); } it.status = '받는 중…'; it.pct = 0; it.done = 0; }
-  if (ev.type === 'download') { it.done = ev.done; it.pct = ev.total ? Math.round(100 * ev.done / ev.total) : 0; it.status = ev.cached ? '이미 받음' : '받는 중 ' + human(ev.done) + ' / ' + human(ev.total); }
+  if (ev.type === 'start') { running = true; it.status = it.have ? '이어 받는 중…' : '받는 중…'; it.pct = it.have ? Math.round(100 * it.have / it.size) : 0; it.done = it.have || 0; }
+  if (ev.type === 'download' && ev.retry) { it.retrying = true; it.status = (ev.reason === 'STALL' ? '응답이 멈춰 ' : '연결이 끊겨 ') + Math.round(ev.waitMs / 1000) + '초 뒤 이어 받아요 (' + ev.retry + '/' + ev.of + ')'; }
+  else if (ev.type === 'download') { it.retrying = false; it.seen = Date.now(); it.done = ev.done; it.pct = ev.total ? Math.round(100 * ev.done / ev.total) : 0; it.status = ev.cached ? '이미 받음' : '받는 중 ' + human(ev.done) + ' / ' + human(ev.total); }
   if (ev.type === 'downloaded') { it.done = it.size; it.pct = 100; it.status = '받았어요 · 설치 차례 기다리는 중'; }
   if (ev.type === 'install') { it.done = it.size; it.status = ev.phase === 'extract' ? '푸는 중' + (ev.pct != null ? ' ' + ev.pct + '%' : '') : '교체 중'; it.pct = 100; }
   if (ev.type === 'done') { it.done = it.size; it.finished = true; it.status = '<span class="ok">완료</span>'; it.pct = 100; }
-  if (ev.type === 'error') { running = false; it.status = '<span class="bad">실패: ' + esc(ev.message) + '</span>'; $('#retry').style.display = ''; }
+  if (ev.type === 'error') { running = false; samples.length = 0; it.retrying = false; it.status = '<span class="bad">' + esc(ev.message) + '</span>'; $('#retry').style.display = ''; }
   render();
 });
 $('#start').onclick = () => { running = true; $('#retry').style.display = 'none'; render(); S.start({ optional: Object.fromEntries(items.filter((x) => x.optional).map((x) => [x.name, !!x.selected])) }); };
@@ -431,6 +460,17 @@ async function ensureRuntime() {
   await runSetup(cfg);
 }
 
+/** 받을 폴더가 있는 디스크의 남은 공간. 모르면 null (확인 없이 진행). */
+function freeBytes(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const st = fs.statfsSync(dir);
+    return st.bavail * st.bsize;
+  } catch {
+    return null;
+  }
+}
+
 function hasNvidia() {
   try {
     require("node:child_process").execFileSync("nvidia-smi", ["-L"], { stdio: "ignore", windowsHide: true });
@@ -457,10 +497,12 @@ function runSetup(cfg) {
             optional: !!it.entry.optional,
             reason: it.reason,
             selected: it.entry.optional ? gpu : true,
+            have: C.partialBytes(it.entry, C.zipPathFor(cfg.downloads, it.entry)),
           }));
         sendSetup({
           type: "plan",
           items,
+          free: freeBytes(cfg.downloads),
           desc: gpu
             ? "NVIDIA GPU 가 감지되어 GPU 가속을 함께 받아요."
             : "NVIDIA GPU 가 없어 GPU 가속은 선택에서 뺐어요 (CPU 로도 동작, 전사만 느려요).",
@@ -500,6 +542,8 @@ function runSetup(cfg) {
       );
       abort = new AbortController();
       updateTrayMenu("구성요소 내려받는 중");
+      // 긴 다운로드 중에 PC 가 잠들면 연결이 끊기므로 설치하는 동안만 절전을 막는다
+      const awake = powerSaveBlocker.start("prevent-app-suspension");
       try {
         const prog = new Map(); // 항목별 받은 바이트 → 트레이에는 전체 퍼센트
         const totalBytes = items.reduce((a, it) => a + (it.entry.size || 0), 0) || 1;
@@ -508,25 +552,33 @@ function runSetup(cfg) {
           signal: abort.signal,
           onEvent: (ev) => {
             sendSetup(ev);
-            if (ev.type === "download") {
+            if (ev.type === "download" && !ev.retry) {
               prog.set(ev.name, ev.done);
-              updateTrayMenu(
-                `내려받는 중 ${Math.round((100 * [...prog.values()].reduce((a, b) => a + b, 0)) / totalBytes)}%`,
-              );
+              const frac = Math.min(1, [...prog.values()].reduce((a, b) => a + b, 0) / totalBytes);
+              updateTrayMenu(`내려받는 중 ${Math.round(100 * frac)}%`);
+              win?.setProgressBar(frac); // 다른 창을 보고 있어도 작업 표시줄에서 보이게
             }
             if (ev.type === "install") updateTrayMenu(`설치 중 ${ev.name}`);
           },
         });
         log("setup: 완료");
+        win?.setProgressBar(-1);
+        if (!win?.isFocused()) {
+          notify("준비가 끝났어요", "편집본을 넣으면 쇼츠 초안을 만들어요.");
+          win?.flashFrame(true);
+        }
         resolve();
       } catch (e) {
         log(`setup: 실패 ${e.stack || e}`);
+        win?.setProgressBar(1, { mode: "error" });
         sendSetup({
           type: "error",
           name: items.find((it) => !C.present(cfg.runtimeDir, it.name))?.name || items[0]?.name,
-          message: e.message,
+          message: C.friendlyError(e),
         });
         if (SMOKE) reject(e);
+      } finally {
+        powerSaveBlocker.stop(awake);
       }
     };
     win.loadURL(setupHtml());

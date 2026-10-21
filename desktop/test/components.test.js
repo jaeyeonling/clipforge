@@ -89,7 +89,7 @@ test("download(file:): 복사 + sha256 검증, 불일치면 삭제하고 실패,
   assert.equal(again[0].cached, true);
   const bad = { ...entry, sha256: "0".repeat(64) };
   const dest2 = path.join(d, "dl", "bad.bin");
-  await assert.rejects(() => C.download(bad, dest2), /해시 불일치/);
+  await assert.rejects(() => C.download(bad, dest2), /손상됐어요/);
   assert.ok(!fs.existsSync(dest2) && !fs.existsSync(dest2 + ".part"));
 });
 

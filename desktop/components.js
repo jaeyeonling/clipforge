@@ -187,6 +187,61 @@ function sha256File(p) {
   });
 }
 
+// 끊김 대응: 연결이 끊기거나 응답이 멈추면 받은 데까지 두고 잠시 뒤 이어 받는다. 테스트는 값을 줄여 쓴다.
+const RETRY = { attempts: 6, backoffMs: [2000, 5000, 10000, 20000, 30000], stallMs: 30000 };
+const RETRIABLE = new Set([
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EPIPE",
+  "ECONNABORTED",
+  "ENETUNREACH",
+  "ENETDOWN",
+  "EHOSTUNREACH",
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "STALL",
+  "INCOMPLETE",
+]);
+function retriable(e) {
+  if (e?.code === "ABORT") return false;
+  if (e?.status) return e.status >= 500 || [403, 408, 429].includes(e.status); // 403: 서명된 다운로드 링크 만료 → 다시 받아 온다
+  return RETRIABLE.has(e?.code);
+}
+const sleep = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(t), reject(abortError())), { once: true });
+  });
+const abortError = () => Object.assign(new Error("취소했어요"), { code: "ABORT" });
+
+/** 오류를 사람이 할 일로 바꾼다 (설치 화면에 그대로 나간다). */
+function friendlyError(e) {
+  const code = e?.code || "";
+  if (code === "ABORT") return "취소했어요.";
+  if (code === "ENOSPC") return "디스크 공간이 모자라요. 공간을 비운 뒤 다시 시도하면 받은 데서부터 이어 받아요.";
+  if (code === "HASH") return e.message;
+  if (["ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "ENETDOWN", "EHOSTUNREACH"].includes(code))
+    return "인터넷에 연결되지 않아요. 연결을 확인한 뒤 다시 시도하면 받은 데서부터 이어 받아요.";
+  if (retriable(e)) return "연결이 자꾸 끊겨요. 잠시 뒤 다시 시도하면 받은 데서부터 이어 받아요.";
+  return e?.message || String(e);
+}
+
+/** 구성요소 zip 을 받아 둘 경로. 이어받기(.part)도 이 이름 옆에 생긴다. */
+const zipPathFor = (downloadDir, entry) => path.join(downloadDir, path.basename(new URL(entry.url).pathname));
+
+/** 이어 받을 수 있게 남아 있는 양(바이트). 다 받아 둔 zip 이면 크기 전체. */
+function partialBytes(entry, dest) {
+  try {
+    if (fs.existsSync(dest) && fs.statSync(dest).size === entry.size) return entry.size;
+    const have = fs.statSync(dest + ".part").size;
+    return have <= entry.size ? have : 0;
+  } catch {
+    return 0;
+  }
+}
+
 async function download(entry, dest, onProgress, signal) {
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   if (fs.existsSync(dest) && fs.statSync(dest).size === entry.size && (await sha256File(dest)) === entry.sha256) {
@@ -198,18 +253,35 @@ async function download(entry, dest, onProgress, signal) {
     const src = fileURLToPath(entry.url);
     await copyWithProgress(src, part, entry.size, onProgress, signal);
   } else {
-    let have = fs.existsSync(part) ? fs.statSync(part).size : 0;
-    if (have > entry.size) {
-      await fsp.unlink(part);
-      have = 0;
+    for (let attempt = 1; ; attempt++) {
+      let have = fs.existsSync(part) ? fs.statSync(part).size : 0;
+      if (have > entry.size) {
+        await fsp.unlink(part);
+        have = 0;
+      }
+      try {
+        if (signal?.aborted) throw abortError();
+        const r = await resolveAsset(entry.url); // 매번 새로: 서명된 링크는 시간이 지나면 만료된다
+        await httpDownload(r.url, part, have, entry.size, onProgress, signal, 0, r.headers);
+        const got = fs.existsSync(part) ? fs.statSync(part).size : 0;
+        if (got < entry.size)
+          throw Object.assign(new Error(`덜 받았어요 (${got}/${entry.size})`), { code: "INCOMPLETE" });
+        break;
+      } catch (e) {
+        if (signal?.aborted) throw abortError();
+        if (!retriable(e) || attempt >= RETRY.attempts) throw e;
+        const wait = RETRY.backoffMs[Math.min(attempt - 1, RETRY.backoffMs.length - 1)];
+        onProgress?.({ retry: attempt, of: RETRY.attempts - 1, waitMs: wait, reason: e.code || e.status || "" });
+        await sleep(wait, signal);
+      }
     }
-    const r = await resolveAsset(entry.url);
-    await httpDownload(r.url, part, have, entry.size, onProgress, signal, 0, r.headers);
   }
   const sum = await sha256File(part);
   if (sum !== entry.sha256) {
     await fsp.unlink(part);
-    throw new Error(`해시 불일치: ${path.basename(dest)} (다운로드가 손상됨 — 다시 시도)`);
+    throw Object.assign(new Error(`받은 파일이 손상됐어요: ${path.basename(dest)}. 다시 시도하면 새로 받아요.`), {
+      code: "HASH",
+    });
   }
   await fsp.rename(part, dest);
   return dest;
@@ -251,7 +323,7 @@ function httpDownload(url, part, have, total, onProgress, signal, redirects = 0,
       } // 이미 다 받음
       if (res.statusCode !== 200 && res.statusCode !== 206) {
         res.resume();
-        return reject(new Error(`HTTP ${res.statusCode} ${url}`));
+        return reject(Object.assign(new Error(`HTTP ${res.statusCode} ${url}`), { status: res.statusCode }));
       }
       const append = res.statusCode === 206 && have > 0;
       let done = append ? have : 0;
@@ -259,14 +331,29 @@ function httpDownload(url, part, have, total, onProgress, signal, redirects = 0,
       res.on("data", (d) => {
         done += d.length;
         onProgress?.({ done, total });
+        arm();
       });
-      res.on("error", reject);
+      // 연결이 중간에 끊기면 받은 데까지 디스크에 쓴 뒤 재시도로 넘긴다
+      res.on("aborted", () => res.destroy(Object.assign(new Error("연결이 끊겼어요"), { code: "ECONNRESET" })));
+      res.on("error", (e) => w.end(() => reject(e)));
       w.on("error", reject);
-      w.on("finish", resolve);
-      res.pipe(w);
+      w.on("finish", () => (clearTimeout(timer), resolve()));
+      res.pipe(w, { end: false });
+      res.on("end", () => w.end());
     });
-    req.on("error", reject);
-    signal?.addEventListener("abort", () => req.destroy(new Error("취소")));
+    // 응답이 멈춘 연결은 RETRY.stallMs 뒤 끊는다 (기다리기만 하는 다운로드를 만들지 않게)
+    let timer = null;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => req.destroy(Object.assign(new Error("응답이 없어요"), { code: "STALL" })),
+        RETRY.stallMs,
+      );
+    };
+    arm();
+    req.on("error", (e) => (clearTimeout(timer), reject(e)));
+    req.on("close", () => clearTimeout(timer));
+    signal?.addEventListener("abort", () => req.destroy(abortError()), { once: true });
   });
 }
 
@@ -397,7 +484,7 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
   const ac = new AbortController();
   const onAbort = () => ac.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
-  const zipOf = (item) => path.join(downloadDir, path.basename(new URL(item.entry.url).pathname));
+  const zipOf = (item) => zipPathFor(downloadDir, item.entry);
   const downloaded = new Map(
     items.map((it) => {
       let res, rej;
@@ -455,6 +542,10 @@ module.exports = {
   present,
   plan,
   download,
+  partialBytes,
+  zipPathFor,
+  friendlyError,
+  RETRY,
   install,
   apply,
   seedFromResources,

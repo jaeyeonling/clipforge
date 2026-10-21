@@ -76,8 +76,5 @@ test("apply: 한 항목의 해시가 틀리면 실패하고 나머지는 중단�
     { name: "alpha", kind: "component", reason: "missing", entry: a.entry },
     { name: "beta", kind: "component", reason: "missing", entry: b.entry },
   ];
-  await assert.rejects(
-    C.apply(runtime, items, { downloadDir: path.join(dir, "dl"), onEvent: () => {} }),
-    /해시 불일치/,
-  );
+  await assert.rejects(C.apply(runtime, items, { downloadDir: path.join(dir, "dl"), onEvent: () => {} }), /손상됐어요/);
 });

@@ -1,4 +1,5 @@
-# 검증한 버전으로 고정. 올릴 때는 Dependabot PR 이나 pip install -U 뒤 scripts\check.ps1 로 확인하고 갱신한다.
+# 직접 쓰는 패키지, 검증한 버전으로 고정. 전이 의존성은 constraints.txt 가 묶는다 (pip install -r requirements.txt -c constraints.txt).
+# 올릴 때는 Dependabot PR 이나 pip install -U 뒤 scripts\check.ps1 로 확인하고 두 파일을 함께 갱신한다.
 numpy==2.5.4
 Pillow==13.0.0
 rapidocr==3.10.0

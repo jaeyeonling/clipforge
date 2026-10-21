@@ -105,6 +105,8 @@ def step_packages(out: Path, force: bool) -> None:
             "--no-warn-script-location",
             "-r",
             str(req),
+            "-c",
+            str(ROOT / "constraints.txt"),  # 전이 의존성까지 검증한 버전으로
         ],
         check=True,
     )

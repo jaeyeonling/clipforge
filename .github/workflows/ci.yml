@@ -28,7 +28,7 @@ jobs:
         run: |
           grep -v '^nvidia-' requirements.txt > requirements-ci.txt
           python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt ruff
+          pip install -r requirements-ci.txt -c constraints.txt
       - name: ruff lint
         run: ruff check .
       - name: ruff format

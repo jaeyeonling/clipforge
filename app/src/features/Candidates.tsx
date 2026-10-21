@@ -24,27 +24,29 @@ export function Candidates() {
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [paths, setPaths] = useState<EpisodePaths | null>(null);
-  const [focus, setFocus] = useState(0);
+  const [focusAt, setFocus] = useState(0);
   const [reasonPrompt, setReasonPrompt] = useState(false);
   const [compare, setCompare] = useState<string[]>([]); // keyOf 목록 (최대 2)
   const videos = useRef(new Map<string, HTMLVideoElement>());
   const keyMoved = useRef(false); // 다음 포커스 변경이 키보드에서 왔는가
 
-  const load = useCallback(async () => {
-    if (!selected) {
-      setItems([]);
-      return;
-    }
-    try {
-      setItems(await api.candidates(selected.id));
-    } catch (e) {
-      fail(e);
-      setItems([]);
-    }
-  }, [selected, fail]);
   useEffect(() => {
-    load();
-  }, [load, tick]);
+    if (!selected) return; // 회차가 없으면 화면이 안내를 보여준다
+    let stale = false; // 회차를 빨리 바꿔도 늦게 온 이전 회차의 응답이 화면을 덮지 않게
+    api.candidates(selected.id).then(
+      (c) => {
+        if (!stale) setItems(c);
+      },
+      (e) => {
+        if (stale) return;
+        fail(e);
+        setItems([]);
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  }, [selected, tick, fail]);
   useEffect(() => {
     if (selected)
       api
@@ -52,10 +54,13 @@ export function Candidates() {
         .then(setPaths)
         .catch(() => setPaths(null));
   }, [selected, tick]);
-  useEffect(() => {
+  // 회차가 바뀐 그 렌더에서 비교 · 포커스를 처음으로
+  const [seenId, setSeenId] = useState(selected?.id);
+  if (seenId !== selected?.id) {
+    setSeenId(selected?.id);
     setCompare([]);
     setFocus(0);
-  }, [selected?.id]);
+  }
   const open = (p: string) => {
     if (shell) shell.shell.openPath(p).catch(fail);
     else {
@@ -69,9 +74,8 @@ export function Candidates() {
       (items || []).filter((c) => filter === "all" || (filter === "undecided" ? !c.decision : c.decision === filter)),
     [items, filter],
   );
-  useEffect(() => {
-    if (focus >= shown.length) setFocus(Math.max(0, shown.length - 1));
-  }, [shown.length, focus]);
+  // 필터나 판정으로 목록이 줄어도 포커스는 목록 안에 (상태를 고치지 않고 읽을 때 자른다)
+  const focus = Math.min(focusAt, Math.max(0, shown.length - 1));
 
   const decide = useCallback(
     async (c: Candidate, label: "keep" | "no", reason: string) => {
@@ -128,13 +132,13 @@ export function Candidates() {
         case "ArrowDown":
           e.preventDefault();
           keyMoved.current = true;
-          setFocus((i) => Math.min(shown.length - 1, i + 1));
+          setFocus(Math.min(shown.length - 1, focus + 1));
           break;
         case "ArrowLeft":
         case "ArrowUp":
           e.preventDefault();
           keyMoved.current = true;
-          setFocus((i) => Math.max(0, i - 1));
+          setFocus(Math.max(0, focus - 1));
           break;
         case "Home":
           e.preventDefault();

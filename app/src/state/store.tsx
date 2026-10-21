@@ -90,7 +90,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tick, setTick] = useState(0);
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
-  const refreshLive = useCallback(async () => setLiveStatus(await api.live()), []);
+  const refreshLive = useCallback(async () => {
+    const live = await api.live();
+    setLiveStatus(live);
+  }, []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeq = useRef(0);
 
@@ -126,13 +129,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
-  const refreshHealth = useCallback(async () => setHealth(await api.health()), []);
-  const refreshEpisodes = useCallback(async () => {
-    const eps = await api.episodes();
+  const refreshHealth = useCallback(async () => {
+    const h = await api.health();
+    setHealth(h);
+  }, []);
+  /** 회차 목록을 넣고, 고른 회차가 사라졌으면 첫 회차로 */
+  const applyEpisodes = useCallback((eps: Episode[]) => {
     setEpisodes(eps);
     setSelectedId((cur) => (cur && eps.some((e) => e.id === cur) ? cur : (eps[0]?.id ?? null)));
   }, []);
-  const refreshJobs = useCallback(async () => setJobs(await api.jobs()), []);
+  const refreshEpisodes = useCallback(async () => applyEpisodes(await api.episodes()), [applyEpisodes]);
+  const refreshJobs = useCallback(async () => {
+    const js = await api.jobs();
+    setJobs(js);
+  }, []);
 
   const selectEpisode = useCallback((id: string) => {
     setSelectedId(id);
@@ -339,38 +349,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const { connected: wsConnected } = useEngineEvents(onEvent);
 
+  // 처음 한 번: 엔진 상태 · 회차 · 작업 목록
   useEffect(() => {
-    refreshHealth().catch(fail);
-    refreshEpisodes().catch(fail);
-    refreshJobs()
-      .then(() => undefined)
-      .catch(fail);
-  }, [refreshHealth, refreshEpisodes, refreshJobs, fail]);
+    api.health().then(setHealth, fail);
+    api.episodes().then(applyEpisodes, fail);
+    api.jobs().then(setJobs, fail);
+  }, [applyEpisodes, fail]);
+  // 연결이 돌아오면 상태를 다시 맞춘다
   useEffect(() => {
-    // 연결이 돌아오면 상태를 다시 맞춘다
-    if (wsConnected) {
-      refreshJobs().catch(() => {});
-      refreshHealth().catch(() => {});
-    }
-  }, [wsConnected, refreshJobs, refreshHealth]);
+    if (!wsConnected) return;
+    api.jobs().then(setJobs, () => {});
+    api.health().then(setHealth, () => {});
+  }, [wsConnected]);
   useEffect(() => {
-    // 선택 회차의 후보 개수 (탭 배지)
-    if (!selected) {
-      setCandCount(0);
-      return;
-    }
+    // 선택 회차의 후보 개수 (탭 배지). 회차가 없으면 아래 shownCandCount 가 0
+    if (!selected) return;
     api
       .candidates(selected.id)
       .then((c) => setCandCount(c.length))
       .catch(() => setCandCount(0));
   }, [selected, tick]);
-  useEffect(() => {
-    // 새로고침 직후 돌고 있는 작업이 있으면 그걸 활성으로
-    if (!activeJobId) {
-      const r = jobs.find((j) => j.status === "running" || j.status === "queued");
-      if (r) setActiveJobId(r.id);
-    }
-  }, [jobs, activeJobId]);
+  // 새로고침 직후 돌고 있는 작업이 있으면 그걸 활성으로 (작업 목록을 받은 그 렌더에서 한 번)
+  if (!activeJobId) {
+    const r = jobs.find((j) => j.status === "running" || j.status === "queued");
+    if (r) setActiveJobId(r.id);
+  }
+  const shownCandCount = selected ? candCount : 0;
 
   const value: Store = {
     health,
@@ -405,7 +409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearLog,
     dismissError,
     lastDone,
-    candCount,
+    candCount: shownCandCount,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

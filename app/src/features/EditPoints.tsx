@@ -25,30 +25,52 @@ export function EditPoints() {
   const [addCat, setAddCat] = useState("kept");
   const video = useRef<HTMLVideoElement>(null);
 
-  const load = useCallback(async () => {
-    if (!selected) {
-      setData(null);
-      setKept([]);
-      return;
-    }
-    try {
-      const [d, k] = await Promise.all([api.editpoints(selected.id), api.kept(selected.id)]);
-      setData(d);
-      setKept(k.kept);
-      setCats(k.categories);
-    } catch (e) {
+  // 받기와 넣기를 나눈다: 화면을 열 때(effect)와 정답 구간을 고친 뒤(load)가 같은 것을 쓴다
+  const fetchAll = useCallback((id: string) => Promise.all([api.editpoints(id), api.kept(id)] as const), []);
+  const apply = useCallback(([d, k]: [EditPointsResult, Awaited<ReturnType<typeof api.kept>>]) => {
+    setData(d);
+    setKept(k.kept);
+    setCats(k.categories);
+  }, []);
+  const onLoadError = useCallback(
+    (e: unknown) => {
       fail(e);
       setData(null);
+    },
+    [fail],
+  );
+  const load = useCallback(async () => {
+    if (!selected) return;
+    try {
+      apply(await fetchAll(selected.id));
+    } catch (e) {
+      onLoadError(e);
     }
-  }, [selected, fail]);
+  }, [selected, fetchAll, apply, onLoadError]);
   useEffect(() => {
-    load();
-  }, [load, tick]);
-  useEffect(() => {
+    if (!selected) return; // 회차가 없으면 화면이 안내를 보여준다
+    let stale = false; // 회차를 빨리 바꿔도 늦게 온 이전 회차의 응답이 화면을 덮지 않게
+    fetchAll(selected.id).then(
+      (r) => {
+        if (!stale) apply(r);
+      },
+      (e) => {
+        if (!stale) onLoadError(e);
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  }, [selected, tick, fetchAll, apply, onLoadError]);
+  // 회차나 필터가 바뀐 그 렌더에서 포커스 · 표시한 구간을 처음으로
+  const view = `${selected?.id}|${filter}`;
+  const [seenView, setSeenView] = useState(view);
+  if (seenView !== view) {
+    setSeenView(view);
     setFocus(0);
     setKfocus(0);
     setMark({ in: null, out: null });
-  }, [selected?.id, filter]);
+  }
 
   const rows = useMemo(
     () => (data?.candidates || []).filter((c) => filter === "all" || (filter === "undecided" ? !c.decision : !c.kept)),

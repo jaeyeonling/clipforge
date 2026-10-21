@@ -28,7 +28,28 @@ const hashTab = (): Tab | null => {
 function Main() {
   const { selected, activeJob, toasts, viewJobId, runError, liveStatus, lastDone, candCount, episodes, simple } =
     useApp();
-  const [tab, setTab] = useState<Tab>(() => hashTab() || (localStorage.getItem(TAB_KEY) as Tab) || "pipeline");
+  const [chosenTab, setTab] = useState<Tab>(() => hashTab() || (localStorage.getItem(TAB_KEY) as Tab) || "pipeline");
+  // 단순 모드에서 숨긴 탭을 골라 둔 상태면 만들기 탭을 보여준다 (고른 값은 그대로 두고 보이는 탭만 계산)
+  const tab: Tab = simple && !SIMPLE_TABS.includes(chosenTab) ? "pipeline" : chosenTab;
+
+  // 상황이 바뀐 그 렌더에서 한 번만 탭을 옮긴다 (effect 로 옮기면 화면을 두 번 그린다)
+  // - 작업 이력을 눌렀거나 오류가 나면 파이프라인 탭(로그·오류 카드)으로
+  const [seenError, setSeenError] = useState({ viewJobId, runError });
+  if (seenError.viewJobId !== viewJobId || seenError.runError !== runError) {
+    setSeenError({ viewJobId, runError });
+    if (viewJobId && runError) setTab("pipeline");
+  }
+  // - 초안이 나오면 후보 탭으로, 편집 포인트가 나오면 편집 포인트 탭으로 — "완료" 뒤 뭘 할지 화면이 말한다
+  const [seenDone, setSeenDone] = useState(lastDone);
+  if (seenDone !== lastDone) {
+    setSeenDone(lastDone);
+    if (lastDone && lastDone.episode === selected?.id) {
+      if (lastDone.stages.includes("export")) setTab("candidates");
+      else if (!simple && (lastDone.stages.includes("candidates") || lastDone.stages.includes("align")))
+        setTab("editpoints");
+    }
+  }
+
   useEffect(() => {
     localStorage.setItem(TAB_KEY, tab);
     if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`);
@@ -41,22 +62,6 @@ function Main() {
     window.addEventListener("hashchange", h);
     return () => window.removeEventListener("hashchange", h);
   }, []);
-  // 단순 모드에서 숨긴 탭에 있었다면 만들기 탭으로
-  useEffect(() => {
-    if (simple && !SIMPLE_TABS.includes(tab)) setTab("pipeline");
-  }, [simple, tab]);
-  // 작업 이력을 눌렀거나 오류가 나면 파이프라인 탭(로그·오류 카드)으로
-  useEffect(() => {
-    if (viewJobId && runError) setTab("pipeline");
-  }, [runError, viewJobId]);
-  // 초안이 나오면 후보 탭으로, 편집 포인트가 나오면 편집 포인트 탭으로 — "완료" 뒤 뭘 할지 화면이 말한다
-  useEffect(() => {
-    if (!lastDone || lastDone.episode !== selected?.id) return;
-    if (lastDone.stages.includes("export")) setTab("candidates");
-    else if (!simple && (lastDone.stages.includes("candidates") || lastDone.stages.includes("align")))
-      setTab("editpoints");
-  }, [lastDone, selected?.id, simple]);
-
   // 영상은 한 번에 하나만: 어떤 <video> 가 재생을 시작하면 같은 그룹(비교 패널)이 아닌 나머지를 멈춘다
   useEffect(() => {
     const onPlay = (e: Event) => {

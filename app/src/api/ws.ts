@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { EngineEvent } from "./types";
 
-/** /ws 에서 Job 이벤트를 받는다. 끊기면 1.5초 후 자동 재연결. 핸들러는 ref 로 들고 있어 재구독 없이 최신 함수를 부른다. */
+/** /ws 에서 Job 이벤트를 받는다. 끊기면 1.5초 후 자동 재연결. 핸들러는 effect 이벤트라 재구독 없이 늘 최신 함수를 부른다. */
 export function useEngineEvents(onEvent: (ev: EngineEvent) => void): { connected: boolean } {
   const [connected, setConnected] = useState(false);
-  const handler = useRef(onEvent);
-  handler.current = onEvent;
+  const handle = useEffectEvent((ev: EngineEvent) => onEvent(ev));
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -17,7 +16,7 @@ export function useEngineEvents(onEvent: (ev: EngineEvent) => void): { connected
       ws.onopen = () => setConnected(true);
       ws.onmessage = (m) => {
         try {
-          handler.current(JSON.parse(m.data) as EngineEvent);
+          handle(JSON.parse(m.data) as EngineEvent);
         } catch (e) {
           console.error("bad event", e);
         }

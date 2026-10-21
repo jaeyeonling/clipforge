@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { useCallback, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { api } from "../api/client";
 import type { CalibResult, PreviewResult } from "../api/types";
 import { Badge, Button, Card, Empty, Spinner, cx } from "../components/ui";
@@ -45,13 +45,16 @@ export function Calibration() {
   const [dirty, setDirty] = useState(false);
   const game = result?.game || selected?.game || "d2r";
 
-  useEffect(() => {
+  // 회차가 바뀐 그 렌더에서 점검 결과 · 편집 중인 영역을 비운다
+  const [seenId, setSeenId] = useState(selected?.id);
+  if (seenId !== selected?.id) {
+    setSeenId(selected?.id);
     setResult(null);
     setPrev(null);
     setRois(null);
     setEditing(false);
     setDirty(false);
-  }, [selected?.id]);
+  }
 
   const preview = useCallback(
     async (override?: Rois | null, at?: number) => {

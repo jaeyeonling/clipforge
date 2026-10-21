@@ -16,6 +16,29 @@ const STATUS_KO: Record<string, string> = {
 };
 const TONE: Record<string, string> = { done: "ok", error: "bad", running: "running", cancelled: "", queued: "" };
 
+/** 큰 숫자 하나. good 이 있으면 기준을 넘었는지로 색을 바꾼다. */
+function Stat({
+  v,
+  unit,
+  label,
+  good,
+}: {
+  v: number | null;
+  unit?: string;
+  label: string;
+  good?: (x: number) => boolean;
+}) {
+  return (
+    <div className={cx("stat", v != null && good && (good(v) ? "good" : "meh"))}>
+      <div className="v">
+        {v == null ? "–" : unit === "%" ? Math.round(v * 100) : v}
+        {v != null && unit && <small>{unit}</small>}
+      </div>
+      <div className="l">{label}</div>
+    </div>
+  );
+}
+
 export function Metrics() {
   const { tick, fail } = useApp();
   const [rows, setRows] = useState<MetricRow[] | null>(null);
@@ -39,25 +62,6 @@ export function Metrics() {
     mrr = avg(shorts.map((r) => r.mrr));
   const recall = avg(eps.map((r) => r.recall)),
     coverage = avg(eps.map((r) => r.coverage));
-  const Stat = ({
-    v,
-    unit,
-    label,
-    good,
-  }: {
-    v: number | null;
-    unit?: string;
-    label: string;
-    good?: (x: number) => boolean;
-  }) => (
-    <div className={cx("stat", v != null && good && (good(v) ? "good" : "meh"))}>
-      <div className="v">
-        {v == null ? "–" : unit === "%" ? Math.round(v * 100) : v}
-        {v != null && unit && <small>{unit}</small>}
-      </div>
-      <div className="l">{label}</div>
-    </div>
-  );
   return (
     <div className="two">
       <div>

@@ -80,12 +80,13 @@ export function Pipeline() {
   }, [kind]);
 
   const running = !!activeJob && (activeJob.status === "running" || activeJob.status === "queued");
-  const [, tickNow] = useState(0);
+  // 경과 시간 · ETA 가 1초마다 움직이게: 현재 시각을 상태로 들고 있다 (렌더 중에 시계를 읽지 않게)
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!running) return;
-    const id = window.setInterval(() => tickNow((n) => n + 1), 1000);
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [running]); // 경과 시간·ETA 가 1초마다 움직이게
+  }, [running]);
   const visible = STAGES_FOR[kind];
   const toggle = (s: StageName) =>
     setStages((cur) => {
@@ -99,14 +100,14 @@ export function Pipeline() {
   const needsShorts = ordered.includes("align") && kind === "edited";
 
   // 결과물 위치 (단순 모드의 '초안 보러 가기' · '자막 파일 열기')
-  const [paths, setPaths] = useState<EpisodePaths | null>(null);
+  const [pathsOf, setPaths] = useState<EpisodePaths | null>(null);
+  const paths = selected ? pathsOf : null; // 회차가 없으면 결과물도 없다
   useEffect(() => {
     if (selected)
       api
         .episodePaths(selected.id)
         .then(setPaths)
         .catch(() => setPaths(null));
-    else setPaths(null);
   }, [selected?.id, tick, lastDone]); // eslint-disable-line react-hooks/exhaustive-deps
   const openPath = (p: string) => {
     if (shell) shell.shell.openPath(p).catch(fail);
@@ -237,7 +238,7 @@ export function Pipeline() {
       .catch(() => {});
   }, [lastDone, toast, fail]);
   const state = activeJob?.status === "error" ? "error" : activeJob?.status === "done" ? "done" : "";
-  const elapsed = activeJob?.started ? (activeJob.finished || Date.now() / 1000) - activeJob.started : 0;
+  const elapsed = activeJob?.started ? (activeJob.finished || now / 1000) - activeJob.started : 0;
 
   const runbar = (
     <div className="runbar" style={{ marginTop: simple ? 0 : 14 }}>

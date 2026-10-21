@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12.10" # 런타임과 같은 버전 (python.org 의 Windows 임베더블 배포판이 있는 마지막 3.12)
 

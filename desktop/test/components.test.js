@@ -1,5 +1,5 @@
 // components.js 단위 테스트 — node:test (의존성 없음).  실행: npm test  (desktop/)
-// 실제 네트워크·7za 없이 돌 수 있는 것: present/plan/download(file:)/sha256/seed. install 은 7za 가 있을 때만(개발 PC 에는 node_modules/7zip-bin).
+// 실제 네트워크·7za 없이 돌 수 있는 것: present/plan/download(file:)/sha256/seed. install 은 electron-builder 가 받아 두는 7-Zip 으로 (scripts/seven-zip.js).
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -12,7 +12,12 @@ const C = require("../src/components");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "cf-test-"));
 const sha = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
-const SEVEN = path.join(__dirname, "..", "node_modules", "7zip-bin", "win", "x64", "7za.exe");
+const { sevenZip } = require("../scripts/seven-zip");
+let SEVEN = null;
+test.before(async () => {
+  SEVEN = (await sevenZip()).exe;
+  process.env.CLIPFORGE_7ZA = SEVEN;
+});
 
 function fakeRuntime(dir, { code = true, python = true, cuda = false, ffmpeg = true, whisper = true } = {}) {
   const touch = (rel) => {
@@ -106,80 +111,71 @@ test("seedFromResources: 동봉 코드만 심고 VERSION.json 에 engine_version
   assert.equal(await C.seedFromResources(rt, path.join(seed, "missing")), false);
 });
 
-test(
-  "install: zip 을 풀어 경로 교체, VERSION 갱신, python-base 교체 시 cuda 보존",
-  { skip: !fs.existsSync(SEVEN) && "7za 없음" },
-  async () => {
-    const d = tmp();
-    fakeRuntime(d, { cuda: true });
-    fs.writeFileSync(path.join(d, "bin", "old.txt"), "old");
-    // ffmpeg zip: bin/ffmpeg.exe (new) + bin/new.txt
-    const stage = tmp();
-    fs.mkdirSync(path.join(stage, "bin"));
-    fs.writeFileSync(path.join(stage, "bin", "ffmpeg.exe"), "NEW");
-    fs.writeFileSync(path.join(stage, "bin", "new.txt"), "n");
-    const zip = path.join(tmp(), "ffmpeg-9.zip");
-    execFileSync(SEVEN, ["a", "-tzip", "-bd", zip, "bin"], { cwd: stage, stdio: "ignore" });
-    const phases = [];
-    await C.install(d, { name: "ffmpeg", kind: "component", reason: "update", entry: { version: "9.9" } }, zip, (p) =>
-      phases.push(p.phase),
-    );
-    assert.equal(fs.readFileSync(path.join(d, "bin", "ffmpeg.exe"), "utf8"), "NEW");
-    assert.ok(!fs.existsSync(path.join(d, "bin", "old.txt")), "옛 폴더는 통째로 교체");
-    assert.ok(fs.existsSync(path.join(d, "bin", "new.txt")));
-    assert.ok(phases.includes("extract") && phases.includes("swap"));
-    assert.equal(C.readLocalVersion(d).component_versions.ffmpeg, "9.9");
-    assert.ok(!fs.existsSync(path.join(d, "_staging")) && !fs.existsSync(path.join(d, "_prev")));
-    // python-base 교체: Lib 가 통째로 바뀌어도 Lib/site-packages/nvidia(cuda) 는 살아남는다
-    const st2 = tmp();
-    fs.mkdirSync(path.join(st2, "Lib", "site-packages", "fastapi"), { recursive: true });
-    fs.writeFileSync(path.join(st2, "Lib", "site-packages", "fastapi", "__init__.py"), "v2");
-    fs.writeFileSync(path.join(st2, "python.exe"), "py2");
-    const zip2 = path.join(tmp(), "python-base.zip");
-    execFileSync(SEVEN, ["a", "-tzip", "-bd", zip2, "python.exe", "Lib"], { cwd: st2, stdio: "ignore" });
-    await C.install(
-      d,
-      { name: "python-base", kind: "component", reason: "update", entry: { version: "p2" } },
-      zip2,
-      () => {},
-    );
-    assert.equal(fs.readFileSync(path.join(d, "python.exe"), "utf8"), "py2");
-    assert.equal(fs.readFileSync(path.join(d, "Lib", "site-packages", "fastapi", "__init__.py"), "utf8"), "v2");
-    assert.ok(C.present(d, "cuda"), "cuda 폴더 보존");
-    assert.equal(C.readLocalVersion(d).component_versions["python-base"], "p2");
-    // engine_code 교체
-    const st3 = tmp();
-    fs.mkdirSync(path.join(st3, "clipforge"));
-    fs.writeFileSync(path.join(st3, "clipforge", "app.py"), "code2");
-    fs.mkdirSync(path.join(st3, "app", "dist"), { recursive: true });
-    fs.writeFileSync(path.join(st3, "app", "dist", "index.html"), "ui2");
-    const zip3 = path.join(tmp(), "engine-code.zip");
-    execFileSync(SEVEN, ["a", "-tzip", "-bd", zip3, "clipforge", "app"], { cwd: st3, stdio: "ignore" });
-    await C.install(
-      d,
-      { name: "engine_code", kind: "engine_code", reason: "update", entry: { version: "0.9.0" } },
-      zip3,
-      () => {},
-    );
-    assert.equal(fs.readFileSync(path.join(d, "clipforge", "app.py"), "utf8"), "code2");
-    assert.equal(C.readLocalVersion(d).engine_version, "0.9.0");
-  },
-);
+test("install: zip 을 풀어 경로 교체, VERSION 갱신, python-base 교체 시 cuda 보존", async () => {
+  const d = tmp();
+  fakeRuntime(d, { cuda: true });
+  fs.writeFileSync(path.join(d, "bin", "old.txt"), "old");
+  // ffmpeg zip: bin/ffmpeg.exe (new) + bin/new.txt
+  const stage = tmp();
+  fs.mkdirSync(path.join(stage, "bin"));
+  fs.writeFileSync(path.join(stage, "bin", "ffmpeg.exe"), "NEW");
+  fs.writeFileSync(path.join(stage, "bin", "new.txt"), "n");
+  const zip = path.join(tmp(), "ffmpeg-9.zip");
+  execFileSync(SEVEN, ["a", "-tzip", "-bd", zip, "bin"], { cwd: stage, stdio: "ignore" });
+  const phases = [];
+  await C.install(d, { name: "ffmpeg", kind: "component", reason: "update", entry: { version: "9.9" } }, zip, (p) =>
+    phases.push(p.phase),
+  );
+  assert.equal(fs.readFileSync(path.join(d, "bin", "ffmpeg.exe"), "utf8"), "NEW");
+  assert.ok(!fs.existsSync(path.join(d, "bin", "old.txt")), "옛 폴더는 통째로 교체");
+  assert.ok(fs.existsSync(path.join(d, "bin", "new.txt")));
+  assert.ok(phases.includes("extract") && phases.includes("swap"));
+  assert.equal(C.readLocalVersion(d).component_versions.ffmpeg, "9.9");
+  assert.ok(!fs.existsSync(path.join(d, "_staging")) && !fs.existsSync(path.join(d, "_prev")));
+  // python-base 교체: Lib 가 통째로 바뀌어도 Lib/site-packages/nvidia(cuda) 는 살아남는다
+  const st2 = tmp();
+  fs.mkdirSync(path.join(st2, "Lib", "site-packages", "fastapi"), { recursive: true });
+  fs.writeFileSync(path.join(st2, "Lib", "site-packages", "fastapi", "__init__.py"), "v2");
+  fs.writeFileSync(path.join(st2, "python.exe"), "py2");
+  const zip2 = path.join(tmp(), "python-base.zip");
+  execFileSync(SEVEN, ["a", "-tzip", "-bd", zip2, "python.exe", "Lib"], { cwd: st2, stdio: "ignore" });
+  await C.install(
+    d,
+    { name: "python-base", kind: "component", reason: "update", entry: { version: "p2" } },
+    zip2,
+    () => {},
+  );
+  assert.equal(fs.readFileSync(path.join(d, "python.exe"), "utf8"), "py2");
+  assert.equal(fs.readFileSync(path.join(d, "Lib", "site-packages", "fastapi", "__init__.py"), "utf8"), "v2");
+  assert.ok(C.present(d, "cuda"), "cuda 폴더 보존");
+  assert.equal(C.readLocalVersion(d).component_versions["python-base"], "p2");
+  // engine_code 교체
+  const st3 = tmp();
+  fs.mkdirSync(path.join(st3, "clipforge"));
+  fs.writeFileSync(path.join(st3, "clipforge", "app.py"), "code2");
+  fs.mkdirSync(path.join(st3, "app", "dist"), { recursive: true });
+  fs.writeFileSync(path.join(st3, "app", "dist", "index.html"), "ui2");
+  const zip3 = path.join(tmp(), "engine-code.zip");
+  execFileSync(SEVEN, ["a", "-tzip", "-bd", zip3, "clipforge", "app"], { cwd: st3, stdio: "ignore" });
+  await C.install(
+    d,
+    { name: "engine_code", kind: "engine_code", reason: "update", entry: { version: "0.9.0" } },
+    zip3,
+    () => {},
+  );
+  assert.equal(fs.readFileSync(path.join(d, "clipforge", "app.py"), "utf8"), "code2");
+  assert.equal(C.readLocalVersion(d).engine_version, "0.9.0");
+});
 
-test(
-  "install: 손상된 zip 이면 실패하고 기존 파일은 그대로",
-  { skip: !fs.existsSync(SEVEN) && "7za 없음" },
-  async () => {
-    const d = tmp();
-    fakeRuntime(d);
-    const bad = path.join(tmp(), "ffmpeg-bad.zip");
-    fs.writeFileSync(bad, "not a zip");
-    await assert.rejects(
-      () =>
-        C.install(d, { name: "ffmpeg", kind: "component", reason: "update", entry: { version: "x" } }, bad, () => {}),
-      /7za exit/,
-    );
-    assert.equal(fs.readFileSync(path.join(d, "bin", "ffmpeg.exe"), "utf8"), "x", "교체 전 실패 → 원본 유지");
-    assert.ok(!C.readLocalVersion(d), "VERSION 은 안 바뀜");
-  },
-);
+test("install: 손상된 zip 이면 실패하고 기존 파일은 그대로", async () => {
+  const d = tmp();
+  fakeRuntime(d);
+  const bad = path.join(tmp(), "ffmpeg-bad.zip");
+  fs.writeFileSync(bad, "not a zip");
+  await assert.rejects(
+    () => C.install(d, { name: "ffmpeg", kind: "component", reason: "update", entry: { version: "x" } }, bad, () => {}),
+    /7za exit/,
+  );
+  assert.equal(fs.readFileSync(path.join(d, "bin", "ffmpeg.exe"), "utf8"), "x", "교체 전 실패 → 원본 유지");
+  assert.ok(!C.readLocalVersion(d), "VERSION 은 안 바뀜");
+});

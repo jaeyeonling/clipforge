@@ -36,7 +36,7 @@ test("latest.yml: 서명으로 바뀐 설치본의 sha512 · size 로 고친다 
   assert.throws(() => patchLatestYml(LATEST, { name: "other.exe", sha512: "x", size: 1 }), /가리키지 않아요/);
 });
 
-test("refresh: 설치본이 바뀌면 --check 는 틀렸다고 하고, 다시 계산하면 맞는다", () => {
+test("refresh: 설치본이 바뀌면 --check 는 틀렸다고 하고, 다시 계산하면 맞는다", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-latest-"));
   const exe = path.join(dir, "clipforge-Setup-0.2.0.exe");
   fs.writeFileSync(exe, "unsigned");
@@ -44,10 +44,10 @@ test("refresh: 설치본이 바뀌면 --check 는 틀렸다고 하고, 다시 �
     path.join(dir, "latest.yml"),
     patchLatestYml(LATEST, { name: "clipforge-Setup-0.2.0.exe", sha512: sha512b64(exe), size: 8 }),
   );
-  assert.equal(refresh(dir, { check: true }), true);
+  assert.equal(await refresh(dir, { check: true }), true);
   fs.appendFileSync(exe, "+signature");
-  assert.equal(refresh(dir, { check: true }), false);
-  refresh(dir);
-  assert.equal(refresh(dir, { check: true }), true);
+  assert.equal(await refresh(dir, { check: true }), false);
+  await refresh(dir);
+  assert.equal(await refresh(dir, { check: true }), true);
   assert.ok(fs.statSync(`${exe}.blockmap`).size > 0, "blockmap 도 다시 만든다");
 });

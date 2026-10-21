@@ -6,7 +6,6 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 
 const sha512b64 = (file) => crypto.createHash("sha512").update(fs.readFileSync(file)).digest("base64");
 
@@ -17,7 +16,7 @@ function patchLatestYml(text, { name, sha512, size }) {
   return text.replace(/^(\s*(?:- )?\s*sha512:\s*).+$/gm, `$1${sha512}`).replace(/^(\s+size:\s*)\d+$/m, `$1${size}`);
 }
 
-function refresh(dir, { check = false } = {}) {
+async function refresh(dir, { check = false } = {}) {
   const ymlPath = path.join(dir, "latest.yml");
   const text = fs.readFileSync(ymlPath, "utf8");
   const name = /^path:\s*(.+)$/m.exec(text)?.[1].trim();
@@ -27,9 +26,9 @@ function refresh(dir, { check = false } = {}) {
   const next = patchLatestYml(text, want);
   if (check) return next === text;
   fs.writeFileSync(ymlPath, next, "utf8");
-  // 차등 업데이트용 블록 맵도 서명된 파일 기준으로
-  const { appBuilderPath } = require("app-builder-bin");
-  execFileSync(appBuilderPath, ["blockmap", "--input", file, "--output", `${file}.blockmap`], { stdio: "ignore" });
+  // 차등 업데이트용 블록 맵도 서명된 파일 기준으로 (electron-builder 가 설치본을 만들 때 쓰는 것과 같은 구현)
+  const { buildBlockMap } = require("app-builder-lib/out/targets/blockmap/blockmap");
+  await buildBlockMap(file, "gzip", `${file}.blockmap`);
   return true;
 }
 
@@ -40,11 +39,12 @@ if (require.main === module) {
     console.error("사용: node scripts/refresh-latest.js <릴리스 폴더> [--check]");
     process.exit(2);
   }
-  const ok = refresh(dir, { check });
-  console.log(
-    check ? (ok ? "[latest.yml] 설치본과 맞아요" : "[latest.yml] 설치본과 달라요") : "[latest.yml] 다시 계산했어요",
-  );
-  if (!ok) process.exit(1);
+  refresh(dir, { check }).then((ok) => {
+    console.log(
+      check ? (ok ? "[latest.yml] 설치본과 맞아요" : "[latest.yml] 설치본과 달라요") : "[latest.yml] 다시 계산했어요",
+    );
+    if (!ok) process.exit(1);
+  });
 }
 
 module.exports = { patchLatestYml, refresh, sha512b64 };

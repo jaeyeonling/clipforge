@@ -171,7 +171,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           if ($env:SIGN -ne 'true') { Write-Output "::warning::SignPath 설정이 없어 서명 없이 만들었어요 (docs/CODE_SIGNING.md)"; exit 0 }
           $setup = Get-ChildItem release-installer/clipforge-Setup-*.exe | Select-Object -First 1
-          & node_modules/7zip-bin/win/x64/7za.exe x -y -oinner $setup.FullName clipforge.exe | Out-Null
+          & release/win-unpacked/resources/7za.exe x -y -oinner $setup.FullName clipforge.exe | Out-Null
           foreach ($f in @($setup.FullName, "inner/clipforge.exe")) {
             $s = Get-AuthenticodeSignature $f
             Write-Output "$f : $($s.Status) — $($s.SignerCertificate.Subject)"

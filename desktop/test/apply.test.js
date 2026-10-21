@@ -6,6 +6,11 @@ const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const C = require("../src/components");
+const { sevenZip } = require("../scripts/seven-zip");
+
+test.before(async () => {
+  process.env.CLIPFORGE_7ZA = (await sevenZip()).exe;
+});
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "cf-apply-"));
@@ -16,7 +21,7 @@ function zipWith(dir, name, inner) {
   fs.mkdirSync(path.join(src, inner), { recursive: true });
   fs.writeFileSync(path.join(src, inner, "marker.txt"), name);
   const zip = path.join(dir, name + ".zip");
-  require("node:child_process").execFileSync(require("7zip-bin").path7za, ["a", "-tzip", "-y", zip, "."], {
+  require("node:child_process").execFileSync(process.env.CLIPFORGE_7ZA, ["a", "-tzip", "-y", zip, "."], {
     cwd: src,
     stdio: "ignore",
   });
@@ -87,7 +92,7 @@ function wheelWith(dir, name, sub) {
   fs.mkdirSync(path.join(src, name + "-1.0.dist-info"), { recursive: true });
   fs.writeFileSync(path.join(src, name + "-1.0.dist-info", "METADATA"), name);
   const whl = path.join(dir, name + "-1.0-py3-none-win_amd64.whl");
-  require("node:child_process").execFileSync(require("7zip-bin").path7za, ["a", "-tzip", "-y", whl, "."], {
+  require("node:child_process").execFileSync(process.env.CLIPFORGE_7ZA, ["a", "-tzip", "-y", whl, "."], {
     cwd: src,
     stdio: "ignore",
   });

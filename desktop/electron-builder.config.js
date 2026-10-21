@@ -40,11 +40,15 @@ module.exports = {
   directories: { output: "release", buildResources: "assets" },
   files: ["src/**", "assets/**", "package.json"],
   asar: true,
-  extraResources: [
-    ...(skipEngine ? [] : [{ from: ENGINE, to: "engine", filter: [...CODE, "!**/__pycache__/**"] }]),
-    { from: "node_modules/7zip-bin/win/x64/7za.exe", to: "7za.exe" },
-    { from: "node_modules/7zip-bin/LICENSE.txt", to: "7za-LICENSE.txt" },
-  ],
+  extraResources: [...(skipEngine ? [] : [{ from: ENGINE, to: "engine", filter: [...CODE, "!**/__pycache__/**"] }])],
+  // 구성요소를 푸는 7za.exe 와 라이선스: electron-builder 가 받아 둔 최신 7-Zip 을 앱 폴더에 넣는다 (서명 · 설치본 만들기 전)
+  afterPack: async (ctx) => {
+    const { sevenZip } = require("./scripts/seven-zip");
+    const { exe, license } = await sevenZip();
+    const res = path.join(ctx.appOutDir, "resources");
+    fs.copyFileSync(exe, path.join(res, "7za.exe"));
+    fs.copyFileSync(license, path.join(res, "7za-LICENSE.txt"));
+  },
   // rcedit 로 아이콘·버전 정보를 넣고, 서명 설정이 있으면 같은 단계에서 서명한다.
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],

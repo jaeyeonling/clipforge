@@ -24,12 +24,27 @@ const COMPONENT_PATHS = {
   whisper: ["models"],
 };
 
+/** 개발 · 테스트: electron-builder 가 받아 둔 7-Zip (desktop/scripts/seven-zip.js 가 처음 한 번 받는다) */
+function cachedSevenZip() {
+  const base = path.join(process.env.LOCALAPPDATA || "", "electron-builder", "Cache");
+  try {
+    return fs
+      .readdirSync(base)
+      .filter((d) => d.startsWith("7zip@"))
+      .flatMap((d) =>
+        fs
+          .readdirSync(path.join(base, d))
+          .filter((x) => x.startsWith("7zip-win-x64"))
+          .map((x) => path.join(base, d, x, "bin", "7za.exe")),
+      );
+  } catch {
+    return [];
+  }
+}
+
 function sevenZip() {
-  // 개발: node_modules/7zip-bin, 배포: resources/7za.exe (electron-builder extraResources)
-  const cands = [
-    path.join(process.resourcesPath || "", "7za.exe"),
-    path.join(__dirname, "..", "node_modules", "7zip-bin", "win", "x64", "7za.exe"),
-  ];
+  // 설치본: resources/7za.exe (afterPack 이 넣는다). 개발 · 테스트: CLIPFORGE_7ZA 또는 electron-builder 캐시
+  const cands = [process.env.CLIPFORGE_7ZA, path.join(process.resourcesPath || "", "7za.exe"), ...cachedSevenZip()];
   const p = cands.find((c) => c && fs.existsSync(c));
   if (!p) throw new Error("7za.exe 를 찾지 못했습니다");
   return p;
@@ -464,7 +479,7 @@ async function install(runtimeDir, item, zipPaths, onProgress) {
         /* best effort */
       }
     }
-    throw new Error(`교체 실패(복원함): ${e.message}`);
+    throw new Error(`교체 실패(복원함): ${e.message}`, { cause: e });
   }
   await rmrf(staging);
   await rmrf(prev);

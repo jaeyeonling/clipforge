@@ -8,6 +8,7 @@
 #   5. 릴리스 초안 (사람이 확인한 뒤 공개)
 #
 # SignPath 설정이 없으면(비밀 SIGNPATH_API_TOKEN · 변수 SIGNPATH_ORGANIZATION_ID) 서명 없이 같은 과정을 거친다.
+# electron-builder 는 CI 에서 태그를 보면 스스로 릴리스를 만들어 올리므로(서명 전 설치본까지) 항상 --publish never 로 부른다.
 # 설정 방법: docs/CODE_SIGNING.md
 name: 릴리스
 
@@ -86,7 +87,7 @@ jobs:
         working-directory: desktop
         run: |
           npm ci
-          npx electron-builder --win --dir --config electron-builder.config.js
+          npx electron-builder --win --dir --config electron-builder.config.js --publish never
 
       # ---------- 서명 1: 앱 실행 파일 ----------
       - name: 서명할 앱 실행 파일 올리기
@@ -127,7 +128,7 @@ jobs:
 
       - name: 설치본 (서명된 앱 폴더로)
         working-directory: desktop
-        run: npx electron-builder --win nsis --prepackaged release/win-unpacked --config electron-builder.config.js -c.directories.output=release-installer
+        run: npx electron-builder --win nsis --prepackaged release/win-unpacked --config electron-builder.config.js -c.directories.output=release-installer --publish never
 
       # ---------- 서명 2: 설치본 ----------
       - name: 서명할 설치본 올리기

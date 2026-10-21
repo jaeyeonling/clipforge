@@ -15,8 +15,8 @@
   "scripts": {
     "start": "electron .",
     "smoke": "electron . --smoke",
-    "pack": "electron-builder --win --dir --config electron-builder.config.js",
-    "dist": "electron-builder --win nsis --config electron-builder.config.js",
+    "pack": "electron-builder --win --dir --config electron-builder.config.js --publish never",
+    "dist": "electron-builder --win nsis --config electron-builder.config.js --publish never",
     "test": "node --test \"test/**/*.test.js\"",
     "lint": "eslint .",
     "format": "prettier --write .",

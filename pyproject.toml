@@ -1,7 +1,7 @@
 # 엔진(clipforge/)의 메타데이터와 도구 설정. 설치 의존성은 requirements.txt(개발) / requirements-runtime.txt(배포 런타임)가 기준이다.
 [project]
 name = "clipforge"
-version = "0.2.0"
+version = "0.3.0"
 description = "게임 방송 편집본에서 세로 쇼츠 초안과 자막을 만드는 분석 엔진"
 readme = "README.md"
 license = "MIT"

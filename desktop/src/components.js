@@ -499,6 +499,37 @@ async function install(runtimeDir, item, zipPaths, onProgress) {
   writeLocalVersion(runtimeDir, v);
 }
 
+/** 점으로 나눈 숫자 버전 비교: a 가 b 보다 새것인가 ("0.10.0" > "0.9.3"). a 가 없으면 false, b 가 없으면 true. */
+function isNewer(a, b) {
+  if (!a) return false;
+  if (!b) return true;
+  const pa = String(a).split(/[.+-]/).map(Number),
+    pb = String(b).split(/[.+-]/).map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0,
+      y = pb[i] || 0;
+    if (Number.isNaN(x) || Number.isNaN(y)) return String(a) > String(b);
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+/** 설치본에 동봉된 엔진 코드의 버전 (resources/engine/VERSION.json). 없으면 null. */
+function seedVersion(seedDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(seedDir, "VERSION.json"), "utf8")).engine_version || null;
+  } catch {
+    return null;
+  }
+}
+
+/** 동봉된 엔진 코드를 심어야 하나: 없거나, 설치본(껍데기)을 새로 깔았거나 업데이트해서 동봉본이 더 새것일 때.
+ *  앱 내 업데이트로 받은 엔진 코드가 동봉본보다 새것이면 그대로 둔다 (되돌리지 않는다). */
+function seedNeeded(runtimeDir, seedDir) {
+  if (!present(runtimeDir, "engine_code")) return true;
+  return isNewer(seedVersion(seedDir), (readLocalVersion(runtimeDir) || {}).engine_version);
+}
+
 /** 설치본에 동봉된 엔진 코드(resources/engine)를 런타임 폴더에 심는다 (첫 실행, 네트워크 없이 층 A 확보) */
 async function seedFromResources(runtimeDir, seedDir) {
   if (!seedDir || !fs.existsSync(path.join(seedDir, "clipforge", "app.py"))) return false;
@@ -610,6 +641,9 @@ module.exports = {
   install,
   apply,
   seedFromResources,
+  seedNeeded,
+  seedVersion,
+  isNewer,
   fileUrl,
   githubToken,
   CODE_PATHS,

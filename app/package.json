@@ -1,7 +1,7 @@
 {
   "name": "clipforge-app",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "clipforge 화면 (React + Vite). 엔진(python -m clipforge.app)이 /api·/ws·/media 를 제공하고, 빌드 결과(dist/)를 그대로 서빙한다.",
   "license": "MIT",
   "repository": {

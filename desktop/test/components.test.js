@@ -179,3 +179,31 @@ test("install: 손상된 zip 이면 실패하고 기존 파일은 그대로", as
   assert.equal(fs.readFileSync(path.join(d, "bin", "ffmpeg.exe"), "utf8"), "x", "교체 전 실패 → 원본 유지");
   assert.ok(!C.readLocalVersion(d), "VERSION 은 안 바뀜");
 });
+
+test("isNewer: 숫자 단위로 비교한다", () => {
+  assert.equal(C.isNewer("0.3.0", "0.2.0"), true);
+  assert.equal(C.isNewer("0.10.0", "0.9.3"), true);
+  assert.equal(C.isNewer("0.2.0", "0.2.0"), false);
+  assert.equal(C.isNewer("0.2.0", "0.3.0"), false);
+  assert.equal(C.isNewer(null, "0.2.0"), false);
+  assert.equal(C.isNewer("0.2.0", undefined), true);
+});
+
+test("seedNeeded: 설치본을 새로 깔면 더 새 엔진 코드로 바꾸고, 앱 내 업데이트로 받은 더 새 코드는 되돌리지 않는다", async () => {
+  const seed = tmp();
+  fakeRuntime(seed, { python: false, ffmpeg: false, whisper: false });
+  const rt = tmp();
+  assert.equal(C.seedNeeded(rt, seed), true, "엔진 코드가 없으면 심는다");
+  fs.writeFileSync(path.join(seed, "VERSION.json"), JSON.stringify({ engine_version: "0.2.0" }));
+  await C.seedFromResources(rt, seed);
+  assert.equal(C.seedNeeded(rt, seed), false, "같은 버전이면 그대로");
+  // 새 설치본(0.3.0)을 덮어 깔았다
+  fs.writeFileSync(path.join(seed, "VERSION.json"), JSON.stringify({ engine_version: "0.3.0" }));
+  assert.equal(C.seedNeeded(rt, seed), true, "동봉본이 더 새것이면 바꿔 넣는다");
+  await C.seedFromResources(rt, seed);
+  assert.equal(C.readLocalVersion(rt).engine_version, "0.3.0");
+  // 앱 내 업데이트로 0.3.1 을 받은 뒤
+  const v = C.readLocalVersion(rt);
+  fs.writeFileSync(path.join(rt, "VERSION.json"), JSON.stringify({ ...v, engine_version: "0.3.1" }));
+  assert.equal(C.seedNeeded(rt, seed), false, "업데이트로 받은 더 새 코드는 되돌리지 않는다");
+});

@@ -1,6 +1,6 @@
 """릴리스 노트: CHANGELOG.md 에서 그 버전의 절을 꺼내고, 설치 안내를 붙인다.
 
-python scripts/release_notes.py 0.2.0 runtime-2026.10 > notes.md
+python scripts/release_notes.py 0.3.0 runtime-2026.10 > notes.md
 """
 
 from __future__ import annotations

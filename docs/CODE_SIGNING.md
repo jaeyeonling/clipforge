@@ -27,7 +27,7 @@ v* 태그를 올리면 [`.github/workflows/release.yml`](../.github/workflows/re
 
 SignPath Foundation 의 [조건](https://signpath.org/terms): OSI 라이선스(MIT) · 독점 구성요소 없음 · 서명할 형태로 이미 릴리스됨 · README 의 코드 서명 정책 · 팀원 다중 인증.
 
-1. 저장소를 공개하고, 서명 없는 첫 릴리스(v0.2.0)를 이 워크플로로 낸다.
+1. 저장소를 공개하고, 서명 없는 첫 릴리스(v0.3.0)를 이 워크플로로 낸다.
 2. GitHub 계정에 2단계 인증을 켠다.
 3. [signpath.org](https://signpath.org) 에서 신청한다. 저장소 주소, 다운로드 페이지(GitHub Releases), 코드 서명 정책([README 의 절](../README.md#코드-서명-정책-code-signing-policy)), 빌드 방식(GitHub Actions)을 적는다.
 4. 승인되면 SignPath 에서:

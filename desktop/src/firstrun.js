@@ -45,9 +45,11 @@ async function ensureRuntime() {
   const cfg = state.engine.cfg;
   if (cfg.mode !== "runtime") return;
   fs.mkdirSync(cfg.runtimeDir, { recursive: true });
-  if (!C.present(cfg.runtimeDir, "engine_code")) {
+  // 엔진 코드: 없으면 심고, 설치본을 새로 깔았거나 껍데기가 업데이트돼 동봉본이 더 새것이면 바꿔 넣는다
+  if (C.seedNeeded(cfg.runtimeDir, cfg.seedDir)) {
+    const before = (C.readLocalVersion(cfg.runtimeDir) || {}).engine_version || "없음";
     const ok = await C.seedFromResources(cfg.runtimeDir, cfg.seedDir);
-    log(`runtime: engine code seed ${ok ? "ok" : "없음"} ← ${cfg.seedDir}`);
+    log(`runtime: engine code ${before} → ${ok ? C.seedVersion(cfg.seedDir) : "동봉본 없음"} ← ${cfg.seedDir}`);
   }
   const need = REQUIRED.filter((n) => !C.present(cfg.runtimeDir, n));
   if (!need.length) return;

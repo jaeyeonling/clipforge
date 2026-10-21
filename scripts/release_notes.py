@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# SignPath Foundation 조건: 다운로드 · 릴리스 페이지에도 "Code signing policy" 를 적는다
+POLICY_URL = "https://github.com/jaeyeonling/clipforge#코드-서명-정책-code-signing-policy"
 
 
 def section(changelog: str, version: str) -> str:
@@ -28,6 +30,8 @@ def notes(version: str, runtime_tag: str, changelog: str) -> str:
             f"`clipforge-Setup-{version}.exe` 를 받아 실행하세요. 관리자 권한은 필요 없어요.",
             f"처음 켜면 분석 엔진 구성요소를 받아요 (런타임 릴리스 `{runtime_tag}`, GPU 가속은 NVIDIA 가 PyPI 에 올린 라이브러리).",
             "이미 쓰고 있다면 앱이 새 버전을 알려 주고, 바뀐 부분만 받아요.",
+            "",
+            f"[코드 서명 정책 (Code signing policy)]({POLICY_URL})",
             "",
             section(changelog, version),
             "",

@@ -97,7 +97,7 @@ A personal project, built and validated against one streamer's broadcasts. Verif
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 - Only the Windows installer and `clipforge.exe` built from this repository's source by the [release workflow](.github/workflows/release.yml) on GitHub-hosted runners are signed. Every signing request is approved manually. Details: [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) (Korean).
-- Authors, reviewers and approvers: [@jaeyeonling](https://github.com/jaeyeonling) (maintainer). External contributions are reviewed before merging.
+- Author, reviewer and signing approver: [@jaeyeonling](https://github.com/jaeyeonling). This is a single-maintainer project.
 - Privacy: [PRIVACY.md](PRIVACY.md). Videos, subtitles and judgments never leave your PC; the app only connects to GitHub and PyPI to check for updates and download components. The application to SignPath Foundation is in progress; releases before approval are unsigned.
 
 ## License

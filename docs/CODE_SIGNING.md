@@ -59,7 +59,7 @@ SignPath Foundation 의 [조건](https://signpath.org/terms): OSI 라이선스(M
 
 ## 다른 인증서로 로컬에서 서명하기
 
-SignPath 를 쓰지 않는 빌드(포크, 사내 배포)는 환경변수로 서명 방식을 고를 수 있어요. 고르는 규칙은 [`desktop/signing.js`](../desktop/signing.js) 에 있어요.
+SignPath 없이 로컬에서 만든 설치본은 환경변수로 서명 방식을 고를 수 있어요. 고르는 규칙은 [`desktop/signing.js`](../desktop/signing.js) 에 있어요.
 
 ```powershell
 $env:CLIPFORGE_PUBLISHER = "인증서 CN"                # 업데이트 서명 확인에 쓰여요

@@ -95,7 +95,7 @@ python -m clipforge.app                    # http://127.0.0.1:8765
 cd desktop ; npm install ; npm start       # 데스크톱 창
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사 전부
 ```
-FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, CLI 실험 하네스, 신호 추가 방법은 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), 기여 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있어요.
+FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, 검사와 코드 규칙, CLI 실험 하네스, 신호 추가 방법은 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 에 있어요.
 
 | 영역 | 포맷 · lint | 테스트 |
 |---|---|---|
@@ -128,7 +128,6 @@ docs/             사용 안내 · 설계 문서
 | [ENGINE.md](docs/ENGINE.md) | 분석 코어: 신호 · 쇼츠 점수 · 판정 학습 · 렌더 · 평가 |
 | [GAME_PROFILE.md](docs/GAME_PROFILE.md) | 다른 게임 추가하기 |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 개발 · 테스트 · CLI · 신호 추가 · 배포 명령 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 코드 규칙 · 올리기 전 검사 |
 | [docs/](docs/README.md) | 문서 전체 지도: 설계 문서 · 시간순 설계 노트 · 조사 |
 
 ## 상태
@@ -146,7 +145,7 @@ docs/             사용 안내 · 설계 문서
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 - 서명하는 것은 이 저장소의 소스로 [릴리스 워크플로](.github/workflows/release.yml)가 GitHub 호스팅 러너에서 만든 Windows 설치본과 `clipforge.exe` 뿐이에요. 릴리스마다 승인자가 서명 요청을 직접 승인해요. 과정: [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md)
-- 작성자 · 검토자 · 승인자: [@jaeyeonling](https://github.com/jaeyeonling) (저장소 관리자). 외부 기여는 검토자가 검토한 뒤 병합해요.
+- 작성 · 검토 · 서명 승인: [@jaeyeonling](https://github.com/jaeyeonling). 혼자 만들고 관리하는 프로젝트예요.
 - 개인정보: [PRIVACY.md](PRIVACY.md). 영상 · 자막 · 판정은 이 PC 밖으로 나가지 않고, 업데이트 확인과 구성요소 내려받기를 위해 GitHub · PyPI 에만 접속해요.
 
 ## 라이선스

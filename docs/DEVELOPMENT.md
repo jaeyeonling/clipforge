@@ -35,12 +35,29 @@ cd desktop ; npm start                     # 데스크톱 창. 8765 에 엔진�
 
 ```powershell
 python -m pytest                           # 엔진 (ffmpeg·GPU 없이 돌아요. 실제 방송 샘플이 있을 때만 도는 검증 2개는 없으면 건너뛰어요)
-powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사를 한 번에 (lint · 포맷 · 테스트 · 빌드)
+powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사를 한 번에 (lint · 포맷 · 테스트 · 빌드). -Fix 면 포맷·자동 수정 먼저
 cd desktop ; npm test                      # 구성요소 다운로드·설치·패키징
 cd app ; npm test                          # 화면 (Vitest)
 cd app ; npm run build                     # 타입 검사 + 빌드
 cd desktop ; npm run smoke                 # 창·엔진이 실제로 뜨는지 5초 점검 (로그 %APPDATA%\clipforge\shell.log)
 ```
+
+| 영역 | 포맷 | lint | 테스트 |
+|---|---|---|---|
+| 엔진 `clipforge/` | `ruff format` | `ruff check` | `pytest` |
+| 화면 `app/` | Prettier | ESLint (typescript-eslint, react-hooks) | Vitest |
+| 데스크톱 `desktop/` | Prettier | ESLint | `node --test` |
+
+규칙은 `pyproject.toml`, `.prettierrc.json`, 각 폴더의 `eslint.config.js` 에 있고, 예외를 둔 규칙에는 이유를 적어 뒀어요.
+
+## 규칙
+
+- **엔진**: 새 단계는 `clipforge/jobs.py` 에 `_stage_<이름>(project, job, prog)` 함수를 만들고 `STAGE_FNS` 와 `STAGES` 에 더해요 (둘이 어긋나면 테스트가 잡아요). 신호는 `clipforge/signals/` 플러그인으로 넣어요. 사용자에게 보일 오류는 `EngineError(code, message, hint)` 로 던지면 화면이 원인과 할 일을 보여줘요.
+- **화면**: 규칙(어떤 단계를 돌릴지 등)은 컴포넌트 밖 순수 함수로 두고 테스트해요 (`app/src/api/plan.ts`).
+- **데스크톱**: 패키징에 들어가는 파일은 `electron-builder.config.js` 의 `files` 에 있어야 해요. 빠지면 테스트가 잡아요.
+- **화면 문구**: `~해요` 체로 짧게, 다음 행동을 먼저. 라벨은 짧게 두고 설명은 `app/src/api/tips.ts` 에 모아 요소에는 `data-tip` 만 붙여요. 딱딱한 `~습니다` 체는 `app/src/api/copy.test.ts`(화면)와 `tests/test_copy.py`(엔진이 보내는 오류 · 진행 문구)가 잡아요.
+- **문서**: 테스트 개수 · 파일 크기처럼 바뀔 때마다 어긋나는 숫자는 쓰지 않아요. 정확한 값은 앱 화면 · 빌드 로그 · CI 가 보여줘요.
+- **커밋**: 한 커밋에 한 가지 변경, 제목은 `영역: 무엇을` (예: `engine: 자막 단계 추가`).
 
 ## 분석 코어를 직접 돌리기 (CLI)
 

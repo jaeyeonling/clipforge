@@ -11,6 +11,8 @@
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
+**한국어** · [English](README.en.md)
+
 <img src="docs/images/make.png" alt="만들기 화면: 쇼츠 초안과 자막 카드" width="860">
 
 </div>
@@ -80,9 +82,17 @@ python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.tx
 cd app ; npm install ; npm run build ; cd ..
 python -m clipforge.app                    # http://127.0.0.1:8765
 cd desktop ; npm install ; npm start       # 데스크톱 창
-python -m pytest ; cd desktop ; npm test   # 테스트
+powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사 전부
 ```
-FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, CLI 실험 하네스, 신호 추가 방법은 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 에 있어요.
+FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, CLI 실험 하네스, 신호 추가 방법은 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), 기여 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있어요.
+
+| 영역 | 포맷 · lint | 테스트 |
+|---|---|---|
+| 엔진 | ruff format · ruff check | pytest 53개 |
+| 화면 | Prettier · ESLint · TypeScript strict | Vitest 37개 |
+| 데스크톱 | Prettier · ESLint | node --test 9개 |
+
+CI 는 Windows 러너에서 세 영역을 모두 돌려요.
 
 ```
 clipforge/        분석 엔진 — 전처리 · 신호 · 후보 · 렌더 · 정렬 · 라이브 · API

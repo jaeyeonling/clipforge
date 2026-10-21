@@ -41,7 +41,7 @@ def _v0_to_v1(kind: str) -> Migration:
         raise EngineError(
             "E_SCHEMA_BAD",
             f"{kind}: 알 수 없는 파일 형식 ({type(data).__name__})",
-            "파일이 손상됐을 수 있습니다. 캐시라면 지우고 다시 실행하세요.",
+            "파일이 손상됐을 수 있어요. 캐시라면 지우고 다시 실행하세요.",
         )
 
     return fn
@@ -68,16 +68,16 @@ def migrate(kind: str, data: Any, where: str | Path | None = None) -> Any:
     if v > cur:
         raise EngineError(
             "E_SCHEMA_NEWER",
-            f"{name}: schema v{v} 는 이 엔진(v{cur})보다 새 버전입니다",
-            "엔진을 최신으로 업데이트하세요. 파일은 변경하지 않았습니다.",
+            f"{name}: schema v{v} 는 이 엔진(v{cur})보다 새 버전이에요",
+            "엔진을 최신으로 업데이트하세요. 파일은 변경하지 않았어요.",
         )
     while v < cur:
         fn = MIGRATIONS[kind].get(v)
         if fn is None:
             raise EngineError(
                 "E_SCHEMA_GAP",
-                f"{name}: v{v} → v{v + 1} 마이그레이션이 없습니다",
-                "엔진 결함입니다. 로그를 첨부해 알려주세요.",
+                f"{name}: v{v} → v{v + 1} 마이그레이션이 없어요",
+                "엔진 결함이에요. 로그를 첨부해 알려주세요.",
                 kind="internal",
             )
         data = fn(data)
@@ -85,8 +85,8 @@ def migrate(kind: str, data: Any, where: str | Path | None = None) -> Any:
         if nv <= v:
             raise EngineError(
                 "E_SCHEMA_GAP",
-                f"{name}: 마이그레이션 v{v} 가 버전을 올리지 않았습니다",
-                "엔진 결함입니다.",
+                f"{name}: 마이그레이션 v{v} 가 버전을 올리지 않았어요",
+                "엔진 결함이에요.",
                 kind="internal",
             )
         v = nv
@@ -117,7 +117,7 @@ def load_json(path: Path, kind: str, rewrite: bool = False) -> Any:
         raise EngineError(
             "E_SCHEMA_BAD",
             f"{path.name}: JSON 파싱 실패 ({e.msg} line {e.lineno})",
-            "파일이 손상됐습니다. 캐시라면 지우고 해당 단계를 다시 실행하세요.",
+            "파일이 손상됐어요. 캐시라면 지우고 해당 단계를 다시 실행하세요.",
         ) from e
     v0 = version_of(raw) if isinstance(raw, dict) else 0
     data = migrate(kind, raw, path)
@@ -135,7 +135,7 @@ def load_project_file(data_root: Path) -> dict:
         if d.get("labels_schema", 0) > SCHEMA["labels"]:
             raise EngineError(
                 "E_SCHEMA_NEWER",
-                f"labels 스키마 v{d['labels_schema']} 는 이 엔진(v{SCHEMA['labels']})보다 새 버전입니다",
+                f"labels 스키마 v{d['labels_schema']} 는 이 엔진(v{SCHEMA['labels']})보다 새 버전이에요",
                 "엔진을 업데이트하세요.",
             )
         changed = False

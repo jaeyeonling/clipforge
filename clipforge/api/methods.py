@@ -61,19 +61,19 @@ class Engine:
             raise ApiError("E_NOT_FOUND", f"파일 없음: {video_path}")
         if src.suffix.lower() not in self.project.VIDEO_EXTS:
             raise ApiError(
-                "E_BAD_FILE", f"영상 파일이 아닙니다: {src.name}", f"가능: {', '.join(self.project.VIDEO_EXTS)}"
+                "E_BAD_FILE", f"영상 파일이 아니에요: {src.name}", f"가능: {', '.join(self.project.VIDEO_EXTS)}"
             )
         if _is_cloud_placeholder(src):
             raise ApiError(
                 "E_FILE_OFFLINE",
-                f"클라우드 자리표시자 파일입니다 (아직 내려받지 않음): {src.name}",
+                f"클라우드 자리표시자 파일이에요 (아직 내려받지 않음): {src.name}",
                 "OneDrive 에서 파일을 우클릭 → '이 장치에 항상 유지' 로 내려받은 뒤 다시 등록하세요.",
             )
         vid = self._safe_id(vid or src.stem)
         if vid in self.project.episode_ids() and (self.project.cache / vid / "meta.json").exists():
             existing = self.project.video_path(vid)
             if existing and existing.resolve() != src.resolve():
-                raise ApiError("E_EXISTS", f"회차 {vid} 는 이미 다른 영상으로 등록돼 있습니다", "다른 id 를 지정하세요")
+                raise ApiError("E_EXISTS", f"회차 {vid} 는 이미 다른 영상으로 등록돼 있어요", "다른 id 를 지정하세요")
         dst = self.project.videos / f"{vid}{src.suffix.lower()}"
         linked = dst.exists()
         if not linked and link:
@@ -150,7 +150,7 @@ class Engine:
         if "align" in (stages or []) and not ((params or {}).get("final") or (params or {}).get("shorts")):
             raise ApiError(
                 "E_BAD_PARAMS",
-                "align 단계에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다",
+                "align 단계에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요해요",
                 "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
             )
         from ..jobs import DEFAULT_STAGES, episode_kind
@@ -435,7 +435,7 @@ class Engine:
         """구간의 범주(또는 경계)를 바꾼다. label 은 범주 key 또는 'kept'(범주 없음)."""
         keys = {c["key"] for c in self.label_categories()} | {"kept"}
         if label not in keys:
-            raise ApiError("E_BAD_LABEL", f"범주가 아닙니다: {label}", f"가능: {sorted(keys)}")
+            raise ApiError("E_BAD_LABEL", f"범주가 아니에요: {label}", f"가능: {sorted(keys)}")
         rows = self._kept_rows(vid)
         hit = [r for r in rows if self._same(r, start, end)]
         if not hit:
@@ -455,7 +455,7 @@ class Engine:
             raise ApiError("E_BAD_PARAMS", "구간은 0 ≤ start < end")
         keys = {c["key"] for c in self.label_categories()} | {"kept"}
         if label not in keys:
-            raise ApiError("E_BAD_LABEL", f"범주가 아닙니다: {label}", f"가능: {sorted(keys)}")
+            raise ApiError("E_BAD_LABEL", f"범주가 아니에요: {label}", f"가능: {sorted(keys)}")
         rows = [r for r in self._kept_rows(vid) if not self._same(r, start, end)]
         rows.append(
             {
@@ -666,26 +666,26 @@ class Engine:
         from ..live.session import LiveSession
 
         if self._live and self._live.running:
-            raise ApiError("E_LIVE_RUNNING", "라이브 세션이 이미 돌고 있습니다", "먼저 정지하세요.")
+            raise ApiError("E_LIVE_RUNNING", "라이브 세션이 이미 돌고 있어요", "먼저 정지하세요.")
         cfg = dict(config or {})
         if cfg.get("source", "screen") == "frames" and not (cfg.get("frames_dir") or cfg.get("episode")):
-            raise ApiError("E_BAD_PARAMS", "frames 소스에는 episode 또는 frames_dir 이 필요합니다")
+            raise ApiError("E_BAD_PARAMS", "frames 소스에는 episode 또는 frames_dir 이 필요해요")
         self._live = LiveSession(self.project, cfg, on_event=self._live_emit)
         return self._live.start()
 
     def live_stop(self) -> dict:
         if not self._live:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없어요")
         return self._live.stop()
 
     def live_mark(self, note: str = "") -> dict:
         if not self._live or not self._live.running:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다", "라이브 탭에서 시작하세요.")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않아요", "라이브 탭에서 시작하세요.")
         return self._live.mark(note)
 
     def live_approve(self, sid: str, text: str | None = None) -> dict:
         if not self._live:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없어요")
         try:
             return self._live.approve(sid, text)
         except KeyError:
@@ -694,23 +694,23 @@ class Engine:
     def live_approve_latest(self) -> dict:
         """전역 단축키용: 가장 최근 대기 제안을 승인."""
         if not self._live or not self._live.running:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않아요")
         s = self._live.latest_pending()
         if not s:
-            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없습니다")
+            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없어요")
         return self._live.approve(s.id)
 
     def live_dismiss_latest(self) -> dict:
         if not self._live or not self._live.running:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 돌고 있지 않아요")
         s = self._live.latest_pending()
         if not s:
-            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없습니다")
+            raise ApiError("E_NOT_FOUND", "대기 중인 제안이 없어요")
         return self._live.dismiss(s.id)
 
     def live_dismiss(self, sid: str) -> dict:
         if not self._live:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없어요")
         try:
             return self._live.dismiss(sid)
         except KeyError:
@@ -718,7 +718,7 @@ class Engine:
 
     def live_banner(self, items: list[str]) -> dict:
         if not self._live:
-            raise ApiError("E_NOT_FOUND", "라이브 세션이 없습니다")
+            raise ApiError("E_NOT_FOUND", "라이브 세션이 없어요")
         return {"text": self._live.set_banner(items), "items": self._live.banner_items}
 
     def live_obs_inputs(self, url: str = "ws://127.0.0.1:4455", password: str = "") -> dict:

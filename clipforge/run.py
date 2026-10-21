@@ -132,7 +132,7 @@ def cmd_align(a):
     --final  최종본 ↔ 원본 → labels/<vid>.csv kept (Phase 2 정답)
     --shorts 스트리머 쇼츠 ↔ 회차 → labels/<vid>.shorts.csv keep (Phase 1 정답 역매핑)"""
     if not a.final and not a.shorts:
-        raise SystemExit("--final 또는 --shorts 중 하나는 필요합니다")
+        raise SystemExit("--final 또는 --shorts 중 하나는 필요해요")
     from .align import (
         align_files,
         align_shorts,
@@ -151,7 +151,7 @@ def cmd_align(a):
     if a.shorts:
         files = collect_shorts(a.shorts)
         if not files:
-            raise FileNotFoundError(f"쇼츠 파일이 없습니다: {a.shorts}")
+            raise FileNotFoundError(f"쇼츠 파일이 없어요: {a.shorts}")
         res = align_shorts(orig_wav, files, cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r"))
         print(pretty_shorts(res))
         n = write_shorts_labels(LABELS / f"{a.vid}.shorts.csv", res)
@@ -166,7 +166,7 @@ def cmd_align(a):
         final_wav = extract_audio(fin, cache / "align" / f"{fin.stem}.wav")
         final_name = fin.name
     else:
-        raise FileNotFoundError(f"최종본을 찾지 못했습니다: {a.final} (영상 경로 또는 prep 된 회차 id)")
+        raise FileNotFoundError(f"최종본을 찾지 못했어요: {a.final} (영상 경로 또는 prep 된 회차 id)")
     segs, diag = align_files(
         orig_wav, final_wav, cache_dir=cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r")
     )
@@ -253,7 +253,7 @@ def cmd_export(a):
             else None
         )
         if ui is None:
-            print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라갑니다)")
+            print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라가요)")
         tr_p = CACHE / a.vid / "transcript.json"
         tr = json.loads(tr_p.read_text(encoding="utf-8")) if tr_p.exists() else None
         if tr is None:

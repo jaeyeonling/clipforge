@@ -261,7 +261,7 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "error",
                 "code": "E_FFMPEG_MISSING",
-                "message": "ffmpeg 를 실행할 수 없습니다",
+                "message": "ffmpeg 를 실행할 수 없어요",
                 "hint": "설치 폴더 bin/ 에 ffmpeg.exe·ffprobe.exe 를 두거나 CLIPFORGE_FFMPEG 환경변수로 폴더를 지정하세요.",
             }
         )
@@ -270,8 +270,8 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "error",
                 "code": "E_FONTS_MISSING",
-                "message": "제목 폰트(NanumPenScript)가 없습니다",
-                "hint": "assets/fonts/ 폴더를 확인하세요. 없으면 쇼츠 제목 띠가 깨집니다.",
+                "message": "제목 폰트(NanumPenScript)가 없어요",
+                "hint": "assets/fonts/ 폴더를 확인하세요. 없으면 쇼츠 제목 띠가 깨져요.",
             }
         )
     if not h.get("rapidocr"):
@@ -279,8 +279,8 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "error",
                 "code": "E_OCR_MISSING",
-                "message": "RapidOCR 이 설치되지 않았습니다",
-                "hint": "pip install -r requirements.txt 를 실행하세요. 배너·채팅 신호가 동작하지 않습니다.",
+                "message": "RapidOCR 이 설치되지 않았어요",
+                "hint": "pip install -r requirements.txt 를 실행하세요. 배너·채팅 신호가 동작하지 않아요.",
             }
         )
     if h.get("ffmpeg_ok") and not h.get("nvenc"):
@@ -288,8 +288,8 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "warn",
                 "code": "W_NO_NVENC",
-                "message": "NVENC 인코더가 없어 CPU 로 렌더합니다 (느림)",
-                "hint": "NVIDIA GPU 와 최신 드라이버가 있으면 자동으로 NVENC 를 씁니다.",
+                "message": "NVENC 인코더가 없어 CPU 로 렌더해요 (느림)",
+                "hint": "NVIDIA GPU 와 최신 드라이버가 있으면 자동으로 NVENC 를 써요.",
             }
         )
     if not h.get("whisper_model"):
@@ -297,7 +297,7 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "warn",
                 "code": "W_NO_WHISPER_MODEL",
-                "message": "음성 인식 모델이 아직 없습니다 (첫 전사 때 1.6GB 를 내려받습니다)",
+                "message": "음성 인식 모델이 아직 없어요 (첫 전사 때 1.6GB 를 내려받아요)",
                 "hint": "설치본이라면 설정 → 업데이트에서 구성요소 whisper 를 받으세요. 개발 환경은 첫 transcribe 때 자동 다운로드.",
             }
         )
@@ -306,7 +306,7 @@ def health_problems(h: dict) -> list[dict]:
             {
                 "level": "warn",
                 "code": "W_NO_GPU_WHISPER",
-                "message": "전사가 CPU 로 돌아갑니다 (12분 영상 약 20분)",
+                "message": "전사가 CPU 로 돌아가요 (12분 영상 약 20분)",
                 "hint": "CUDA 런타임(nvidia-cublas-cu12, nvidia-cudnn-cu12)을 확인하세요.",
             }
         )
@@ -316,7 +316,7 @@ def health_problems(h: dict) -> list[dict]:
                 "level": "warn",
                 "code": "W_DISK_LOW",
                 "message": f"디스크 여유 {h['disk_free_gb']}GB",
-                "hint": "4K 회차 하나의 캐시가 수 GB 입니다. cache/<회차>/frames 는 지워도 됩니다.",
+                "hint": "4K 회차 하나의 캐시가 수 GB 예요. cache/<회차>/frames 는 지워도 돼요.",
             }
         )
     return out

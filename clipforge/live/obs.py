@@ -61,13 +61,13 @@ class ObsClient:
         self._ws = await asyncio.wait_for(websockets.connect(self.url, max_size=16 * 1024 * 1024), self.timeout)
         hello = json.loads(await asyncio.wait_for(self._ws.recv(), self.timeout))
         if hello.get("op") != 0:
-            raise ObsError(f"Hello 가 아닙니다: {hello}")
+            raise ObsError(f"Hello 가 아니에요: {hello}")
         d = hello["d"]
         self.obs_version = d.get("obsStudioVersion", "")
         ident = {"rpcVersion": d.get("rpcVersion", 1), "eventSubscriptions": 0}
         if "authentication" in d:
             if not self.password:
-                raise ObsError("OBS WebSocket 비밀번호가 필요합니다 (OBS → 도구 → WebSocket 서버 설정)")
+                raise ObsError("OBS WebSocket 비밀번호가 필요해요 (OBS → 도구 → WebSocket 서버 설정)")
             a = d["authentication"]
             secret = base64.b64encode(hashlib.sha256((self.password + a["salt"]).encode()).digest()).decode()
             ident["authentication"] = base64.b64encode(

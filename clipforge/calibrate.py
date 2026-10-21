@@ -60,7 +60,7 @@ def check(project: Project, vid: str) -> dict:
             0.5,
             0.15,
             f"OCR {len(vals)}초 중 '득템' 머리말 {sum(hit)}초",
-            "배너 위치/크기가 화면과 안 맞습니다. 미리보기에서 노란 박스가 '득템 :' 줄을 덮는지 확인하고 rois.banner 를 조정하세요.",
+            "배너 위치/크기가 화면과 안 맞아요. 미리보기에서 노란 박스가 '득템 :' 줄을 덮는지 확인하고 rois.banner 를 조정하세요.",
         )
     else:
         checks.append(
@@ -83,7 +83,7 @@ def check(project: Project, vid: str) -> dict:
             0.08,
             0.02,
             f"{len(d)}초 중 패널 검출 {sum(hit)}초",
-            "인벤토리를 여는 장면이 있는데도 검출이 없으면 panel_bands 위치가 틀린 것입니다. 미리보기의 초록 박스가 창 제목을 덮어야 합니다.",
+            "인벤토리를 여는 장면이 있는데도 검출이 없으면 panel_bands 위치가 틀린 것이에요. 미리보기의 초록 박스가 창 제목을 덮어야 해요.",
         )
     else:
         checks.append(
@@ -103,7 +103,7 @@ def check(project: Project, vid: str) -> dict:
             0.5,
             0.15,
             f"OCR {len(d)}초 중 채팅 줄 검출 {sum(hit)}초",
-            "채팅 오버레이 위치가 다릅니다. 파란 박스가 채팅 영역을 덮도록 rois.chat 을 조정하세요.",
+            "채팅 오버레이 위치가 달라요. 파란 박스가 채팅 영역을 덮도록 rois.chat 을 조정하세요.",
         )
     else:
         checks.append(
@@ -120,7 +120,7 @@ def check(project: Project, vid: str) -> dict:
             0.7,
             0.3,
             f"{len(d)}초 중 구슬 검출 {sum(hit)}초",
-            "체력/마나 구슬 박스(빨강/파랑)가 구슬 위에 있어야 합니다. 게임 UI 배율이 다르면 hud_*_orb 를 조정하세요.",
+            "체력/마나 구슬 박스(빨강/파랑)가 구슬 위에 있어야 해요. 게임 UI 배율이 다르면 hud_*_orb 를 조정하세요.",
         )
     else:
         checks.append(

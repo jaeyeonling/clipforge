@@ -113,15 +113,15 @@ def transcribe(cache: Path, backend: str | None = None, force: bool = False) -> 
     except ImportError as e:
         raise EngineError(
             "E_TRANSCRIBE",
-            f"faster-whisper 가 설치되지 않았습니다: {e}",
+            f"faster-whisper 가 설치되지 않았어요: {e}",
             "pip install -r requirements.txt (또는 설치본의 파이썬 런타임 구성요소를 다시 받으세요)",
         ) from e
     except Exception as e:
         msg = str(e)[:300]
         hint = (
-            "Whisper 모델을 찾지 못했습니다. 번들 models/ 폴더 또는 네트워크(HF 다운로드)를 확인하세요."
+            "Whisper 모델을 찾지 못했어요. 번들 models/ 폴더 또는 네트워크(HF 다운로드)를 확인하세요."
             if "model" in msg.lower() or "huggingface" in msg.lower() or "snapshot" in msg.lower()
-            else "GPU 와 CPU 모두 실패했습니다. 로그를 확인하세요."
+            else "GPU 와 CPU 모두 실패했어요. 로그를 확인하세요."
         )
         raise EngineError("E_TRANSCRIBE", f"전사 실패: {msg}", hint) from e
     out.write_text(json.dumps(res, ensure_ascii=False, indent=0), encoding="utf-8")

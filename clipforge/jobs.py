@@ -389,7 +389,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         if video is None:
             raise EngineError(
                 "E_FILE_MISSING",
-                f"회차 {vid} 의 영상을 찾지 못했습니다",
+                f"회차 {vid} 의 영상을 찾지 못했어요",
                 "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.",
             )
         kind = episode_kind(project, vid, job.params)
@@ -431,7 +431,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 n = len(list((cache / "frames").glob("*.jpg"))) if (cache / "frames").exists() else 0
                 prog(0.05 + 0.9 * min(1.0, n / expected), f"화면 {n}/{expected}장을 읽었어요")
             if job.cancel_event.is_set():
-                job.log("취소 요청 — 현재 ffmpeg 패스가 끝나면 멈춥니다")
+                job.log("취소 요청 — 현재 ffmpeg 패스가 끝나면 멈춰요")
         if err:
             raise err[0]
         prog(1.0, "영상 읽기가 끝났어요")
@@ -504,7 +504,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                         "code": "W_CALIBRATION",
                         "message": "화면 영역(ROI) 점검에서 경고: "
                         + ", ".join(f"{c['name']} {c['status']}" for c in bad),
-                        "hint": "캘리브레이션 탭에서 미리보기를 확인하세요. 오버레이 위치가 바뀐 회차면 ROI 를 조정하고 prep 을 다시 실행합니다.",
+                        "hint": "캘리브레이션 탭에서 미리보기를 확인하세요. 오버레이 위치가 바뀐 회차면 ROI 를 조정하고 prep 을 다시 실행해요.",
                     }
                 )
                 job.emit({"type": "log", "stage": "signals", "level": "warn", "message": job.warnings[-1]["message"]})
@@ -525,7 +525,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         meta = _meta(project, vid)
         curves, events = _signals(project, vid)
         if not curves and not events:
-            raise EngineError("E_NO_SIGNALS", "신호 결과가 없습니다", "signals 단계를 먼저 실행하세요.")
+            raise EngineError("E_NO_SIGNALS", "신호 결과가 없어요", "signals 단계를 먼저 실행하세요.")
         weights = dict(DEFAULT_WEIGHTS)
         weights.update(job.params.get("weights") or {})
         kernels = load_profile(meta.get("game", "d2r")).get("events", {}) or {}
@@ -554,7 +554,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         if not final and not shorts:
             raise EngineError(
                 "E_BAD_PARAMS",
-                "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다",
+                "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요해요",
                 "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
             )
         _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
@@ -562,7 +562,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             files = collect_shorts(shorts if isinstance(shorts, list) else [shorts])
             if not files:
                 raise EngineError(
-                    "E_FILE_MISSING", f"쇼츠 파일이 없습니다: {shorts}", "mp4 파일이나 폴더 경로를 확인하세요."
+                    "E_FILE_MISSING", f"쇼츠 파일이 없어요: {shorts}", "mp4 파일이나 폴더 경로를 확인하세요."
                 )
             res = align_shorts(
                 cache / "audio.wav", files, cache, progress=lambda f, m="": prog(0.05 + (0.45 if final else 0.9) * f, m)
@@ -597,7 +597,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         else:
             raise EngineError(
                 "E_FILE_MISSING",
-                f"최종본을 찾지 못했습니다: {final}",
+                f"최종본을 찾지 못했어요: {final}",
                 "영상 파일 경로 또는 prep 된 회차 id 를 확인하세요.",
             )
         segs, diag = align_files(
@@ -691,7 +691,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         if not shorts and not cands.items:
             raise EngineError(
                 "E_NO_SHORTS",
-                "후보가 없습니다 (shorts.json / candidates.json)",
+                "후보가 없어요 (shorts.json / candidates.json)",
                 "shorts 또는 candidates 단계를 먼저 실행하세요.",
             )
         export_xml(meta, cands, shorts, ui, project.premiere, vid, k=int(job.params.get("k", 5)))
@@ -741,7 +741,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 encoding="utf-8",
             )
         if not done:
-            job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없습니다")
+            job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없어요")
         prog(1.0, "점수를 매겼어요" if done else "점수를 매길 정답이 아직 없어요")
     else:
         raise EngineError("E_BAD_STAGE", f"알 수 없는 단계: {stage}", f"가능: {STAGES}")

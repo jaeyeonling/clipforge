@@ -8,7 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
-const C = require("../components");
+const C = require("../src/components");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "cf-test-"));
 const sha = (buf) => crypto.createHash("sha256").update(buf).digest("hex");

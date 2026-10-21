@@ -28,7 +28,7 @@ function sevenZip() {
   // 개발: node_modules/7zip-bin, 배포: resources/7za.exe (electron-builder extraResources)
   const cands = [
     path.join(process.resourcesPath || "", "7za.exe"),
-    path.join(__dirname, "node_modules", "7zip-bin", "win", "x64", "7za.exe"),
+    path.join(__dirname, "..", "node_modules", "7zip-bin", "win", "x64", "7za.exe"),
   ];
   const p = cands.find((c) => c && fs.existsSync(c));
   if (!p) throw new Error("7za.exe 를 찾지 못했습니다");
@@ -239,6 +239,25 @@ const partsOf = (entry) => (entry.parts?.length ? entry.parts : [entry]);
 
 /** 받은 파일을 둘 경로. 이어받기(.part)도 이 이름 옆에 생긴다. */
 const zipPathFor = (downloadDir, part) => path.join(downloadDir, path.basename(new URL(part.url).pathname));
+
+/** 구성요소 하나를 받는다: 조각이 여럿이면 차례로 받고, 진행률은 구성요소 전체 기준으로 알린다. 받은 파일 경로들을 돌려준다.
+ *  첫 실행 설치(apply)와 앱 내 업데이트가 함께 쓴다. */
+async function downloadItem(entry, downloadDir, onProgress, signal) {
+  const zips = [];
+  let base = 0;
+  for (const part of partsOf(entry)) {
+    const dest = zipPathFor(downloadDir, part);
+    await download(
+      part,
+      dest,
+      (p) => onProgress?.({ ...p, ...(p.done != null ? { done: base + p.done, total: entry.size } : {}) }),
+      signal,
+    );
+    zips.push(dest);
+    base += part.size;
+  }
+  return zips;
+}
 
 /** 구성요소 하나에 대해 받아 둔 양(조각 합). */
 const savedBytes = (downloadDir, entry) =>
@@ -520,23 +539,12 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
       const item = queue.shift();
       try {
         onEvent({ type: "start", name: item.name, size: item.entry.size, reason: item.reason });
-        // 조각이 여럿이면 차례로 받고, 진행률은 구성요소 전체 기준으로 알린다
-        let base = 0;
-        for (const part of partsOf(item.entry)) {
-          await download(
-            part,
-            zipPathFor(downloadDir, part),
-            (p) =>
-              onEvent({
-                type: "download",
-                name: item.name,
-                ...p,
-                ...(p.done != null ? { done: base + p.done, total: item.entry.size } : {}),
-              }),
-            ac.signal,
-          );
-          base += part.size;
-        }
+        await downloadItem(
+          item.entry,
+          downloadDir,
+          (p) => onEvent({ type: "download", name: item.name, ...p }),
+          ac.signal,
+        );
         onEvent({ type: "downloaded", name: item.name });
         downloaded.get(item.name).res();
       } catch (e) {
@@ -578,6 +586,7 @@ module.exports = {
   present,
   plan,
   download,
+  downloadItem,
   partialBytes,
   savedBytes,
   zipPathFor,

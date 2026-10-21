@@ -12,7 +12,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 
-const REPO = path.resolve(__dirname, "..");
+const REPO = path.resolve(__dirname, "..", ".."); // desktop/src → 저장소 루트
 
 function localAppData() {
   return process.env.LOCALAPPDATA || path.join(require("node:os").homedir(), "AppData", "Local");

@@ -1,6 +1,6 @@
 // 렌더러에 노출하는 최소 API (contextIsolation + sandbox).
 //   - React 화면은 HTTP/WS 로 엔진과 직접 대화한다. 껍데기에만 있는 정보/동작(버전·업데이트·폴더 열기)만 여기로.
-//   - 첫 실행 설치 화면(main.js 의 data: URL)도 같은 preload 를 쓴다 (setup.*).
+//   - 첫 실행 설치 화면(pages/setup.html, clipforge://app/)도 같은 preload 를 쓴다 (setup.*).
 //   - 브라우저로 열면 window.clipforgeShell 이 없다 → 화면은 그 부분을 숨긴다.
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 

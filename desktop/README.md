@@ -45,7 +45,21 @@ python scripts\publish_github.py app --dry-run   # 올리지 않고 만들 것�
 
 ## 파일
 
-- `main.js` 창·트레이·알림·첫 실행 설치·업데이트 적용·오른쪽 클릭 복사/붙여넣기 메뉴·편집/보기 메뉴(숨김, 단축키만), `engine.js` 엔진 사이드카(모드: runtime/dist/venv), `components.js` 구성요소 다운로드·설치·롤백, `preload.js` IPC 브리지, `electron-builder.config.js` 패키징, `assets/` 아이콘(임시 마크).
+`src/` 가 설치본에 들어가는 껍데기 코드예요.
+
+| 파일 | 맡은 일 |
+|---|---|
+| `main.js` | 시작과 연결만. 단일 인스턴스, 부팅 순서, 점검 플래그 |
+| `window.js` | 창 · 메뉴 · 오른쪽 클릭 메뉴 · OS 알림 · 앱 화면(`clipforge://app/`) · 보안 기본값(이동 제한 · 권한 · webview 금지) |
+| `pages/` | 부팅 · 첫 실행 설치 화면 (HTML · CSS · JS, CSP). 설치 화면의 상태와 계산은 `setup-model.js` 에서 테스트 |
+| `firstrun.js` | 첫 실행 설치: 엔진 코드 심기, 구성요소 받기 · 풀기, 절전 막기 · 작업 표시줄 진행률 |
+| `updates.js` | 앱 내 업데이트(엔진 코드 · 구성요소)와 껍데기 업데이트(electron-updater) |
+| `components.js` | 구성요소 다운로드(이어받기 · 재시도 · sha256) · 설치 · 롤백 |
+| `engine.js` | 엔진 자식 프로세스 (모드: runtime / dist / venv) |
+| `tray.js` · `events.js` · `live.js` · `ipc.js` | 트레이 메뉴 · 엔진 이벤트 구독 · 라이브 전역 단축키와 OBS 감지 · 화면이 부르는 shell 기능 |
+| `preload.js` | 화면에 노출하는 최소 API (contextIsolation + sandbox) |
+
+빌드 설정은 `electron-builder.config.js`, 서명 설정은 `signing.js`, 릴리스 도우미는 `scripts/`, 아이콘은 `assets/` 에 있어요.
 
 ## electron-builder 가 Windows 비관리자에서 멈출 때
 

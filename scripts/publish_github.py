@@ -1,4 +1,4 @@
-"""GitHub Releases 배포 (gh CLI). desktop/release.config.js 의 owner/repo 를 쓴다.
+"""GitHub Releases 배포 (gh CLI). desktop/src/release.config.js 의 owner/repo 를 쓴다.
 
     python scripts/publish_github.py runtime            # 런타임 릴리스 runtime-YYYY.MM: 구성요소 zip 4개 (처음 한 번, 이후 런타임이 바뀔 때만)
     python scripts/publish_github.py app [--notes "…"]   # 앱 릴리스 v<version>: Setup.exe + blockmap + latest.yml + engine-code zip + latest.json
@@ -59,7 +59,7 @@ def release_cfg() -> dict:
         [
             str(NODE / "node.exe"),
             "-e",
-            "const c=require('./release.config');console.log(JSON.stringify({owner:c.owner,repo:c.repo,isPrivate:c.isPrivate}))",
+            "const c=require('./src/release.config');console.log(JSON.stringify({owner:c.owner,repo:c.repo,isPrivate:c.isPrivate}))",
         ],
         cwd=str(DESKTOP),
         capture_output=True,

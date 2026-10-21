@@ -14,4 +14,13 @@ module.exports = [
       "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
+  // 앱 화면(부팅 · 설치)은 브라우저에서 돈다. setup-model.js 는 테스트(Node)와 함께 쓴다.
+  {
+    files: ["src/pages/**/*.js"],
+    languageOptions: { sourceType: "script", globals: { ...globals.browser } },
+  },
+  {
+    files: ["src/pages/setup-model.js"],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
 ];

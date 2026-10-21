@@ -6,7 +6,7 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
-const release = require("../release.config");
+const release = require("../src/release.config");
 const pkg = require("../package.json");
 
 function appUpdateYml(env = process.env) {

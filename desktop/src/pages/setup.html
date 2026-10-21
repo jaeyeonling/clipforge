@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>clipforge</title>
+    <link rel="stylesheet" href="page.css" />
+  </head>
+  <body>
+    <div class="box">
+      <div class="brand">clipforge</div>
+      <div class="t" id="title">처음 한 번, 분석 엔진을 준비해요</div>
+      <div class="d" id="desc">한 번만 받아요. 이후 업데이트는 바뀐 부분만 받아요.</div>
+      <div class="total" id="total" hidden>
+        <div class="big"><span id="tpct">0%</span><small id="teta"></small></div>
+        <div class="bar"><i id="tbar"></i></div>
+      </div>
+      <div class="intro" id="intro">
+        <div class="dots" id="dots"></div>
+        <div class="k" id="ik"></div>
+        <h3 id="ih"></h3>
+        <p id="ip"></p>
+      </div>
+      <table id="tb"></table>
+      <div class="hint" id="hint"></div>
+      <div class="btns">
+        <button id="logs">로그 폴더</button>
+        <button id="retry" hidden>다시 시도</button>
+        <button id="start" class="p" disabled>설치 시작</button>
+      </div>
+    </div>
+    <script src="setup-model.js"></script>
+    <script src="setup.js"></script>
+  </body>
+</html>

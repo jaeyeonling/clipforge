@@ -1,0 +1,243 @@
+/* 부팅 · 첫 실행 설치 화면. 앱 본체(app/src/styles/tokens.css)와 같은 토스 다크 팔레트. */
+body {
+  margin: 0;
+  background: #17171c;
+  color: #e8e8ea;
+  font:
+    15px/1.55 "Pretendard Variable",
+    Pretendard,
+    "Malgun Gothic",
+    system-ui;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  letter-spacing: -0.005em;
+}
+.box {
+  max-width: 680px;
+  width: 92%;
+}
+.center {
+  text-align: center;
+}
+.brand {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f0f660;
+  letter-spacing: -0.02em;
+}
+.t {
+  margin-top: 14px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.d {
+  margin-top: 8px;
+  color: #8b95a1;
+  font-size: 14px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.spin {
+  margin: 22px auto 0;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #34343e;
+  border-top-color: #4593fc;
+  border-radius: 50%;
+  animation: s 0.8s linear infinite;
+}
+@keyframes s {
+  to {
+    transform: rotate(360deg);
+  }
+}
+[hidden] {
+  display: none !important;
+}
+
+/* 구성요소 목록 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 13px;
+}
+td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #2a2a32;
+  vertical-align: middle;
+}
+tr:last-child td {
+  border-bottom: none;
+}
+td.n {
+  width: 28px;
+}
+td.s {
+  color: #8b95a1;
+  white-space: nowrap;
+  text-align: right;
+  width: 90px;
+  font-variant-numeric: tabular-nums;
+}
+.bar {
+  height: 6px;
+  background: #2a2a33;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #4593fc;
+  border-radius: 999px;
+  transition: width 0.25s;
+}
+.st {
+  font-size: 12px;
+  color: #8b95a1;
+  margin-top: 3px;
+}
+.ok {
+  color: #4fd58b;
+}
+.bad {
+  color: #ff5a66;
+}
+
+/* 버튼 */
+.btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  justify-content: flex-end;
+  align-items: center;
+}
+button {
+  font: inherit;
+  border-radius: 12px;
+  border: none;
+  background: #2a2a33;
+  color: #e8e8ea;
+  padding: 0 18px;
+  height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:hover {
+  background: #34343e;
+}
+button.p {
+  background: #3182f6;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 0 26px;
+  height: 52px;
+  border-radius: 14px;
+}
+button.p:hover {
+  background: #4593fc;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+input[type="checkbox"] {
+  accent-color: #4593fc;
+  width: 16px;
+  height: 16px;
+}
+.hint {
+  font-size: 13px;
+  color: #8b95a1;
+  margin-top: 10px;
+}
+
+/* 전체 진행률 */
+.total {
+  margin-top: 18px;
+  background: #202027;
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.total .big {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.total .big small {
+  font-size: 13px;
+  color: #8b95a1;
+  font-weight: 500;
+  margin-left: 8px;
+  letter-spacing: 0;
+}
+.total .bar {
+  margin-top: 10px;
+  height: 8px;
+}
+
+/* 받는 동안 보여 주는 소개 */
+.intro {
+  margin-top: 14px;
+  background: #202027;
+  border-radius: 16px;
+  padding: 18px 20px;
+  min-height: 96px;
+  position: relative;
+}
+.intro .k {
+  font-size: 12px;
+  color: #4593fc;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.intro h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.intro p {
+  margin: 6px 0 0;
+  color: #c5c5ca;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.intro .dots {
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  display: flex;
+  gap: 5px;
+}
+.intro .dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34343e;
+}
+.intro .dots i.on {
+  background: #4593fc;
+}
+.intro.fade {
+  animation: f 0.35s ease;
+}
+@keyframes f {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

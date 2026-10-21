@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const http = require("node:http");
 const crypto = require("node:crypto");
-const C = require("../components");
+const C = require("../src/components");
 
 const BODY = crypto.randomBytes(256 * 1024);
 const entryFor = (url) => ({

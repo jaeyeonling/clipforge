@@ -9,7 +9,7 @@
     "url": "https://github.com/jaeyeonling/clipforge.git",
     "directory": "desktop"
   },
-  "main": "main.js",
+  "main": "src/main.js",
   "private": true,
   "author": "jaeyeonling",
   "scripts": {

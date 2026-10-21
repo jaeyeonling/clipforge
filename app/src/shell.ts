@@ -1,4 +1,4 @@
-// Electron 껍데기 브리지 (desktop/preload.js 의 window.clipforgeShell). 브라우저로 열면 없다 → 모든 훅이 null 을 돌려준다.
+// Electron 껍데기 브리지 (desktop/src/preload.js 의 window.clipforgeShell). 브라우저로 열면 없다 → 모든 훅이 null 을 돌려준다.
 import { useCallback, useEffect, useState } from "react";
 
 export interface UpdatePending {

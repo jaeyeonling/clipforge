@@ -38,7 +38,7 @@ module.exports = {
   copyright:
     "clipforge. 제3자 고지는 resources/engine/THIRD_PARTY_NOTICES.md (FFmpeg GPL 등은 첫 실행 때 내려받는 구성요소에 포함)",
   directories: { output: "release", buildResources: "assets" },
-  files: ["main.js", "preload.js", "engine.js", "components.js", "release.config.js", "assets/**", "package.json"],
+  files: ["src/**", "assets/**", "package.json"],
   asar: true,
   extraResources: [
     ...(skipEngine ? [] : [{ from: ENGINE, to: "engine", filter: [...CODE, "!**/__pycache__/**"] }]),
@@ -73,8 +73,8 @@ module.exports = {
   // 실제 업로드는 scripts/publish_github.py(gh CLI)가 한다 — electron-builder 의 --publish 는 쓰지 않는다(GH_TOKEN 불필요).
   publish: {
     provider: "github",
-    owner: require("./release.config").owner,
-    repo: require("./release.config").repo,
+    owner: require("./src/release.config").owner,
+    repo: require("./src/release.config").repo,
     releaseType: "release",
   },
 };

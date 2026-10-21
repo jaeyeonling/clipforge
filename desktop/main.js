@@ -26,9 +26,9 @@ const C = require("./components");
 const RELEASE = require("./release.config");
 
 const SMOKE = process.argv.includes("--smoke");
-const AUTO_SETUP = process.argv.includes("--auto-setup");
+const AUTO_SETUP = process.argv.includes("--auto-setup"); // 첫 실행 설치를 기본 선택으로 클릭 없이 시작 (자동 점검용)
 const FAKE_UPDATE = process.argv.includes("--fake-update"); // 화면 점검용: 가짜 업데이트가 있는 것처럼 상태를 보낸다 (아무것도 내려받지 않음)
-const AUTO_UPDATE = process.argv.includes("--auto-update"); // 시작 직후 업데이트를 확인해 있으면 바로 적용 (자동 점검용)   // 설치 화면에서 기본 선택으로 자동 시작 (자동 점검용)
+const AUTO_UPDATE = process.argv.includes("--auto-update"); // 시작 직후 업데이트를 확인해 있으면 바로 적용 (자동 점검용)
 const ASSETS = path.join(__dirname, "assets");
 const DEFAULT_UPDATE_URL = RELEASE.updateUrl; // GitHub Releases: <owner>/<repo> 의 최신 릴리스 자산 (release.config.js)
 let win = null,
@@ -69,6 +69,20 @@ function log(line) {
     logStream?.write(msg + "\n");
   } catch {
     /* ignore */
+  }
+}
+
+// ---------- 라이브 전역 단축키 ----------
+// Ctrl+Alt+Y/N/M 은 게임 중에도 받아야 해서 시스템 전체 단축키로 잡는다. 많은 자판에서 Ctrl+Alt 는 AltGr 이라
+// 다른 앱 입력을 가로채지 않도록, 라이브 세션이 도는 동안에만 등록하고 멈추면 바로 놓는다.
+let liveKeys = []; // [[가속키, 동작]] — 엔진 주소를 알고 나서 채운다
+let liveKeysOn = false;
+function setLiveShortcuts(on) {
+  if (on === liveKeysOn) return;
+  liveKeysOn = on;
+  for (const [acc, fn] of liveKeys) {
+    if (on) log(`shell: globalShortcut ${acc} ${globalShortcut.register(acc, fn) ? "ok" : "실패(다른 앱이 사용 중)"}`);
+    else globalShortcut.unregister(acc);
   }
 }
 
@@ -115,9 +129,16 @@ function dataUrl(html) {
   );
 }
 
+/** 부팅·오류 화면. 오류 메시지(경로·예외 문구)가 들어가므로 HTML 로 해석되지 않게 이스케이프한다. */
+const escapeHtml = (v) =>
+  String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+
 function bootHtml(title, detail, spinning) {
   return dataUrl(
-    `<div class="box" style="text-align:center"><div class="brand">clipforge</div><div class="t">${title}</div><div class="d">${detail || ""}</div>${spinning ? '<div class="spin"></div>' : ""}</div>`,
+    `<div class="box" style="text-align:center"><div class="brand">clipforge</div><div class="t">${escapeHtml(title)}</div><div class="d">${escapeHtml(detail)}</div>${spinning ? '<div class="spin"></div>' : ""}</div>`,
   );
 }
 
@@ -370,8 +391,14 @@ function subscribeEvents() {
         const le = ev.event;
         if (le.type === "suggestion" && le.status === "pending" && !win?.isFocused())
           notify(`득템 제안: ${le.head || le.text} (${le.grade})`, "Ctrl+Alt+Y 배너에 추가 · Ctrl+Alt+N 무시");
-        if (le.type === "started") liveActive = true;
-        if (le.type === "stopped") liveActive = false;
+        if (le.type === "started") {
+          liveActive = true;
+          setLiveShortcuts(true);
+        }
+        if (le.type === "stopped") {
+          liveActive = false;
+          setLiveShortcuts(false);
+        }
       }
     });
     ws.on("close", () => {
@@ -838,8 +865,7 @@ async function boot() {
           () => livePost("/api/live/suggestions/latest/dismiss", {}, () => notify("무시", "최근 제안을 무시했어요")),
         ],
       ];
-      for (const [acc, fn] of regs)
-        log(`shell: globalShortcut ${acc} ${globalShortcut.register(acc, fn) ? "ok" : "실패(다른 앱이 사용 중)"}`);
+      liveKeys = regs; // 라이브를 시작할 때만 잡는다 (setLiveShortcuts)
     } catch (e) {
       log(`shell: globalShortcut ${e.message}`);
     }

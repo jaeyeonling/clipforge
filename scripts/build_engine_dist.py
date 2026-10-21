@@ -210,7 +210,8 @@ def step_meta(out: Path) -> None:
 | FFmpeg (Gyan.dev full build, bin/) | **GPL v3** (full build 는 GPL 구성요소 포함) | 소스: ffmpeg.org · 빌드: gyan.dev. 실행 파일을 그대로 동봉하며 수정하지 않음. 라이선스 원문 bin/ffmpeg-LICENSE |
 | faster-whisper / CTranslate2 | MIT | |
 | Whisper large-v3-turbo (CTranslate2 변환, models/) | MIT (OpenAI Whisper) | 변환본: mobiuslabsgmbh/faster-whisper-large-v3-turbo |
-| NVIDIA cuBLAS / cuDNN (pip 휠) | NVIDIA 라이선스 | 재배포 허용 조건은 각 휠의 License 참고 |
+| NVIDIA cuBLAS / cuDNN / NVRTC (GPU 가속, 선택) | NVIDIA 라이선스 | 앱이 PyPI 의 NVIDIA 휠을 직접 받는다 (런타임 릴리스에 넣지 않음) |
+| CTranslate2 휠의 Intel OpenMP · cuDNN DLL | Intel · NVIDIA 재배포 라이선스 | PyPI 휠 그대로 |
 | RapidOCR / ONNX Runtime | Apache-2.0 / MIT | PP-OCR 모델 포함 (Apache-2.0) |
 | FastAPI, uvicorn, Pillow, numpy, PyYAML, rapidfuzz, fonttools, OpenTimelineIO | MIT/BSD/HPND/Apache | |
 | 나눔펜스크립트, 검은고딕(Black Han Sans) | SIL OFL 1.1 | assets/fonts |
@@ -316,6 +317,65 @@ COMPONENT_INFO = {  # 첫 실행 화면에 보여줄 설명. optional 은 사용
 }
 EXCLUDE_IN = {"python-base": ["Lib/site-packages/nvidia"]}
 
+# GPU 가속은 NVIDIA 가 PyPI 에 올린 휠을 앱이 그대로 받는다 (독점 바이너리를 이 저장소의 릴리스에 다시 올리지 않는다).
+# 버전은 constraints.txt 에 고정된 것, 주소·해시·크기는 PyPI 가 알려 주는 것.
+CUDA_WHEELS = ("nvidia-cublas-cu12", "nvidia-cudnn-cu12", "nvidia-cuda-nvrtc-cu12")
+FROM_PYPI = {"cuda"}
+
+
+def pinned(name: str, constraints: Path | None = None) -> str:
+    """constraints.txt 에 고정된 버전."""
+    for line in (constraints or ROOT / "constraints.txt").read_text(encoding="utf-8").splitlines():
+        k, sep, v = line.partition("==")
+        if sep and k.strip().lower() == name:
+            return v.strip()
+    raise SystemExit(f"constraints.txt 에 {name} 이 없어요")
+
+
+def pypi_wheel(name: str, version: str, fetch=None) -> dict:
+    """PyPI 의 Windows x64 휠: {url, sha256, size}."""
+    url = f"https://pypi.org/pypi/{name}/{version}/json"
+    if fetch is None:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            info = json.load(r)
+    else:
+        info = fetch(url)
+    for f in info.get("urls", []):
+        if f.get("packagetype") == "bdist_wheel" and f["filename"].endswith("win_amd64.whl"):
+            return {"url": f["url"], "sha256": f["digests"]["sha256"], "size": f["size"]}
+    raise SystemExit(f"PyPI 에 {name}=={version} 의 Windows x64 휠이 없어요")
+
+
+def cuda_entry(fetch=None, constraints: Path | None = None) -> dict:
+    """GPU 가속 구성요소: 휠 여러 개(parts)를 Lib/site-packages 아래에 푼다."""
+    vers = {n: pinned(n, constraints) for n in CUDA_WHEELS}
+    parts = [pypi_wheel(n, v, fetch) for n, v in vers.items()]
+    return {
+        "version": f"{vers['nvidia-cublas-cu12']}+cudnn{vers['nvidia-cudnn-cu12']}",
+        "parts": parts,
+        "size": sum(x["size"] for x in parts),
+        "prefix": "Lib/site-packages",
+    }
+
+
+def component_entries(names, zips: dict, info: dict, runtime_manifest: dict | None, entry_of, cuda=None) -> dict:
+    """매니페스트의 components. 순서: PyPI 에서 받는 것 → 이번에 만든 zip → 런타임 릴리스의 항목 그대로.
+    어디에도 없으면 실패한다 — 주소 없는 항목을 내보내면 새로 설치한 앱이 구성요소를 받지 못한다."""
+    out = {}
+    for name in names:
+        if name in FROM_PYPI:
+            out[name] = {**(cuda or cuda_entry()), **info[name]}
+        elif name in zips:
+            out[name] = {**entry_of(name, zips[name]), **info[name]}
+        elif runtime_manifest and (runtime_manifest.get("components") or {}).get(name, {}).get("url"):
+            out[name] = {**runtime_manifest["components"][name], **info[name]}
+        else:
+            raise SystemExit(
+                f"구성요소 {name} 의 주소가 없어요. --release-components 로 zip 을 만들거나 "
+                "--components-manifest 로 런타임 릴리스의 latest.json 을 주세요"
+            )
+    return out
+
 
 def sha256_of(p: Path) -> str:
     import hashlib
@@ -343,11 +403,17 @@ def zip_paths(out: Path, rel_paths: list[str], dst: Path, exclude: list[str] | N
 
 
 def step_release(
-    out: Path, rel_dir: Path, with_components: bool, base_url: str, components_url: str | None = None
+    out: Path,
+    rel_dir: Path,
+    with_components: bool,
+    base_url: str,
+    components_url: str | None = None,
+    components_manifest: Path | None = None,
 ) -> None:
     """engine-code-<ver>.zip (+ 구성요소 zip) 과 latest.json.
     base_url       = 앱 릴리스 자산 주소 (engine-code zip·latest.json. GitHub: .../releases/latest/download)
-    components_url = 구성요소 zip 주소 (드물게 갱신되는 런타임 릴리스. GitHub: .../releases/download/runtime-YYYY.MM). 없으면 base_url"""
+    components_url = 구성요소 zip 주소 (드물게 갱신되는 런타임 릴리스. GitHub: .../releases/download/runtime-YYYY.MM). 없으면 base_url
+    components_manifest = 런타임 릴리스의 latest.json (앱 릴리스는 구성요소 zip 을 만들지 않으므로 그 항목을 그대로 가져온다)"""
     sys.path.insert(0, str(ROOT))
     from clipforge import __version__
 
@@ -384,22 +450,30 @@ def step_release(
         "compat": {},
     }
     log(f"release: {code_zip.name} {human(code_zip.stat().st_size)}")
+    zips = {}
     for name in COMPONENTS:
+        if name in FROM_PYPI:
+            continue
         zp = rel_dir / f"{name}-{comp_ver[name].replace('+', '_')}.zip"
         if with_components:
             zip_paths(out, component_paths(out, name), zp, EXCLUDE_IN.get(name))
             log(f"release: {zp.name} {human(zp.stat().st_size)}")
-        info = {
+        if zp.exists():
+            zips[name] = zp
+    info = {
+        name: {
             **COMPONENT_INFO[name],
             "paths": component_paths(out, name) if name != "python-base" else ["<root files>", "Lib"],
         }
-        if zp.exists():
-            manifest["components"][name] = {**entry(zp, comp_ver[name], comp_base), **info}
-        else:
-            manifest["components"][name] = {
-                "version": comp_ver[name],
-                **info,
-            }  # zip 없이 버전만 (서버에 이미 있는 경우)
+        for name in COMPONENTS
+    }
+    runtime_manifest = json.loads(components_manifest.read_text(encoding="utf-8")) if components_manifest else None
+    cuda = cuda_entry()
+    comp_ver["cuda"] = cuda["version"]
+    manifest["components"] = component_entries(
+        COMPONENTS, zips, info, runtime_manifest, lambda n, zp: entry(zp, comp_ver[n], comp_base), cuda
+    )
+    log(f"release: cuda ← PyPI {', '.join(x['url'].rsplit('/', 1)[-1] for x in cuda['parts'])}")
     (rel_dir / "latest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     ver["component_versions"] = comp_ver
     (out / "VERSION.json").write_text(json.dumps(ver, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -425,6 +499,11 @@ def main() -> None:
         default=None,
         help="구성요소 zip 의 url 접두 (런타임 릴리스, 예: .../releases/download/runtime-2026.10). 없으면 --base-url",
     )
+    ap.add_argument(
+        "--components-manifest",
+        default=None,
+        help="런타임 릴리스의 latest.json 파일 (앱 릴리스가 구성요소 항목을 그대로 가져온다)",
+    )
     ap.add_argument("--skip-packages", action="store_true")
     ap.add_argument("--force-packages", action="store_true")
     ap.add_argument("--skip-ffmpeg", action="store_true")
@@ -448,7 +527,14 @@ def main() -> None:
     if a.smoke:
         step_smoke(out)
     if a.release:
-        step_release(out, Path(a.release).resolve(), a.release_components, a.base_url, a.components_url)
+        step_release(
+            out,
+            Path(a.release).resolve(),
+            a.release_components,
+            a.base_url,
+            a.components_url,
+            Path(a.components_manifest) if a.components_manifest else None,
+        )
 
 
 if __name__ == "__main__":

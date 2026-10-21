@@ -497,7 +497,7 @@ function runSetup(cfg) {
             optional: !!it.entry.optional,
             reason: it.reason,
             selected: it.entry.optional ? gpu : true,
-            have: C.partialBytes(it.entry, C.zipPathFor(cfg.downloads, it.entry)),
+            have: C.savedBytes(cfg.downloads, it.entry),
           }));
         sendSetup({
           type: "plan",

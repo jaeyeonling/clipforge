@@ -1,6 +1,8 @@
 // 런타임 구성요소 관리 (docs/ARCHITECTURE.md · 배포와 업데이트): 첫 실행 설치와 앱 내 업데이트가 같은 코드를 쓴다.
 //   runtime/ (= %LOCALAPPDATA%\clipforge\runtime)  ← 엔진 코드(층 A) + 구성요소(층 B)가 모두 여기. 사용자 쓰기 가능 → 업데이트에 UAC 불필요
 //   매니페스트 latest.json: { engine_code: {version,url,sha256,size}, components: {name: {version,url,sha256,size,label,optional,paths}} }
+//     구성요소는 zip 하나(url) 대신 여러 조각(parts: [{url,sha256,size}])일 수 있고, prefix 가 있으면 그 아래에 푼다.
+//     GPU 가속(cuda)은 NVIDIA 가 PyPI 에 올린 휠을 그대로 받는다 — 독점 바이너리를 이 저장소의 릴리스에 다시 올리지 않는다.
 //   흐름: plan() → 빠졌거나 버전이 다른 것 → download(이어받기, sha256) → install(7za 로 _staging 에 풀고 경로 교체, 실패 시 _prev 복원) → VERSION.json 갱신
 //   URL 은 https:// 또는 file:// (로컬 릴리스 폴더로 테스트).
 "use strict";
@@ -127,7 +129,10 @@ async function fetchManifest(baseUrl) {
   // 상대 url 은 baseUrl 기준으로
   const abs = (u) => (/^(https?|file):/.test(u) ? u : baseUrl.replace(/\/+$/, "") + "/" + u.replace(/^\/+/, ""));
   if (m.engine_code?.url) m.engine_code.url = abs(m.engine_code.url);
-  for (const c of Object.values(m.components || {})) if (c.url) c.url = abs(c.url);
+  for (const c of Object.values(m.components || {})) {
+    if (c.url) c.url = abs(c.url);
+    for (const p of c.parts || []) p.url = abs(p.url);
+  }
   return m;
 }
 
@@ -168,7 +173,7 @@ function plan(runtimeDir, manifest, { wantOptional = {} } = {}) {
     if (reason) out.push({ name: "engine_code", kind: "engine_code", reason, entry: manifest.engine_code });
   }
   for (const [name, entry] of Object.entries(manifest.components || {})) {
-    if (!entry.url) continue;
+    if (!entry.url && !entry.parts?.length) continue; // 받을 곳이 없는 항목(버전만 적힌 것)은 건너뛴다
     if (entry.optional && wantOptional[name] === false) continue;
     const reason = !present(runtimeDir, name) ? "missing" : lv[name] !== entry.version ? "update" : null;
     if (reason) out.push({ name, kind: "component", reason, entry });
@@ -211,6 +216,7 @@ function retriable(e) {
 }
 const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError()); // 기다리기 전에 이미 취소됐으면 바로
     const t = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => (clearTimeout(t), reject(abortError())), { once: true });
   });
@@ -228,8 +234,15 @@ function friendlyError(e) {
   return e?.message || String(e);
 }
 
-/** 구성요소 zip 을 받아 둘 경로. 이어받기(.part)도 이 이름 옆에 생긴다. */
-const zipPathFor = (downloadDir, entry) => path.join(downloadDir, path.basename(new URL(entry.url).pathname));
+/** 구성요소가 받는 파일들: zip 하나(url) 또는 여러 조각(parts). 조각마다 {url, sha256, size}. */
+const partsOf = (entry) => (entry.parts?.length ? entry.parts : [entry]);
+
+/** 받은 파일을 둘 경로. 이어받기(.part)도 이 이름 옆에 생긴다. */
+const zipPathFor = (downloadDir, part) => path.join(downloadDir, path.basename(new URL(part.url).pathname));
+
+/** 구성요소 하나에 대해 받아 둔 양(조각 합). */
+const savedBytes = (downloadDir, entry) =>
+  partsOf(entry).reduce((a, p) => a + partialBytes(p, zipPathFor(downloadDir, p)), 0);
 
 /** 이어 받을 수 있게 남아 있는 양(바이트). 다 받아 둔 zip 이면 크기 전체. */
 function partialBytes(entry, dest) {
@@ -373,16 +386,21 @@ async function rmrf(p) {
   await fsp.rm(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
-async function install(runtimeDir, item, zipPath, onProgress) {
+async function install(runtimeDir, item, zipPaths, onProgress) {
   const staging = path.join(runtimeDir, "_staging", item.name);
   const prev = path.join(runtimeDir, "_prev", item.name);
   await rmrf(staging);
   await fsp.mkdir(staging, { recursive: true });
   onProgress?.({ phase: "extract" });
-  await run7z(["x", "-y", "-bd", "-bsp1", `-o${staging}`, zipPath], (line) => {
-    const m = line.match(/(\d+)%/);
-    if (m) onProgress?.({ phase: "extract", pct: Number(m[1]) });
-  });
+  const zips = [].concat(zipPaths);
+  const into = path.join(staging, item.entry?.prefix || ""); // 휠은 site-packages 기준이라 Lib/site-packages 아래에 푼다
+  await fsp.mkdir(into, { recursive: true });
+  for (const [i, zp] of zips.entries()) {
+    await run7z(["x", "-y", "-bd", "-bsp1", `-o${into}`, zp], (line) => {
+      const m = line.match(/(\d+)%/);
+      if (m) onProgress?.({ phase: "extract", pct: Math.round((100 * i + Number(m[1])) / zips.length) });
+    });
+  }
   // 교체 대상 경로
   let rels;
   if (item.name === "engine_code") rels = CODE_PATHS;
@@ -484,7 +502,7 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
   const ac = new AbortController();
   const onAbort = () => ac.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
-  const zipOf = (item) => zipPathFor(downloadDir, item.entry);
+  const zipsOf = (item) => partsOf(item.entry).map((p) => zipPathFor(downloadDir, p));
   const downloaded = new Map(
     items.map((it) => {
       let res, rej;
@@ -502,7 +520,23 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
       const item = queue.shift();
       try {
         onEvent({ type: "start", name: item.name, size: item.entry.size, reason: item.reason });
-        await download(item.entry, zipOf(item), (p) => onEvent({ type: "download", name: item.name, ...p }), ac.signal);
+        // 조각이 여럿이면 차례로 받고, 진행률은 구성요소 전체 기준으로 알린다
+        let base = 0;
+        for (const part of partsOf(item.entry)) {
+          await download(
+            part,
+            zipPathFor(downloadDir, part),
+            (p) =>
+              onEvent({
+                type: "download",
+                name: item.name,
+                ...p,
+                ...(p.done != null ? { done: base + p.done, total: item.entry.size } : {}),
+              }),
+            ac.signal,
+          );
+          base += part.size;
+        }
         onEvent({ type: "downloaded", name: item.name });
         downloaded.get(item.name).res();
       } catch (e) {
@@ -518,12 +552,14 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
     for (const item of items) {
       // 설치는 순서대로, 각 항목은 받아지는 대로
       await downloaded.get(item.name).p;
-      await install(runtimeDir, item, zipOf(item), (p) => onEvent({ type: "install", name: item.name, ...p }));
+      await install(runtimeDir, item, zipsOf(item), (p) => onEvent({ type: "install", name: item.name, ...p }));
       onEvent({ type: "done", name: item.name });
-      try {
-        await fsp.unlink(zipOf(item));
-      } catch {
-        /* keep */
+      for (const z of zipsOf(item)) {
+        try {
+          await fsp.unlink(z);
+        } catch {
+          /* keep */
+        }
       }
     }
     await workers;
@@ -543,6 +579,7 @@ module.exports = {
   plan,
   download,
   partialBytes,
+  savedBytes,
   zipPathFor,
   friendlyError,
   RETRY,

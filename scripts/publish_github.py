@@ -2,6 +2,7 @@
 
     python scripts/publish_github.py runtime            # 런타임 릴리스 runtime-YYYY.MM: 구성요소 zip 4개 (처음 한 번, 이후 런타임이 바뀔 때만)
     python scripts/publish_github.py app [--notes "…"]   # 앱 릴리스 v<version>: Setup.exe + blockmap + latest.yml + engine-code zip + latest.json
+                                                        # (로컬 · 서명 없음. 서명된 릴리스는 v* 태그를 올리면 .github/workflows/release.yml 이 만든다)
     옵션: --dry-run (업로드 없이 만들 것만 출력)  --require-signed (설치본이 신뢰되는 서명이 아니면 멈춤. docs/CODE_SIGNING.md)
            --runtime-tag runtime-2026.10 (앱 릴리스의 매니페스트가 가리킬 런타임 태그; 기본 = 가장 최근 runtime-* 릴리스)
 
@@ -153,7 +154,11 @@ def cmd_app(a, cfg) -> None:
     if rel.exists():
         shutil.rmtree(rel)
     # 1) 화면 → 엔진 코드 번들(engine-dist 의 코드 경로 갱신) → 릴리스 아티팩트
+    #    구성요소 항목은 런타임 릴리스의 latest.json 을 그대로 가져온다 (앱 릴리스는 구성요소 zip 을 만들지 않는다)
     sh([str(NODE / "npm.cmd"), "run", "build"], cwd=ROOT / "app")
+    rel.mkdir(parents=True)
+    runtime_manifest = rel / "runtime-latest.json"
+    sh([GH, "release", "download", rt, "--repo", slug, "--pattern", "latest.json", "--output", str(runtime_manifest)])
     sh(
         [
             sys.executable,
@@ -167,8 +172,11 @@ def cmd_app(a, cfg) -> None:
             f"https://github.com/{slug}/releases/latest/download",
             "--components-url",
             f"https://github.com/{slug}/releases/download/{rt}",
+            "--components-manifest",
+            str(runtime_manifest),
         ]
     )
+    runtime_manifest.unlink()
     # 2) 설치본 (app-update.yml 에 publish 설정이 들어간다)
     sh([str(NODE / "npm.cmd"), "run", "dist"], cwd=DESKTOP)
     out = DESKTOP / "release"

@@ -10,9 +10,15 @@ clipforge 의 소스 코드는 [MIT](LICENSE) 입니다. 아래 구성요소는 
 | FFmpeg (Gyan.dev full build) | **GPL v3** | 수정 없이 실행 파일로 동봉. 소스: [ffmpeg.org](https://ffmpeg.org) · 빌드: [gyan.dev](https://www.gyan.dev/ffmpeg/builds/). 라이선스 원문은 런타임 `bin/` 에 있어요 |
 | faster-whisper · CTranslate2 | MIT | |
 | Whisper large-v3-turbo (CTranslate2 변환본) | MIT | OpenAI Whisper · 변환본 mobiuslabsgmbh/faster-whisper-large-v3-turbo |
-| NVIDIA cuBLAS · cuDNN (pip 휠, 선택) | NVIDIA 소프트웨어 라이선스 | NVIDIA GPU 가 있을 때만 받아요. 재배포 조건은 각 휠의 라이선스를 따라요 |
+| CTranslate2 휠에 함께 든 Intel OpenMP 런타임 · cuDNN DLL | Intel · NVIDIA 재배포 라이선스 | PyPI 의 `ctranslate2` 휠을 수정 없이 그대로 넣어요 |
 | RapidOCR · ONNX Runtime · PP-OCR 모델 | Apache-2.0 · MIT · Apache-2.0 | |
 | FastAPI · uvicorn · Pillow · numpy · PyYAML · rapidfuzz · fonttools · OpenTimelineIO | MIT · BSD · HPND · Apache-2.0 | |
+
+## 앱이 공급처에서 직접 받는 것
+
+| 구성요소 | 라이선스 | 비고 |
+|---|---|---|
+| NVIDIA cuBLAS · cuDNN · NVRTC (GPU 가속, 선택) | NVIDIA 소프트웨어 라이선스 | NVIDIA GPU 가 있을 때 처음 실행에서 PyPI(`files.pythonhosted.org`)의 NVIDIA 휠을 그대로 받아요. 이 저장소의 릴리스에는 들어 있지 않아요 |
 
 ## 저장소에 들어 있는 것
 

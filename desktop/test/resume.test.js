@@ -102,7 +102,7 @@ test("계속 끊기면 정해진 횟수까지만 시도하고, 받은 부분은 
   assert.ok(have > 0 && have < BODY.length, "받은 만큼 .part 가 남아 있어야 한다");
 });
 
-test("취소하면 기다리지 않고 바로 멈춘다", async (t) => {
+test("취소하면 기다리지 않고 바로 멈춘다 (재시도 대기 직전에 취소해도)", { timeout: 5000 }, async (t) => {
   fastRetry(t);
   Object.assign(C.RETRY, { backoffMs: [60000] });
   const s = await serve(() => "drop");

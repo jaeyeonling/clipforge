@@ -67,9 +67,11 @@ python scripts\publish_github.py app --dry-run   # 올리지 않고 만들 것�
 한 번만 아래처럼 다운로드 캐시에 직접 풀어 두면 다시는 받지 않는다:
 
 ```
-set C=%LOCALAPPDATA%\electron-builder\Cache\winCodeSign
-node_modules\7zip-bin\win\x64\7za.exe x -y -o%C%\winCodeSign-2.6.0 -xr!darwin %C%\<아무 숫자>.7z
+set C=%LOCALAPPDATA%\electron-builder\Cache
+%C%\7zip@1.0.0\7zip-win-x64-<접미사>\bin\7za.exe x -y -o%C%\winCodeSign\winCodeSign-2.6.0 -xr!darwin %C%\winCodeSign\<아무 숫자>.7z
 ```
 
-(폴더 이름 `winCodeSign-2.6.0` 은 app-builder.exe 가 기대하는 이름. 버전이 바뀌면 `findstr winCodeSign- node_modules\app-builder-bin\win\x64\app-builder.exe` 로 확인.)
+(7za 는 electron-builder 가 받아 두는 7-Zip 이에요. 없으면 `node -e "require('./scripts/seven-zip').sevenZip().then(x => console.log(x.exe))"` 가 받고 경로를 알려 줘요.
+폴더 이름 `winCodeSign-2.6.0` 은 electron-builder 가 기대하는 이름이에요.)
+
 코드 서명: 공개 릴리스는 `.github/workflows/release.yml` 이 SignPath 로 두 번 서명한다 (앱 실행 파일 → 그 폴더로 만든 설치본, `--prepackaged`). 그 사이에 `scripts/app-update-yml.js` 가 업데이트 설정을 넣고, 서명 뒤 `scripts/refresh-latest.js` 가 latest.yml · blockmap 을 다시 계산한다. 로컬 빌드는 환경변수로 서명 방식을 고른다 (`signing.js`). 설정은 [docs/CODE_SIGNING.md](../docs/CODE_SIGNING.md). 설정이 없으면 서명 없이 만들고, 첫 실행 때 SmartScreen "추가 정보 → 실행" 이 뜬다. `CLIPFORGE_NO_RCEDIT=1` 이면 아이콘·버전 정보 삽입과 서명을 함께 건너뛴다.

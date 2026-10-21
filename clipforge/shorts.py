@@ -1,4 +1,4 @@
-"""쇼츠 후보 생성기 (Phase 1). 설계: docs/ARCHITECTURE.md 8.2 ~ 8.3.
+"""쇼츠 후보 생성기 (Phase 1). 설계: docs/ENGINE.md · 쇼츠 후보와 점수.
 
 임계 초과 구간이 아니라 **페이오프 앵커**에서 창을 만든다.
   앵커 = item_banner(append) > edit_emphasis(zoom/note) > chat_burst 피크
@@ -300,11 +300,10 @@ def _trim_quote(text: str, limit: int = 20) -> str:
     return t.rstrip(PUNCT) + "…"
 
 
-def _load_chat_keywords() -> dict:
-    import yaml
+def _load_chat_keywords(game: str | None = None) -> dict:
+    from .profiles import load_settings
 
-    p = Path(__file__).resolve().parent.parent / "games" / "common.yaml"
-    return ((yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("chat_keywords") or {}) if p.exists() else {}
+    return load_settings(game).get("chat_keywords") or {}
 
 
 OCR_FIX = {"혈": "헐", "슷츠": "쇼츠", "솟츠": "쇼츠"}
@@ -320,11 +319,13 @@ def clean_chat(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def best_chat_quote(c: ShortCandidate, chat: Segments | None, pre: float = 8.0) -> tuple[str, float]:
+def best_chat_quote(
+    c: ShortCandidate, chat: Segments | None, pre: float = 8.0, keywords: dict | None = None
+) -> tuple[str, float]:
     """창 [anchor−pre, end] 안의 채팅 중 반응 어휘 가중치가 가장 큰 메시지 (닉네임 제외). (텍스트, 점수)"""
     if not chat:
         return "", 0.0
-    kws = _load_chat_keywords()
+    kws = keywords if keywords is not None else _load_chat_keywords()
     best, best_s = "", 0.0
     for m in chat.items:
         if not (c.anchor - pre <= m.start <= c.end):
@@ -339,7 +340,12 @@ def best_chat_quote(c: ShortCandidate, chat: Segments | None, pre: float = 8.0) 
 
 
 def suggest_hook(
-    c: ShortCandidate, transcript: dict | None, kw_events: Segments | None, lexicon=None, chat: Segments | None = None
+    c: ShortCandidate,
+    transcript: dict | None,
+    kw_events: Segments | None,
+    lexicon=None,
+    chat: Segments | None = None,
+    chat_keywords: dict | None = None,
 ) -> list[str]:
     """[인용, 아이템 맥락]. 인용 = 줌/채팅 앵커면 채팅 원문 우선, 아니면 전사 대사. 둘 다 있으면 점수 높은 쪽."""
     quote = ""
@@ -364,7 +370,7 @@ def suggest_hook(
             quote_score = 0.0
     else:
         quote_score = 0.0
-    chat_q, chat_s = best_chat_quote(c, chat)
+    chat_q, chat_s = best_chat_quote(c, chat, keywords=chat_keywords)
     kinds = set(c.evidence.get("anchor_kinds", []))
     # 채팅 원문 우선 조건: 편집자가 채팅을 강조한 줌 구간이거나, 전사에 쓸 만한 대사가 없을 때.
     # 그 외엔 스트리머 본인 리액션(전사)이 더 자연스럽다.
@@ -495,8 +501,11 @@ def make_shorts(
         lex = Lexicon()
     except Exception:
         lex = None
+    from .profiles import episode_game
+
+    chat_kws = _load_chat_keywords(episode_game(cache))
     for c in final:
-        c.hook_lines = suggest_hook(c, tr, events.get("speech_keyword"), lex, events.get("chat_text"))
+        c.hook_lines = suggest_hook(c, tr, events.get("speech_keyword"), lex, events.get("chat_text"), chat_kws)
     return final
 
 

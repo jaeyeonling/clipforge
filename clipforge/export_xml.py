@@ -2,13 +2,13 @@
 
 두 가지 시퀀스를 한 파일에 담는다.
   review : 원본 해상도·프레임레이트. V1 = 원본 전체 1클립, V2 = 후보 세그먼트만 원본 시각 위치에(갭 유지),
-           시퀀스 마커 = 쇼츠 후보 앵커(이름 "score|근거"). 친구는 마커로 훑고 V2 에서 리플 삭제.
+           시퀀스 마커 = 쇼츠 후보 앵커(이름 "score|근거"). 스트리머는 마커로 훑고 V2 에서 리플 삭제.
   shorts : 후보마다 1080×1920 시퀀스. 원본 클립에 Basic Motion(scale 50%, center 키프레임)으로 세로 크롭을 재현.
            크롭 중심은 ui_state 를 따라 컷처럼 점프(렌더와 동일 규칙).
 
 AutoEditor 사례에서 배운 것: xmeml v5 를 ElementTree 로 직접 쓴다. 컷을 이어붙이지 않는다(원본 타임라인 유지).
 pathurl 은 file://localhost/C:/... 형식, <file> 은 첫 등장에만 본문, 이후엔 id 참조.
-검증: OpenTimelineIO fcp_xml 어댑터로 읽어 트랙·클립 수를 확인한다 (Premiere 실제 임포트는 친구 쪽에서).
+검증: OpenTimelineIO fcp_xml 어댑터로 읽어 트랙·클립 수를 확인한다 (Premiere 실제 임포트는 스트리머 쪽에서).
 Basic Motion center 단위는 "시퀀스 폭/높이에 대한 비율" 로 가정 — Premiere 에서 1회 확인 필요 (9.x 메모).
 """
 

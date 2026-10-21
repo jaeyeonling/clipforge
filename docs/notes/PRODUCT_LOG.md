@@ -1,4 +1,6 @@
-# clipforge 제품 아키텍처 — 방송용 통합 프로그램으로 가는 설계 (v0, 2026-10-18)
+# 제품 설계 노트 — 방송용 통합 프로그램으로 가는 설계 (2026-10-18 ~)
+
+> **설계 노트 (시간순 기록).** 결정이 내려진 순서와 그때의 근거·실측을 그대로 남긴 문서예요. 일부 계획은 이후에 바뀌었어요. 지금의 구조는 [ARCHITECTURE.md](../ARCHITECTURE.md) 를 보세요.
 
 > 지금까지의 `clipforge` 는 "편집본 → 쇼츠 후보" 실험 하네스다. 이 문서는 그것을 **스트리머가 방송 전·중·후에 쓰는 하나의 프로그램**으로
 > 키울 때의 설계다. 실험 하네스의 원칙(정답 데이터 먼저, 신호는 플러그인, 지표로 결정)은 그대로 제품의 원칙이 된다.
@@ -8,7 +10,7 @@
 
 **한 문장**: 게임 방송의 "순간"을 자동으로 찾고, 기록하고, 콘텐츠(쇼츠·편집 포인트·오버레이)로 바꿔 주는 스트리머용 로컬 프로그램.
 
-사용 시점별 기능 (`[가정]` 친구 = 디아2R·던파 방송, OBS, Premiere, 페이스캠 없음, 4K60):
+사용 시점별 기능 (`[가정]` 스트리머 = 디아2R·던파 방송, OBS, Premiere, 페이스캠 없음, 4K60):
 
 | 시점 | 기능 | 지금 상태 |
 |---|---|---|
@@ -173,7 +175,7 @@
 - 검증: 번들 파이썬만으로(PATH=bin) 엔진 기동 → health 전부 OK(ffmpeg·NVENC·GPU·Whisper GPU·OCR·폰트), Electron `CLIPFORGE_ENGINE_DIST=1 --smoke` 통과, ep59 오디오 오프라인 전사 OK.
 - `engine-dist/` 는 이제 **설치본에 통째로 들어가지 않는다** — 릴리스 아티팩트(층 A zip + 층 B zip 들)의 원본이자 개발 중 번들 점검용. 설치본에는 그중 코드 경로만 동봉(§9.2).
 - 데이터 분리: 껍데기가 설치본에서 `CLIPFORGE_DATA=%APPDATA%/clipforge/data` 를 넘긴다(§6 원칙: 업데이트가 라벨을 지우지 않음).
-- 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 친구 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
+- 용량 줄일 여지(순서대로): ① CPU 전용 변형(NVIDIA 휠 제외 → 2.6GB, 전사 20배 느림) ② ffmpeg essentials 빌드(≈ 200MB 절약, libass·NVENC 포함 여부 확인 필요) ③ 모델을 설치 후 첫 실행에 내려받기(1.6GB 절약, 오프라인 원칙과 충돌) ④ cuDNN 을 CTranslate2 가 쓰는 서브 라이브러리만 남기기. v1 은 4.5GB 그대로 간다 — 스트리머 PC 는 4K 녹화 환경이라 디스크가 문제되지 않는다.
 - 전사 백엔드는 faster-whisper 하나(CUDA 실패 시 CPU/int8 자동 폴백). 예전 ffmpeg whisper 필터(ggml 모델) 경로는 제거했다 — 번들에 없는 파일을 가리켰고 CPU 폴백과 역할이 겹쳤다. `models/ggml-*.bin` 은 더 이상 쓰지 않는다.
 
 ### 9.2 앱 내 업데이트 설계 (2026-10-18 밤) — 재설치 없이, 작은 것만, 승인 뒤 적용
@@ -211,14 +213,14 @@
 **서버 (결정 필요)**: 정적 HTTPS 폴더면 충분하다 — `latest.json` + zip 들. 후보:
 - GitHub Releases: 무료, 간단. **단일 파일 2GB 제한**이라 설치본 4.5GB 는 못 올리고(설치본은 다른 곳), 구성요소 zip 은 전부 2GB 미만이라 가능(python 층은 cublas/cudnn 을 나누면 안전). electron-updater 의 GitHub provider 가 C 층을 바로 지원.
 - Cloudflare R2 / S3 + 정적 호스팅: 용량 제한 없음, 다운로드 속도 좋음, 소액 비용. electron-updater `generic` provider.
-- 추천: **R2 하나로 통일**(설치본·구성요소·매니페스트 모두). 친구 한 명 배포 규모에선 비용이 거의 0.
+- 추천: **R2 하나로 통일**(설치본·구성요소·매니페스트 모두). 스트리머 한 명 배포 규모에선 비용이 거의 0.
 서명: 코드 서명 인증서가 없는 동안은 SmartScreen 경고를 피할 수 없다(설치본 첫 실행 때 "추가 정보 → 실행"). 앱 내 업데이트(A·B 층)는 zip 교체라 SmartScreen 과 무관 — **재설치를 피하는 또 하나의 이유**.
 
 **설치본은 작게, 대용량은 첫 실행 때 (2026-10-18 밤 결정, 사용자 제안)**: 4.5GB 설치본은 만들지 않는다. 설치본 = Electron + 엔진 코드(층 A, 5MB) + 7za.exe ≈ 100MB. 첫 실행 때 껍데기가 `latest.json` 을 읽어 **구성요소 선택 화면**(python-base 193MB · cuda 1.4GB[선택, NVIDIA 감지 시 기본 켬] · ffmpeg 182MB · whisper 1.5GB)을 보여주고, 받은 것을 `%LOCALAPPDATA%\clipforge\runtime\` 에 풀어 엔진을 띄운다. 첫 설치와 업데이트가 **같은 코드**(`desktop/components.js`)다. 장점: 설치본이 작고, GitHub 2GB 제한 안에 들어가고, CPU 전용 설치가 되고, 런타임이 사용자 폴더라 업데이트에 UAC 가 없다. 단점: 오프라인 첫 설치 불가 → USB 배포는 릴리스 폴더를 통째로 복사하고 `%LOCALAPPDATA%\clipforge\update-url.txt` 에 `file:///E:/...` 를 적는 것으로 해결(또는 `CLIPFORGE_UPDATE_URL`).
 
 **호스팅 결정 (2026-10-18 밤): GitHub Releases, 저장소 `jaeyeonling/clipforge`, 일단 private.**
 - 두 종류의 릴리스: 앱 `v<ver>`(Setup.exe · blockmap · latest.yml · engine-code zip · latest.json) 와 런타임 `runtime-YYYY.MM`(구성요소 zip 4개, 각 2GB 미만). latest.json 은 `releases/latest/download/latest.json` 으로 항상 최신 앱 릴리스를 가리키고, 그 안의 구성요소 URL 은 런타임 릴리스의 절대 URL.
-- **private 의 대가**: 릴리스 자산을 토큰 없이 못 받는다. 앱은 `%LOCALAPPDATA%\clipforge\github-token.txt`(또는 `CLIPFORGE_GH_TOKEN`)의 fine-grained PAT(저장소 clipforge, Contents read-only)로 API 를 거쳐 받는다(`components.js resolveAsset`: 릴리스 조회 → 자산 API URL → `Accept: application/octet-stream`, S3 리다이렉트 시 Authorization 제거). electron-updater 는 `setFeedURL({private:true, token})`. 친구 PC 에 토큰 파일 하나를 놓아 주는 운영 부담이 있고, 토큰이 새면 저장소 읽기가 가능하므로 **공개 전환 시점에 토큰 발급을 취소**한다. public 으로 바꾸면 토큰 없이 그대로 동작(`CLIPFORGE_GH_PRIVATE=0` 또는 release.config.js).
+- **private 의 대가**: 릴리스 자산을 토큰 없이 못 받는다. 앱은 `%LOCALAPPDATA%\clipforge\github-token.txt`(또는 `CLIPFORGE_GH_TOKEN`)의 fine-grained PAT(저장소 clipforge, Contents read-only)로 API 를 거쳐 받는다(`components.js resolveAsset`: 릴리스 조회 → 자산 API URL → `Accept: application/octet-stream`, S3 리다이렉트 시 Authorization 제거). electron-updater 는 `setFeedURL({private:true, token})`. 스트리머 PC 에 토큰 파일 하나를 놓아 주는 운영 부담이 있고, 토큰이 새면 저장소 읽기가 가능하므로 **공개 전환 시점에 토큰 발급을 취소**한다. public 으로 바꾸면 토큰 없이 그대로 동작(`CLIPFORGE_GH_PRIVATE=0` 또는 release.config.js).
 - 배포 명령: `python scripts/publish_github.py runtime`(처음 한 번·런타임 갱신 시) → `python scripts/publish_github.py app`(화면 빌드 → 엔진 코드 zip·latest.json → NSIS → gh release create). gh CLI 는 포터블(`<gh 폴더>`), `gh auth login` 은 사용자가 한 번.
 - 껍데기(층 C): electron-updater, 자동 다운로드 + 종료 시 설치(강제 재시작 없음), 트레이 "앱 X 설치하고 다시 시작". 코드 서명이 없어 electron-updater 의 서명 검증은 건너뛴다(publisherName 미설정).
 
@@ -248,16 +250,16 @@
 |---|---|---|
 | 0. 검증 | 편집본 5~10편에서 현재 파이프라인 지표 | hit@3 ≥ 0.8, 거절 상위3 ≤ 1 (라벨 30개+) |
 | 1. 엔진화 | §10 의 1~8 | `run` 한 번에 끝, RPC 로 UI 없이도 호출 가능, 테스트 통과 |
-| 2. UI v1 | 회차 추가 → 실행 → 리뷰(재생·판정) → 내보내기 — **구현됨(2026-10-19~20)**: 온보딩(시작 화면·'다음' 진행 띠·도움말 탭), 한 버튼 실행, 토스 결 UI(§9.3), 툴팁 설명, '~해요' 문구, 오른쪽 클릭 복사 | 친구가 설명 없이 한 회차 처리 (실사용 확인 전) |
-| 3. Premiere 검증 | XML 임포트·세로 시퀀스·SRT 캡션 | 친구 Premiere 에서 실사용 1회 |
-| 4. 라이브 v1 | 득템 배너 자동 갱신(승인 모드) + 북마크 — **구현됨(2026-10-19, docs/design/LIVE.md)**: 바닥 아이템 라벨 감지(세트·유니크, CPU) → 제안 카드 승인 → 배너 텍스트·OBS 소스 갱신, 북마크(단축키·채팅 폭주·승인), 녹화 타임코드. 실방송 검증은 친구 PC 에서 | 방송 1회 무사고, 오탐 0 |
+| 2. UI v1 | 회차 추가 → 실행 → 리뷰(재생·판정) → 내보내기 — **구현됨(2026-10-19~20)**: 온보딩(시작 화면·'다음' 진행 띠·도움말 탭), 한 버튼 실행, 토스 결 UI(§9.3), 툴팁 설명, '~해요' 문구, 오른쪽 클릭 복사 | 스트리머가 설명 없이 한 회차 처리 (실사용 확인 전) |
+| 3. Premiere 검증 | XML 임포트·세로 시퀀스·SRT 캡션 | 스트리머 Premiere 에서 실사용 1회 |
+| 4. 라이브 v1 | 득템 배너 자동 갱신(승인 모드) + 북마크 — **구현됨(2026-10-19, docs/design/LIVE.md)**: 바닥 아이템 라벨 감지(세트·유니크, CPU) → 제안 카드 승인 → 배너 텍스트·OBS 소스 갱신, 북마크(단축키·채팅 폭주·승인), 녹화 타임코드. 실방송 검증은 스트리머 PC 에서 | 방송 1회 무사고, 오탐 0 |
 | 5. Phase 2 | 원본 VOD → 편집 포인트 — **파이프라인 구현됨(2026-10-19)**: 회차 종류 original, 원본용 신호 세트(common.yaml pipelines), 배너 OCR 변화 감지 모드, 단계 candidates/align/eval, 편집 포인트 탭(원본 재생·kept/no). 실측은 원본 VOD 입수 뒤 | recall ≥ 0.95, coverage ≤ 10% |
 | 6. 배포 | 설치본·업데이트·고지 — 구현됨: 슬림 NSIS + 첫 실행 구성요소 다운로드, 앱 내 업데이트(배너 + '새 버전이 준비됐어요' 시트, 작업 중 잠금), USB 오프라인 묶음. 남은 것: `gh auth login` 뒤 첫 릴리스 업로드, 깨끗한 PC 실제 설치, 코드 서명(SmartScreen) | 깨끗한 PC 설치 성공 |
 
-## 12. 결정 요청
+## 12. 당시 열린 질문
 
-1. **라이브 기능의 우선순위**: 득템 배너 자동 갱신이 친구에게 실제로 가치가 있는가? (지금 메모장 수동 입력) — 있다면 v1 에 넣고, 아니면 포스트 전용으로 먼저 간다.
+1. **라이브 기능의 우선순위**: 득템 배너 자동 갱신이 스트리머에게 실제로 가치가 있는가? (지금 메모장 수동 입력) — 있다면 v1 에 넣고, 아니면 포스트 전용으로 먼저 간다.
 2. ~~UI 스택~~ **결정(2026-10-18)**: 웹앱 기반 + 데스크톱 완성도(OP.GG 데스크톱 방식) → Electron + React. §9.1.
-3. **대상 범위**: 친구 한 명 전용(프로필 1개) vs 처음부터 멀티 스트리머 구조. 구조는 멀티로 준비하되 v1 은 1명 — 이 가정으로 진행해도 되는가.
+3. **대상 범위**: 스트리머 한 명 전용(프로필 1개) vs 처음부터 멀티 스트리머 구조. 구조는 멀티로 준비하되 v1 은 1명 — 이 가정으로 진행해도 되는가.
 4. **플랫폼 채팅 연동**: 채팅 오버레이 OCR 대신 치지직/SOOP API 로 채팅을 직접 받을지 (정확하지만 인증·약관 확인 필요).
 5. **Phase 0 데이터**: 유튜브 공개본 다운로드로 5~10편을 지금 확보할지 (화질은 OCR·전사에 충분, 원본 오면 교체).

@@ -455,7 +455,7 @@ export function Pipeline() {
               <div className="shorts-pick">
                 <div className="row">
                   <span className="small">
-                    친구 쇼츠 파일 — 이 회차에서 잘라 올린 쇼츠를 주면 어느 구간인지 찾아 정답(keep)으로 기록해요
+                    올린 쇼츠 파일 — 이 회차에서 잘라 올린 쇼츠를 주면 어느 구간인지 찾아 정답(keep)으로 기록해요
                   </span>
                   <span className="grow" style={{ flex: 1 }} />
                   {inShell ? (
@@ -505,7 +505,7 @@ export function Pipeline() {
                 <input
                   className="field"
                   style={{ flex: 1, minWidth: 240 }}
-                  placeholder="친구 편집본 mp4 경로 — 원본의 어느 구간이 살아남았는지 정답을 만들어요"
+                  placeholder="편집본 mp4 경로 — 원본의 어느 구간이 살아남았는지 정답을 만들어요"
                   value={finalPath}
                   onChange={(e) => setFinalPath(e.target.value)}
                   disabled={running}
@@ -540,7 +540,7 @@ export function Pipeline() {
                       value={layout}
                       onChange={(e) => setLayout(e.target.value as Layout)}
                       disabled={running}
-                      title="card = 친구 확정 포맷(제목 띠 + 템 창 크롭 + 채팅). feed 는 실험용"
+                      title="card = 확정 포맷(제목 띠 + 템 창 크롭 + 채팅). feed 는 실험용"
                     >
                       <option value="card">card (확정)</option>
                       <option value="feed">feed (실험)</option>

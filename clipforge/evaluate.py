@@ -1,6 +1,6 @@
 """평가 지표: 후보 vs 정답.
 
-정답(labels) = 친구가 최종본에 실제로 남긴 구간 (labels/<video_id>.csv).
+정답(labels) = 스트리머가 최종본에 실제로 남긴 구간 (labels/<video_id>.csv).
 
 지표
   recall      : 정답 구간 중 후보와 겹치는(≥ min_overlap초) 비율  ← 1순위. 놓치면 치명적

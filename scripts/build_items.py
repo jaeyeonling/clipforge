@@ -6,7 +6,7 @@
 레코드: {id, kind, name_en, name_ko, code, base_en, base_ko, lvl, aliases[]}
   kind ∈ unique | set | runeword | rune | charm | base
 한국어 값은 레거시 음차("할리퀸 크레스트")와 D2R 번역("수수께끼")이 섞여 있으므로 aliases 에 자동 변형(공백 제거 등)을 넣고,
-친구 어휘는 data/d2r/slang.yaml 에서 따로 관리한다. 빠진 한국어명은 meta.missing_ko 에 기록 → 수동 보강.
+스트리머 어휘는 data/d2r/slang.yaml 에서 따로 관리한다. 빠진 한국어명은 meta.missing_ko 에 기록 → 수동 보강.
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ def build(raw: Path) -> dict:
             "counts": counts,
             "n_missing_ko": len(missing),
             "missing_ko": missing,
-            "note": "name_ko 는 레거시 음차/D2R 번역 혼재. 친구 어휘는 slang.yaml",
+            "note": "name_ko 는 레거시 음차/D2R 번역 혼재. 스트리머 어휘는 slang.yaml",
         },
         "items": items,
     }

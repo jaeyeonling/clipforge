@@ -1,4 +1,4 @@
-"""프로젝트/경로/도구 설정 객체. 전역 상수와 PATH 의존을 여기로 모은다 (PRODUCT_ARCHITECTURE §10-1).
+"""프로젝트/경로/도구 설정 객체. 전역 상수와 PATH 의존을 여기로 모은다 (docs/ARCHITECTURE.md · 데이터와 폴더).
 
 - 앱 폴더(코드·모델·폰트·기본 사전)와 데이터 폴더(videos/cache/labels/review/premiere)를 구분한다.
   지금은 둘 다 저장소 루트지만, `CLIPFORGE_DATA` 환경변수나 Project(data_root=...) 로 분리할 수 있다.

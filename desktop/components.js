@@ -1,4 +1,4 @@
-// 런타임 구성요소 관리 (PRODUCT_ARCHITECTURE §9.2): 첫 실행 설치와 앱 내 업데이트가 같은 코드를 쓴다.
+// 런타임 구성요소 관리 (docs/ARCHITECTURE.md · 배포와 업데이트): 첫 실행 설치와 앱 내 업데이트가 같은 코드를 쓴다.
 //   runtime/ (= %LOCALAPPDATA%\clipforge\runtime)  ← 엔진 코드(층 A) + 구성요소(층 B)가 모두 여기. 사용자 쓰기 가능 → 업데이트에 UAC 불필요
 //   매니페스트 latest.json: { engine_code: {version,url,sha256,size}, components: {name: {version,url,sha256,size,label,optional,paths}} }
 //   흐름: plan() → 빠졌거나 버전이 다른 것 → download(이어받기, sha256) → install(7za 로 _staging 에 풀고 경로 교체, 실패 시 _prev 복원) → VERSION.json 갱신

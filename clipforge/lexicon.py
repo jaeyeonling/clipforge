@@ -2,10 +2,10 @@
 
 두 사전을 합쳐 쓴다.
   data/<game>/items.json  : d2data 조인 공식 사전 (영/한 이름, 종류, 레벨). scripts/build_items.py 가 생성
-  data/<game>/slang.yaml  : 커뮤니티·친구 약어 → 표제어 (사람이 관리)
+  data/<game>/slang.yaml  : 커뮤니티·스트리머 약어 → 표제어 (사람이 관리)
 조회 순서: slang 별칭 정확/부분 일치 → items name_ko/aliases 정확 일치 → rapidfuzz partial_ratio ≥ threshold.
-매칭 실패 토큰은 unknown 으로 모아 reports/<id>_unknown_tokens.md 와 친구 질문지에 쓴다.
-지표: 배너 append 토큰 중 매칭률 (docs/ARCHITECTURE.md 9.4).
+매칭 실패 토큰은 unknown 으로 모아 reports/<id>_unknown_tokens.md 와 스트리머 질문지에 쓴다.
+지표: 배너 append 토큰 중 매칭률 (docs/ENGINE.md · 도메인 지식).
 """
 
 from __future__ import annotations
@@ -112,5 +112,5 @@ def report_md(vid: str, matches: list[tuple[float, Match]]) -> str:
         )
     unknown = [m.token for _, m in matches if not m.head]
     if unknown:
-        lines += ["", "## 미매칭 (친구에게 물어볼 것)", ""] + [f"- `{u}`" for u in unknown]
+        lines += ["", "## 미매칭 (스트리머에게 물어볼 것)", ""] + [f"- `{u}`" for u in unknown]
     return "\n".join(lines)

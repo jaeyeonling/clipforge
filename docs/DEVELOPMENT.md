@@ -8,7 +8,7 @@ clipforge 는 세 덩어리로 나뉩니다. 각자 따로 띄우고 고칠 수 
 | `app/` | 화면 (React 18 + TypeScript + Vite). 엔진이 빌드 결과를 그대로 서빙 | `npm run dev` / `npm run build` |
 | `desktop/` | 데스크톱 껍데기 (Electron). 엔진을 자식 프로세스로 띄우고 트레이·알림·업데이트를 맡음 | `npm start` |
 
-설계 배경은 [PRODUCT_ARCHITECTURE.md](PRODUCT_ARCHITECTURE.md), 분석 코어의 결정 기록은 [ARCHITECTURE.md](ARCHITECTURE.md) 에 있어요.
+구조는 [ARCHITECTURE.md](ARCHITECTURE.md), 분석 코어는 [ENGINE.md](ENGINE.md), 문서 전체 지도는 [docs/README.md](README.md) 에 있어요.
 
 ## 준비 (Windows)
 
@@ -34,8 +34,10 @@ cd desktop ; npm start                     # 데스크톱 창. 8765 에 엔진�
 ## 테스트
 
 ```powershell
-python -m pytest                           # 엔진 42개 (ffmpeg·GPU 없이 돌아요)
+python -m pytest                           # 엔진 53개 (ffmpeg·GPU 없이 돌아요)
+scriptseck.ps1                          # CI 와 같은 검사를 한 번에 (lint · 포맷 · 테스트 · 빌드)
 cd desktop ; npm test                      # 구성요소 다운로드·설치·패키징 9개
+cd app ; npm test                          # 화면 37개 (Vitest)
 cd app ; npm run build                     # 타입 검사 + 빌드
 cd desktop ; npm run smoke                 # 창·엔진이 실제로 뜨는지 5초 점검 (로그 %APPDATA%\clipforge\shell.log)
 ```

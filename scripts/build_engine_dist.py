@@ -1,4 +1,4 @@
-"""포터블 엔진 런타임 `engine-dist/` 구성 (PRODUCT_ARCHITECTURE §9: 설치본의 몸통).
+"""포터블 엔진 런타임 `engine-dist/` 구성 (docs/ARCHITECTURE.md · 배포와 업데이트: 런타임 구성요소의 원본).
 
     python scripts/build_engine_dist.py [--out engine-dist] [--skip-packages] [--skip-ffmpeg] [--skip-models] [--smoke]
 
@@ -276,7 +276,7 @@ def step_smoke(out: Path) -> dict:
     return health
 
 
-# ---------- 8. 릴리스 아티팩트 (앱 내 업데이트용, PRODUCT_ARCHITECTURE §9.2) ----------
+# ---------- 8. 릴리스 아티팩트 (앱 내 업데이트용, docs/ARCHITECTURE.md · 배포와 업데이트) ----------
 CODE_PATHS = ["clipforge", "games", "data", "assets", "app"]  # 층 A
 DATA_DIRS = {
     "cache",

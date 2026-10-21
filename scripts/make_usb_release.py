@@ -1,4 +1,4 @@
-"""USB/오프라인 배포 폴더 만들기 — 서버 없이 친구 PC 에 설치.
+"""USB/오프라인 배포 폴더 만들기 — 서버 없이 다른 PC 에 설치.
 
     python scripts/make_usb_release.py --out E:/clipforge-release [--skip-installer] [--skip-components]
 
@@ -7,7 +7,7 @@
   <out>/2-구성요소-위치-등록.cmd                더블클릭하면 %LOCALAPPDATA%\\clipforge\\update-url.txt 에 이 폴더 주소(file://)를 적는다
   <out>/latest.json, engine-code-*.zip, python-base-*.zip, cuda-*.zip, ffmpeg-*.zip, whisper-*.zip
   <out>/설치안내.txt
-친구는 1 → 2 → 앱 실행 순서. 앱은 첫 실행 때 이 폴더에서 구성요소를 읽는다 (네트워크 불필요).
+받는 사람은 1 → 2 → 앱 실행 순서. 앱은 첫 실행 때 이 폴더에서 구성요소를 읽는다 (네트워크 불필요).
 """
 
 from __future__ import annotations

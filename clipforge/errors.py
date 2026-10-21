@@ -1,4 +1,4 @@
-"""오류 분류: 예외 → {code, message, hint, kind} (PRODUCT_ARCHITECTURE §8 에러 등급).
+"""오류 분류: 예외 → {code, message, hint, kind} (docs/ARCHITECTURE.md · 오류).
 
 - kind="user": 사용자가 조치할 수 있는 문제(파일 없음, ffmpeg 없음, 디스크 부족, 선행 단계 미실행). hint 문장 필수.
 - kind="internal": 코드 결함. 메시지는 짧게, 트레이스백은 로그 파일로만.

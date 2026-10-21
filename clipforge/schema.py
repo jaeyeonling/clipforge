@@ -1,4 +1,4 @@
-"""스키마 버전과 마이그레이션 (PRODUCT_ARCHITECTURE §6, §10-8).
+"""스키마 버전과 마이그레이션 (docs/ARCHITECTURE.md · 데이터와 폴더).
 
 버전이 붙는 파일 = 사람이 만든 것이거나 다른 프로그램이 읽는 것:
   project.json(데이터 폴더 루트) · cache/<id>/meta.json · cache/<id>/shorts.json · review/<id>/shorts/index.json · games/<game>.yaml

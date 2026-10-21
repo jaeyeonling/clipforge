@@ -13,14 +13,13 @@ import json
 import time
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _cfg() -> dict:
-    p = ROOT / "games" / "common.yaml"
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("transcribe", {}) if p.exists() else {}
+def _cfg(game: str | None = None) -> dict:
+    from .profiles import load_settings
+
+    return load_settings(game).get("transcribe", {})
 
 
 def _add_nvidia_dlls() -> None:
@@ -103,7 +102,9 @@ def transcribe(cache: Path, backend: str | None = None, force: bool = False) -> 
     wav = cache / "audio.wav"
     if not wav.exists():
         raise EngineError("E_NO_PREP", f"오디오 없음: {wav}", "prep 단계를 먼저 실행하세요.")
-    cfg = _cfg()
+    from .profiles import episode_game
+
+    cfg = _cfg(episode_game(cache))
     language = cfg.get("language", "ko")
     try:
         res = transcribe_faster(wav, cfg.get("faster_whisper", {}), language)

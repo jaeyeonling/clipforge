@@ -246,8 +246,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         return engine.kept_delete(vid, start, end)
 
     @app.get("/api/label-categories")
-    def label_categories():
-        return engine.label_categories()
+    def label_categories(game: str | None = None):
+        return engine.label_categories(game)
 
     # ---- live ----
     @app.get("/api/live")

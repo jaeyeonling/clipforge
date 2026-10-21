@@ -11,8 +11,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import yaml
-
 from ..timeline import Segment, Segments
 from .base import signal
 
@@ -27,7 +25,9 @@ def speech_keyword(cache: Path) -> Segments:
             "speech_keyword", [], meta={"note": "transcript.json 없음 — python -m clipforge.run transcribe <id>"}
         )
     tr = json.loads(tr_p.read_text(encoding="utf-8"))
-    cfg = yaml.safe_load((ROOT / "games" / "common.yaml").read_text(encoding="utf-8")) or {}
+    from ..profiles import episode_game, load_settings
+
+    cfg = load_settings(episode_game(cache))
     groups = cfg.get("speech_keywords", {})
     cooldown = float((cfg.get("speech_kernel") or {}).get("cooldown", 8))
     items: list[Segment] = []

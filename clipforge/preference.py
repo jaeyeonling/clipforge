@@ -125,7 +125,14 @@ def fit_preference(judgments: list[Judgment], default: dict[str, float] | None =
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
     if len(judgments) < MIN_SAMPLES:
         return Preference(
-            default, default, n_keep, n_no, False, 0.0, f"판정 {len(judgments)}개예요. {MIN_SAMPLES}개부터 반영해요", stamp
+            default,
+            default,
+            n_keep,
+            n_no,
+            False,
+            0.0,
+            f"판정 {len(judgments)}개예요. {MIN_SAMPLES}개부터 반영해요",
+            stamp,
         )
     if n_keep == 0 or n_no == 0:
         return Preference(default, default, n_keep, n_no, False, 0.0, "쓸 만함과 안 씀이 둘 다 있어야 반영해요", stamp)

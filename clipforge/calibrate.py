@@ -1,4 +1,4 @@
-"""캘리브레이션: 게임 프로필 ROI 가 지금 화면과 맞는지 점검하고, 미리보기·수정 저장을 제공한다 (PRODUCT_ARCHITECTURE §10-5).
+"""캘리브레이션: 게임 프로필 ROI 가 지금 화면과 맞는지 점검하고, 미리보기·수정 저장을 제공한다 (사용자 값은 데이터 폴더 profiles/ 에 저장).
 
 check(project, vid)   → 각 ROI 의 적중률과 판정 (pass / warn / fail) + 힌트
 preview(project, vid, t) → ROI 박스를 그린 PNG (frames/ 의 1080p 프레임 위)
@@ -11,7 +11,6 @@ import json
 import re
 from pathlib import Path
 
-import yaml
 from PIL import Image, ImageDraw
 
 from .project import Project
@@ -197,8 +196,9 @@ def preview(project: Project, vid: str, t: int | None = None, rois_override: dic
 
 
 def get_rois(project: Project, game: str) -> dict:
-    p = project.games / f"{game}.yaml"
-    prof = yaml.safe_load(p.read_text(encoding="utf-8"))
+    from .profiles import load_profile
+
+    prof = load_profile(game, project.data_root / "profiles")
     return {
         "game": game,
         "resolution_ref": prof.get("resolution_ref"),
@@ -209,17 +209,20 @@ def get_rois(project: Project, game: str) -> dict:
 
 
 def set_rois(project: Project, game: str, rois: dict, panel_bands: dict | None = None) -> dict:
-    """비율 ROI 저장. 값 검증(0~1, w/h > 0) 후 yaml 갱신. 주석은 보존하지 않는다(yaml 덤프) — 변경 이력은 git 으로."""
-    p = project.games / f"{game}.yaml"
-    prof = yaml.safe_load(p.read_text(encoding="utf-8"))
+    """비율 ROI 저장. 값 검증(0~1, w/h > 0) 후 데이터 폴더 profiles/<game>.yaml 에 사용자 값으로 쓴다.
+    앱의 games/<game>.yaml 은 업데이트가 교체하는 곳이라 건드리지 않는다."""
+    from .profiles import save_user_overrides
+
+    if not (project.games / f"{game}.yaml").exists():
+        raise ValueError(f"게임 프로필 없음: {game}")
     clean = {}
     for k, v in rois.items():
         v = [float(x) for x in v]
         if len(v) != 4 or not all(0.0 <= x <= 1.0 for x in v) or v[2] <= 0 or v[3] <= 0:
             raise ValueError(f"ROI 값 오류: {k}={v} (비율 0~1, w/h > 0)")
         clean[k] = [round(x, 4) for x in v]
-    prof["rois"] = clean
+    values: dict = {"rois": clean}
     if panel_bands:
-        prof["panel_bands"] = {k: [round(float(x), 4) for x in v] for k, v in panel_bands.items()}
-    p.write_text(yaml.safe_dump(prof, allow_unicode=True, sort_keys=False, width=200), encoding="utf-8")
-    return {"ok": True, "note": "저장됨. 네이티브 크롭(rois/)이 바뀌는 ROI 는 다음 prep(강제 재계산)부터 반영됩니다."}
+        values["panel_bands"] = {k: [round(float(x), 4) for x in v] for k, v in panel_bands.items()}
+    save_user_overrides(game, values, project.data_root / "profiles")
+    return {"ok": True, "note": "저장했어요. 배너·채팅 영역이 바뀌었다면 '처음부터 다시'로 한 번 돌려야 반영돼요."}

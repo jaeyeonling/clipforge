@@ -378,11 +378,10 @@ class Engine:
         return {"path": str(dst), "dir": str(out_dir), "files": n, "size": dst.stat().st_size}
 
     # ---- Phase 2: 정답 구간(kept) 과 범주 ----
-    def label_categories(self) -> list[dict]:
-        import yaml
+    def label_categories(self, game: str | None = None) -> list[dict]:
+        from ..profiles import load_settings
 
-        p = self.project.games / "common.yaml"
-        cats = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("label_categories") if p.exists() else None
+        cats = load_settings(game, self.project.games).get("label_categories")
         return cats or [{"key": "kept", "label": "kept", "hint": "", "color": "#9be28a", "shortcut": "1"}]
 
     def _kept_rows(self, vid: str) -> list[dict]:

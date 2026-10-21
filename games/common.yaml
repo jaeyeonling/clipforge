@@ -1,7 +1,7 @@
-# 게임 공통 설정 (D2R·DNF 모두). 게임 프로필(d2r.yaml 등)이 이걸 덮어쓴다.
+# 게임 공통 설정. 모든 게임이 같이 쓰고, 게임 프로필(d2r.yaml 등)에 같은 키가 있으면 그 게임에서는 프로필 값이 이긴다 (clipforge/profiles.py load_settings).
 
 # 발화 키워드 → speech_keyword 이벤트. 한국 스트리머 리액션 어휘. 전사 텍스트에서 부분 일치로 찾는다.
-# weight 는 앵커 강도(0~1). 친구 전사가 쌓이면 빈도 기반으로 교체.
+# weight 는 앵커 강도(0~1). 스트리머 전사가 쌓이면 빈도 기반으로 교체.
 speech_keywords:
   강:  {weight: 1.0, words: [미쳤다, 미쳤네, 미친, 대박, 헐, 와 미쳤, 실화냐, 실화야, 말이 돼, 말이 안 돼, 레전드, 역대급, 나왔다, 떴다, 터졌다]}
   중:  {weight: 0.7, words: [와, 우와, 오오, 어어, 뭐야, 뭐지, 잠깐, 잠깐만, 아니, 어 뭐야, 이거 봐, 보세요, 봐봐, 진짜, 진짜요, 개꿀, 꿀, 유니크, 세트, 으뜸, 에테로 나왔]}
@@ -22,7 +22,7 @@ transcribe:
   language: ko
   faster_whisper: {model: large-v3-turbo, device: cuda, compute_type: int8_float16, vad: true, word_timestamps: true}
 
-# 회차 종류별 파이프라인. edited = 친구 편집본 → 쇼츠 (Phase 1), original = 원본 녹화 → 편집 포인트 (Phase 2).
+# 회차 종류별 파이프라인. edited = 스트리머 편집본 → 쇼츠 (Phase 1), original = 원본 녹화 → 편집 포인트 (Phase 2).
 # 원본은 길이가 수십 배라 OCR 이 무거운 신호(chat_text)와 편집본에만 뜻이 있는 신호(cut_density·edit_emphasis)를 뺀다.
 # item_banner 는 원본에서 '변화 감지' 모드(배너 크롭이 바뀔 때만 OCR)로 돈다.
 pipelines:

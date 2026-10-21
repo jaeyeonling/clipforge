@@ -130,7 +130,7 @@ def cmd_eval(a):
 def cmd_align(a):
     """오디오 지문 정렬 (docs/design/ALIGN.md).
     --final  최종본 ↔ 원본 → labels/<vid>.csv kept (Phase 2 정답)
-    --shorts 친구 쇼츠 ↔ 회차 → labels/<vid>.shorts.csv keep (Phase 1 정답 역매핑)"""
+    --shorts 스트리머 쇼츠 ↔ 회차 → labels/<vid>.shorts.csv keep (Phase 1 정답 역매핑)"""
     if not a.final and not a.shorts:
         raise SystemExit("--final 또는 --shorts 중 하나는 필요합니다")
     from .align import (
@@ -474,7 +474,7 @@ def main():
     p = sp.add_parser("align")
     p.add_argument("vid", help="회차 id (prep 완료)")
     p.add_argument("--final", help="최종본 영상 경로 또는 회차 id (원본 → kept 정답)")
-    p.add_argument("--shorts", nargs="+", help="친구 쇼츠 파일/폴더 (편집본 → labels/<id>.shorts.csv keep 정답)")
+    p.add_argument("--shorts", nargs="+", help="스트리머 쇼츠 파일/폴더 (편집본 → labels/<id>.shorts.csv keep 정답)")
     p.set_defaults(f=cmd_align)
     p = sp.add_parser("export")
     p.add_argument("vid")
@@ -493,7 +493,7 @@ def main():
         "--layout",
         default="card",
         choices=["card", "feed"],
-        help="card(기본·친구 확정 2026-10-18: 손글씨 제목 띠+템 창 추적 크롭+방송 채팅) | feed(실험: @마골 구조, shorts_feed/)",
+        help="card(기본·스트리머 확정 2026-10-18: 손글씨 제목 띠+템 창 추적 크롭+방송 채팅) | feed(실험: @마골 구조, shorts_feed/)",
     )
     p.add_argument("--brand", default="디아블로2 하이라이트", help="feed 레이아웃 상단 채널 띠 문구")
     p.set_defaults(f=cmd_export)

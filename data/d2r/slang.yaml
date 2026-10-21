@@ -1,5 +1,5 @@
 # D2R 한국 커뮤니티·기준 채널 약어 사전 v0 (2026-10-18)
-# 표제어 → {aliases, kind, item(items.json id), name_ko_official, name_en, note}. '?' = 미확인, 친구 인터뷰로 확정.
+# 표제어 → {aliases, kind, item(items.json id), name_ko_official, name_en, note}. '?' = 미확인, 스트리머 인터뷰로 확정.
 # 매칭: 공백·구두점 제거 후 정확/부분 일치 → rapidfuzz. OCR 변형(어레/어래, 템/렘, 횃/팻)도 alias 로 적는다.
 
 지존참:
@@ -226,12 +226,12 @@
 슬가:
   kind: unknown
   aliases: []
-  note: '? 친구 약어. 슬픔의 가면? 확인 필요'
+  note: '? 스트리머 약어. 슬픔의 가면? 확인 필요'
 스웹벨트:
   kind: unknown
   aliases:
   - 스웹 벨트
-  note: '? 친구 약어. 확인 필요'
+  note: '? 스트리머 약어. 확인 필요'
 말룬:
   kind: rune
   aliases:

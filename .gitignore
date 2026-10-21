@@ -27,3 +27,4 @@ labels/*.csv
 !labels/_template.csv
 !labels/demo.csv
 experiments/*.json
+profiles/

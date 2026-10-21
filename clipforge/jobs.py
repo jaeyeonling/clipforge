@@ -1,4 +1,4 @@
-"""Job 러너: 파이프라인 단계를 순서대로 실행하며 진행률·로그·취소를 제공한다 (PRODUCT_ARCHITECTURE §10-2).
+"""Job 러너: 파이프라인 단계를 순서대로 실행하며 진행률·로그·취소를 제공한다 (docs/ARCHITECTURE.md · 작업(Job)).
 
     runner = JobRunner(project)
     job = runner.submit("ep59", stages=["prep","transcribe","signals","shorts","export","xml"], params={})
@@ -56,12 +56,19 @@ def episode_kind(project: Project, vid: str, params: dict | None = None) -> str:
     return k if k in ("edited", "original") else "edited"
 
 
-def pipeline_cfg(project: Project, kind: str) -> dict:
-    import yaml
+def pipeline_cfg(project: Project, kind: str, game: str | None = None) -> dict:
+    """회차 종류별 신호 묶음·장면 전환 설정. 게임 프로필의 pipelines 가 있으면 그 게임에서는 그것을 쓴다."""
+    from .profiles import load_settings
 
-    p = project.games / "common.yaml"
-    cfg = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("pipelines", {}) if p.exists() else {}
+    cfg = load_settings(game, project.games).get("pipelines", {})
     return cfg.get(kind) or {"signals": "all", "scene_cuts": kind != "original"}
+
+
+def episode_game_of(project: Project, vid: str) -> str | None:
+    """회차의 게임: 전처리 결과(meta.json) → 등록 정보(episodes.csv) 순."""
+    from .profiles import episode_game
+
+    return episode_game(project.cache / vid) or (project.episode_rows().get(vid) or {}).get("game") or None
 
 
 # ---- 캐시 로더 (run.py 의 CACHE 전역은 저장소 기준이라 데이터 폴더가 분리된 설치본에서는 쓰면 안 된다) ----
@@ -372,7 +379,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 "videos/ 폴더에 영상을 넣거나, 참조 등록한 원본 파일이 아직 그 자리에 있는지 확인하세요.",
             )
         kind = episode_kind(project, vid, job.params)
-        pcfg = pipeline_cfg(project, kind)
+        pcfg = pipeline_cfg(project, kind, episode_game_of(project, vid))
         prog(0.02, f"ffprobe / 단일 패스 디코딩 ({kind})")
         # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
         done_flag = threading.Event()
@@ -458,7 +465,9 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
 
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
         kind = episode_kind(project, vid, job.params)
-        want = job.params.get("signals") or pipeline_cfg(project, kind).get("signals", "all")
+        want = job.params.get("signals") or pipeline_cfg(project, kind, episode_game_of(project, vid)).get(
+            "signals", "all"
+        )
         names = list(REGISTRY) if want == "all" else [n for n in want if n in REGISTRY]
         job.log(f"signals [{kind}]: {', '.join(names)}")
         for i, name in enumerate(names):

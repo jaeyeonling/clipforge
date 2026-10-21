@@ -22,6 +22,7 @@ import json
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 from ..timeline import Segment, Segments
 from .base import signal
@@ -59,7 +60,7 @@ class BannerOCR:
         self.cache: dict[int, str] = {}
         if cache_path.exists():
             self.cache = {int(k): v for k, v in json.loads(cache_path.read_text(encoding="utf-8")).items()}
-        self._eng = None
+        self._eng: Any = None  # RapidOCR (처음 읽을 때 만든다)
         self.calls = 0
 
     def __len__(self) -> int:

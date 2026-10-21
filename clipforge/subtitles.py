@@ -41,7 +41,9 @@ def _clean(text: str) -> str:
 
 def _split_words(words: list[dict], max_chars: int) -> list[tuple[float, float, str]]:
     """단어 리스트를 max_chars 안에서 묶어 (start, end, text) 큐로."""
-    cues, buf, b0 = [], [], None
+    cues: list[tuple[float, float, str]] = []
+    buf: list[dict] = []
+    b0: float = 0.0
     for w in words:
         tok = w["word"].strip()
         if not tok:
@@ -49,8 +51,8 @@ def _split_words(words: list[dict], max_chars: int) -> list[tuple[float, float, 
         cand = (" ".join(x["word"].strip() for x in buf) + " " + tok).strip()
         if buf and len(cand) > max_chars:
             cues.append((b0, buf[-1]["end"], _clean(" ".join(x["word"].strip() for x in buf))))
-            buf, b0 = [], None
-        if b0 is None:
+            buf = []
+        if not buf:
             b0 = w["start"]
         buf.append(w)
     if buf:
@@ -81,7 +83,7 @@ def cues_for_clip(
         else:
             out.extend(_split_words(sg["words"], max_chars))
     # 클립 구간으로 자르고, 최소 길이·겹침 정리
-    cues = []
+    cues: list[tuple[float, float, str]] = []
     for a, b, t in sorted(out):
         a, b = max(a, start), min(b, end)
         if b - a <= 0.05:

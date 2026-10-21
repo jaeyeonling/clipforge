@@ -118,10 +118,9 @@ def parse_time(s: str) -> float:
     parts = s.split(":")
     if len(parts) == 1:
         return float(s)
-    parts = [float(p) for p in parts]
     sec = 0.0
     for p in parts:
-        sec = sec * 60 + p
+        sec = sec * 60 + float(p)
     return sec
 
 

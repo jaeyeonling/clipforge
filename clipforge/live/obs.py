@@ -18,6 +18,7 @@ import hashlib
 import json
 import threading
 import uuid
+from typing import Any
 
 
 class ObsError(Exception):
@@ -29,7 +30,7 @@ class ObsClient:
         self.url, self.password, self.timeout = url, password, timeout
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
-        self._ws = None
+        self._ws: Any = None  # websockets 연결 (connect 뒤)
         self._pending: dict[str, asyncio.Future] = {}
         self.connected = False
         self.obs_version = ""
@@ -52,13 +53,17 @@ class ObsClient:
         self.connected = False
 
     def _run(self, coro):
+        assert self._loop is not None, "connect() 를 먼저"
         fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return fut.result(timeout=self.timeout + 2)
 
     async def _connect(self) -> dict:
         import websockets
 
-        self._ws = await asyncio.wait_for(websockets.connect(self.url, max_size=16 * 1024 * 1024), self.timeout)
+        async def open_ws() -> Any:
+            return await websockets.connect(self.url, max_size=16 * 1024 * 1024)
+
+        self._ws = await asyncio.wait_for(open_ws(), self.timeout)
         hello = json.loads(await asyncio.wait_for(self._ws.recv(), self.timeout))
         if hello.get("op") != 0:
             raise ObsError(f"Hello 가 아니에요: {hello}")
@@ -101,6 +106,7 @@ class ObsClient:
         if not self._ws:
             raise ObsError("연결되지 않음")
         rid = uuid.uuid4().hex
+        assert self._loop is not None
         fut = self._loop.create_future()
         self._pending[rid] = fut
         await self._ws.send(

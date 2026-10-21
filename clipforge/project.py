@@ -12,6 +12,7 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from . import __version__ as ENGINE_VERSION
 from .errors import EngineError
@@ -115,7 +116,7 @@ class Project:
         """첫 실행 진단: 도구·GPU·모델·폰트."""
         import subprocess
 
-        out = {
+        out: dict[str, Any] = {
             "engine_version": ENGINE_VERSION,
             "schema": dict(SCHEMA),
             "project": self.project_info,

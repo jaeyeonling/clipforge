@@ -31,14 +31,14 @@ PY_VER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.m
 EMBED_URL = f"https://www.python.org/ftp/python/{PY_VER}/python-{PY_VER}-embed-amd64.zip"
 HF_REPO = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 MODEL_DIR_NAME = "faster-whisper-large-v3-turbo"
-RUNTIME_EXCLUDE = {"pytest", "httpx", "ruff"}  # 개발 전용
+RUNTIME_EXCLUDE = {"pytest", "httpx", "ruff", "mypy", "types-PyYAML"}  # 개발 전용
 
 
 def log(msg: str) -> None:
     print(f"[dist] {msg}", flush=True)
 
 
-def human(n: int) -> str:
+def human(n: float) -> str:
     for u in ("B", "KB", "MB", "GB"):
         if n < 1024:
             return f"{n:.0f}{u}"

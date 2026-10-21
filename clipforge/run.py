@@ -50,6 +50,14 @@ from .weaklabel import (
 
 # 데이터 폴더 경로. 명령을 실행할 때(main) 채운다 — --help 만으로 폴더를 만들거나 PATH 를 바꾸지 않게.
 _PROJECT: Project | None = None
+
+
+def project() -> Project:
+    """명령 실행 중의 데이터 폴더 (main 이 채운다)."""
+    assert _PROJECT is not None, "main() 에서 Project 를 먼저 만든다"
+    return _PROJECT
+
+
 CACHE = LABELS = REVIEW = Path()
 
 
@@ -194,7 +202,7 @@ def cmd_align(a):
 def cmd_weaklabel(a):
     """제목 → 아이템 키워드 → 배너 추가 시각 → labels/<vid>.shorts.csv (label=title_item)."""
     meta = load_meta(a.vid)
-    ep = load_episode(a.vid, _PROJECT.episodes_csv)
+    ep = load_episode(a.vid, project().episodes_csv)
     title = a.title or (ep or {}).get("title")
     if not title:
         raise SystemExit(f"제목 없음 — episodes.csv 에 {a.vid} 행을 추가하거나 --title 로 주세요")
@@ -252,7 +260,7 @@ def cmd_export(a):
         else:
             out = REVIEW / a.vid / "shorts"
         idx = render_episode_shorts(
-            _PROJECT,
+            project(),
             a.vid,
             out,
             k=a.k,
@@ -323,7 +331,7 @@ def cmd_lexicon(a):
         print(
             f"  {fmt_time(t)}  {m.token:<28} -> {m.head or '?':<14} {m.kind or '':<8} {m.source:<12} {m.score:.0f}  {m.option}"
         )
-    out = _PROJECT.reports
+    out = project().reports
     out.mkdir(exist_ok=True)
     (out / f"{a.vid}_tokens.md").write_text(report_md(a.vid, matches), encoding="utf-8")
     print(f"  -> {out / (a.vid + '_tokens.md')}")
@@ -341,7 +349,7 @@ def cmd_xml(a):
         if ui_p.exists()
         else None
     )
-    out = _PROJECT.premiere
+    out = project().premiere
     for p in export_xml(meta, cands, shorts, ui, out, a.vid, k=a.k):
         print(f"  {p}")
     print(
@@ -407,15 +415,15 @@ def cmd_harvest(a):
         )
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
-    kept = {p.name.split("_")[0] for p in (REVIEW / a.vid / "keep").glob("*.mp4")}
+    kept_ranks = {p.name.split("_")[0] for p in (REVIEW / a.vid / "keep").glob("*.mp4")}
     lab_p = LABELS / f"{a.vid}.csv"
     lines = [] if lab_p.exists() else ["start,end,label,note"]
     for i, s in enumerate(cands.items, 1):
-        if f"{i:03d}" in kept:
+        if f"{i:03d}" in kept_ranks:
             lines.append(f"{s.start:.1f},{s.end:.1f},keep,harvested")
     with open(lab_p, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"[harvest] {len(kept)} segments appended to {lab_p}")
+    print(f"[harvest] {len(kept_ranks)} segments appended to {lab_p}")
 
 
 def main():

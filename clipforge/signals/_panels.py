@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -66,7 +67,7 @@ def panel_titles(cache: Path, bands: dict | None = None, det: bool = False, forc
     for i, p in enumerate(frames):
         im = Image.open(p).convert("RGB")
         W, H = im.size
-        rec = {"txt": {}}
+        rec: dict[str, Any] = {"txt": {}}
         for side, (fx, fy, fw, fh) in bands.items():
             crop = im.crop((int(fx * W), int(fy * H), int((fx + fw) * W), int((fy + fh) * H)))
             crop = crop.resize((crop.width * 2, crop.height * 2))

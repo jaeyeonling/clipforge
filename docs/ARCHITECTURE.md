@@ -170,7 +170,7 @@ HTTP 경로는 `/api` 아래에 있고, 실시간 이벤트는 `/ws` 하나로 �
 
 | 영역 | 포맷 · lint | 테스트 |
 |---|---|---|
-| 엔진 | ruff format · ruff check (`pyproject.toml`) | pytest: 타임라인 · 어댑터 · 후보 · 배너 전이 · 사전 · 자막 · 정렬(합성 오디오) · 라이브 감지(합성 화면) · API · 로컬 전용 접근 · 스키마 · 오류 형태 · 문구 규칙 · 판정 학습 · 프로필 합치기. 실제 방송 샘플이 있을 때만 도는 검증 2개는 CI 에서 건너뛰어요 |
+| 엔진 | ruff format · ruff check · mypy (`pyproject.toml`) | pytest: 타임라인 · 어댑터 · 후보 · 배너 전이 · 사전 · 자막 · 정렬(합성 오디오) · 라이브 감지(합성 화면) · API · 로컬 전용 접근 · 스키마 · 오류 형태 · 문구 규칙 · 판정 학습 · 프로필 합치기. 실제 방송 샘플이 있을 때만 도는 검증 2개는 CI 에서 건너뛰어요 |
 | 화면 | Prettier · ESLint (typescript-eslint · react-hooks) · `tsc` strict | Vitest: 실행 규칙 · 문구 규칙 · 시간 표시 · 탭 · 토스트 · 툴팁 · 판정 반영 표시 |
 | 데스크톱 | Prettier · ESLint | node --test: 구성요소 판정 · 다운로드 검증 · 병렬 설치 순서 · 실패 시 되돌리기 · 패키징 누락 검사 |
 

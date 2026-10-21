@@ -42,7 +42,7 @@ def chat_burst(cache: Path, text_thr: int = 200, smooth: int = 5) -> Curve:
     v = np.asarray(vals, dtype=np.float32)
     if smooth > 1:
         k = np.ones(smooth, dtype=np.float32) / smooth
-        v = np.convolve(v, k, mode="same")
+        v = np.convolve(v, k, mode="same").astype(np.float32)
     return Curve(
         name="chat_burst",
         hop=hop,

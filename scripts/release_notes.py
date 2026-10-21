@@ -37,5 +37,5 @@ def notes(version: str, runtime_tag: str, changelog: str) -> str:
 
 if __name__ == "__main__":
     ver, rt = sys.argv[1], sys.argv[2]
-    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # 콘솔 출력은 TextIOWrapper
     print(notes(ver, rt, (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")))

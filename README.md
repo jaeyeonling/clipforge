@@ -99,7 +99,7 @@ FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, 검사
 
 | 영역 | 포맷 · lint | 테스트 |
 |---|---|---|
-| 엔진 | ruff format · ruff check | pytest |
+| 엔진 | ruff format · ruff check · mypy | pytest |
 | 화면 | Prettier · ESLint · TypeScript strict | Vitest |
 | 데스크톱 | Prettier · ESLint | node --test |
 

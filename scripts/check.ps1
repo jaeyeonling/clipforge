@@ -24,6 +24,7 @@ if ($Fix) {
 
 Step "엔진 lint" "." { & $py -m ruff check . }
 Step "엔진 포맷" "." { & $py -m ruff format --check . }
+Step "엔진 타입" "." { & $py -m mypy }
 Step "엔진 테스트" "." { & $py -m pytest }
 Step "화면 포맷" "app" { npm run format:check }
 Step "화면 lint" "app" { npm run lint }

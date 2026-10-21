@@ -15,6 +15,7 @@ import time
 import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -196,15 +197,16 @@ def _pairs(orig: Fingerprint, final: Fingerprint, p: Params) -> tuple[np.ndarray
     hi = np.searchsorted(orig.hashes, final.hashes, side="right")
     cnt = hi - lo
     ok = (cnt > 0) & (cnt <= p.common_hash_cap)
-    tf, to = [], []
+    tf_parts: list[np.ndarray] = []
+    to_parts: list[np.ndarray] = []
     for i in np.nonzero(ok)[0]:
         o = orig.times[lo[i] : hi[i]]
-        tf.append(np.full(len(o), final.times[i], dtype=np.int64))
-        to.append(o.astype(np.int64))
-    if not tf:
+        tf_parts.append(np.full(len(o), final.times[i], dtype=np.int64))
+        to_parts.append(o.astype(np.int64))
+    if not tf_parts:
         return np.zeros(0, np.int64), np.zeros(0, np.int64)
-    tf = np.concatenate(tf)
-    to = np.concatenate(to)
+    tf = np.concatenate(tf_parts)
+    to = np.concatenate(to_parts)
     order = np.argsort(tf, kind="stable")
     return tf[order], to[order]
 
@@ -255,7 +257,7 @@ def align(orig: Fingerprint, final: Fingerprint, p: Params | None = None) -> tup
             windows.append((ws, ws + win, int(np.median(sel)), v1, margin))
     # 병합
     segs: list[Match] = []
-    cur = None
+    cur: dict[str, Any] | None = None
     for ws, we, o, v, m in windows:
         if cur and abs(o - cur["o"]) <= p.join_tol_frames and ws <= cur["we"] + step:
             cur["we"] = we

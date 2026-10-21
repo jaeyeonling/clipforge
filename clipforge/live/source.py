@@ -73,8 +73,8 @@ class VideoFileSource(FrameSource):
         self.fps = fps
         self.width = width
         self.start_s = start_s
-        self.proc = None
-        self.h = None
+        self.proc: subprocess.Popen[bytes] | None = None
+        self.h = 0  # _open 에서 영상 비율로 정한다
         self.i = 0
         self.t0 = time.time()
 
@@ -125,6 +125,7 @@ class VideoFileSource(FrameSource):
     def next_frame(self):
         if self.proc is None:
             self._open()
+        assert self.proc is not None and self.proc.stdout is not None
         n = self.width * self.h * 3
         buf = self.proc.stdout.read(n)
         if len(buf) < n:

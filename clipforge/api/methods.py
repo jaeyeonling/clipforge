@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from typing import Any
 
 from ..errors import EngineError
 from ..jobs import STAGES, JobRunner
@@ -20,7 +21,7 @@ ApiError = EngineError  # 전송층 오류 = 엔진 오류 같은 타입 (code, 
 def _is_cloud_placeholder(p: Path) -> bool:
     """OneDrive '파일 온디맨드' 자리표시자(내용이 로컬에 없음) 판정. Windows 파일 속성 RECALL_ON_DATA_ACCESS(0x400000) / OFFLINE(0x1000)."""
     try:
-        attrs = p.stat().st_file_attributes  # type: ignore[attr-defined]
+        attrs = p.stat().st_file_attributes  # Windows 전용 속성 (다른 OS 는 AttributeError)
     except (AttributeError, OSError):
         return False
     return bool(attrs & 0x400000) or bool(attrs & 0x1000)
@@ -176,7 +177,7 @@ class Engine:
         return rows[-50:]
 
     def _manifests(self) -> dict[str, dict]:
-        out = {}
+        out: dict[str, dict] = {}
         d = self.project.reports / "jobs"
         if not d.exists():
             return out
@@ -258,7 +259,7 @@ class Engine:
     def _shorts_ground_truth(self, vid: str) -> list[dict]:
         """labels/<vid>.shorts.csv 의 keep 행 중 사람이 UI 에서 누른 것(note 'ui …')이 아닌 것 = 스트리머 쇼츠 역매핑·확정본."""
         p = self._labels_path(vid)
-        out = []
+        out: list[dict] = []
         if not p.exists():
             return out
         with open(p, encoding="utf-8", newline="") as f:
@@ -323,7 +324,7 @@ class Engine:
             "labels_editpoints": p.labels / f"{vid}.csv",
             "data_dir": p.data_root,
         }
-        out = {k: {"path": str(v), "exists": v.exists()} for k, v in items.items()}
+        out: dict[str, Any] = {k: {"path": str(v), "exists": v.exists()} for k, v in items.items()}
         sd = p.review / vid / "shorts"
         out["shorts_count"] = len(list(sd.glob("*.mp4"))) if sd.exists() else 0
         out["video"] = str(p.video_path(vid) or "")
@@ -658,7 +659,7 @@ class Engine:
             "suggestions": [vars(x) for x in s.suggestions[-50:]] if s else [],
             "bookmarks": s.bookmarks[-50:] if s else [],
             "preview_url": f"/media/live/{s.id}/last.jpg?ts={int(prev.stat().st_mtime)}"
-            if prev and prev.exists()
+            if s and prev and prev.exists()
             else None,
         }
 

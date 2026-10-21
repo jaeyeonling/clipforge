@@ -44,7 +44,7 @@ cd desktop ; npm run smoke                 # 창·엔진이 실제로 뜨는지 
 
 | 영역 | 포맷 | lint | 테스트 |
 |---|---|---|---|
-| 엔진 `clipforge/` | `ruff format` | `ruff check` | `pytest` |
+| 엔진 `clipforge/` | `ruff format` | `ruff check` · `mypy` (타입) | `pytest` |
 | 화면 `app/` | Prettier | ESLint (typescript-eslint, react-hooks) | Vitest |
 | 데스크톱 `desktop/` | Prettier | ESLint | `node --test` |
 

@@ -47,7 +47,9 @@ class Report:
 
 
 def evaluate(candidates: Segments, labels: Segments, duration: float, min_overlap: float = 1.0) -> Report:
-    missed, hit_c, miss_c = [], Counter(), Counter()
+    missed: list[Segment] = []
+    hit_c: Counter[str] = Counter()
+    miss_c: Counter[str] = Counter()
     for lab in labels.items:
         if any(lab.overlap(c) >= min(min_overlap, lab.duration) for c in candidates.items):
             hit_c[lab.label] += 1

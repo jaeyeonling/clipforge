@@ -720,7 +720,7 @@ def _stage_export(project: Project, job: Job, prog: Callable[[float, str], None]
         layout=job.params.get("layout", "card"),
         top=job.params.get("top", "title"),
         brand=job.params.get("brand", "디아블로2 하이라이트"),
-        progress=lambda f, m="": prog(0.05 + 0.9 * f, m),
+        progress=lambda f, m="": prog(0.05 + 0.9 * f, m),  # type: ignore[misc]  # 기본값 있는 람다는 추론 불가
     )
     prog(1.0, f"세로 초안 {len(idx)}개를 만들었어요")
 

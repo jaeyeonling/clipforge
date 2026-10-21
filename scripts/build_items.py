@@ -152,7 +152,7 @@ def build(raw: Path) -> dict:
                     "aliases": alias_forms(name_ko or ""),
                 }
             )
-    counts = {}
+    counts: dict[str, int] = {}
     for it in items:
         counts[it["kind"]] = counts.get(it["kind"], 0) + 1
     return {

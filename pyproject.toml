@@ -50,3 +50,18 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["clipforge"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["clipforge", "scripts"]
+check_untyped_defs = true      # 타입을 안 적은 함수 본문도 검사한다
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true
+pretty = true
+
+[[tool.mypy.overrides]]
+# 타입 정보를 싣지 않은 외부 패키지
+module = ["faster_whisper.*", "fontTools.*", "ctranslate2.*"]
+ignore_missing_imports = true

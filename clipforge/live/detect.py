@@ -10,9 +10,13 @@ panel_open(frame)   : 소지품/캐릭터창 열림 (signals._panels 의 제목 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PIL import Image
+
+if TYPE_CHECKING:
+    from ..lexicon import Lexicon
 
 # 등급 → (이름, RGB 조건). 1080p 기준 JPEG 에서 잰 값. 라벨 텍스트 픽셀만 통과해야 하므로 좁게 잡는다.
 GRADES = ["set", "unique", "rare", "magic"]
@@ -63,7 +67,7 @@ def _components(mask: np.ndarray, cell: int) -> list[tuple[int, int, int, int, i
     grid = mask[: gh * cell, : gw * cell].reshape(gh, cell, gw, cell).sum(axis=(1, 3))
     occ = grid >= max(2, cell * cell // 12)  # 셀 안에 라벨 픽셀이 조금이라도 모여 있으면
     seen = np.zeros_like(occ, dtype=bool)
-    out = []
+    out: list[tuple[int, int, int, int, int]] = []
     ys, xs = np.nonzero(occ)
     for y, x in zip(ys, xs, strict=True):
         if seen[y, x]:
@@ -80,9 +84,9 @@ def _components(mask: np.ndarray, cell: int) -> list[tuple[int, int, int, int, i
                     if 0 <= ny < gh and 0 <= nx < gw and occ[ny, nx] and not seen[ny, nx]:
                         seen[ny, nx] = True
                         stack.append((ny, nx))
-        cy = [c[0] for c in cells]
-        cx = [c[1] for c in cells]
-        y0, y1, x0, x1 = min(cy) * cell, (max(cy) + 1) * cell, min(cx) * cell, (max(cx) + 1) * cell
+        rows = [int(c[0]) for c in cells]
+        cols = [int(c[1]) for c in cells]
+        y0, y1, x0, x1 = min(rows) * cell, (max(rows) + 1) * cell, min(cols) * cell, (max(cols) + 1) * cell
         out.append((x0, y0, x1, y1, int(mask[y0:y1, x0:x1].sum())))
     return out
 
@@ -147,7 +151,7 @@ def _merge_row(comps: list[tuple[int, int, int, int, int]], gap: int) -> list[tu
                 break
         else:
             merged.append([x0, y0, x1, y1, px])
-    return [tuple(m) for m in merged]
+    return [(m[0], m[1], m[2], m[3], m[4]) for m in merged]
 
 
 def _iou(a, b) -> float:
@@ -161,9 +165,9 @@ class LabelOCR:
     """라벨 상자 → 텍스트 (RapidOCR, CPU). 2배 확대 후 인식. 결과는 lexicon 으로 정규화."""
 
     def __init__(self, game: str = "d2r"):
-        self._eng = None
+        self._eng: Any = None  # RapidOCR (첫 사용 때 만든다)
         self.game = game
-        self._lex = None
+        self._lex: Lexicon | None = None
 
     def _engine(self):
         if self._eng is None:
@@ -183,7 +187,7 @@ class LabelOCR:
         x0, y0, x1, y1 = label.bbox
         pad = 6
         crop = frame.crop((max(0, x0 - pad), max(0, y0 - pad), min(frame.width, x1 + pad), min(frame.height, y1 + pad)))
-        crop = crop.resize((crop.width * 3, crop.height * 3), Image.LANCZOS)
+        crop = crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
         # 상자가 이미 한 줄 텍스트라 검출(det)을 건너뛰고 인식만 (det 은 작은 크롭에서 단어 일부를 놓친다)
         r = self._engine()(np.asarray(crop), use_det=False, use_cls=False)
         txt = " ".join(t.strip() for t in (r.txts or []) if t.strip()).replace("*", "").strip()
@@ -192,7 +196,7 @@ class LabelOCR:
         if txt:
             try:
                 if self._lex is None:
-                    from ..lexicon import Lexicon
+                    from ..lexicon import Lexicon  # 사전은 처음 읽을 때만 불러온다
 
                     self._lex = Lexicon(self.game)
                 m = self._lex.lookup(txt)

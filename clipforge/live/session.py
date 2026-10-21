@@ -26,9 +26,15 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .detect import LabelOCR, chat_activity, drop_labels
 from .source import make_source
+
+if TYPE_CHECKING:
+    import numpy as np
+
+    from .obs import ObsClient
 
 DEFAULTS = {
     "interval": 1.0,
@@ -73,10 +79,10 @@ class LiveSession:
         self.suggestions: list[Suggestion] = []
         self.bookmarks: list[dict] = []
         self.banner_items: list[str] = []
-        self.obs = None
+        self.obs: ObsClient | None = None
         self.obs_info: dict | None = None
         self._ocr: LabelOCR | None = None
-        self._chat_prev = None
+        self._chat_prev: np.ndarray | None = None
         self._last_chat_mark = 0.0
         self._last_label_t: dict[str, float] = {}
         self._lock = threading.Lock()
@@ -123,13 +129,14 @@ class LiveSession:
         obs_cfg = self.cfg.get("obs")
         if obs_cfg and obs_cfg.get("url"):
             try:
-                from .obs import ObsClient
+                from .obs import ObsClient  # OBS 를 쓸 때만 불러온다
 
-                self.obs = ObsClient(obs_cfg["url"], obs_cfg.get("password", ""))
-                self.obs_info = self.obs.connect()
+                obs = ObsClient(obs_cfg["url"], obs_cfg.get("password", ""))
+                self.obs = obs
+                self.obs_info = obs.connect()
                 src = obs_cfg.get("text_source")
                 if src and not self.banner_items:
-                    cur = self.obs.get_text(src)
+                    cur = obs.get_text(src)
                     self.banner_items = [
                         x.strip() for x in cur.replace(self.cfg["banner_prefix"], "").split(",") if x.strip()
                     ]

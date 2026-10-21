@@ -74,11 +74,12 @@ class FontStack:
 
     def height(self, text: str, size: int) -> tuple[int, int]:
         """(top, bottom) bbox y 범위 — 줄 높이 계산용."""
-        tops, bots = [], []
+        tops: list[int] = []
+        bots: list[int] = []
         for f, s in self.runs(text, size):
             b = f.getbbox(s)
-            tops.append(b[1])
-            bots.append(b[3])
+            tops.append(int(b[1]))
+            bots.append(int(b[3]))
         return (min(tops) if tops else 0, max(bots) if bots else size)
 
 

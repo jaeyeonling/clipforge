@@ -59,25 +59,25 @@ flowchart LR
 
 - **Engine** (`clipforge/`, Python 3.12): one FFmpeg decode pass extracts audio, frames and full-resolution crops of the OCR regions; RapidOCR reads the item banner and chat, faster-whisper the speech. Signals are plugins; per-game screen layout lives in `games/<game>.yaml`. FastAPI over HTTP + WebSocket, bound to 127.0.0.1 only.
 - **UI** (`app/`, React + TypeScript + Vite): served by the engine, identical in a browser and in the desktop window.
-- **Desktop** (`desktop/`, Electron): runs the engine as a child process; tray, notifications, a slim 88 MB installer that downloads the large components (Python runtime, CUDA libraries, FFmpeg, Whisper model) on first run, and in-app updates in three layers (app code, runtime components, shell) with SHA-256 checks and rollback.
+- **Desktop** (`desktop/`, Electron): runs the engine as a child process; tray, notifications, a slim installer that downloads the large components (Python runtime, CUDA libraries, FFmpeg, Whisper model) on first run, and in-app updates in three layers (app code, runtime components, shell) with SHA-256 checks and rollback.
 
 Read more: [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [ENGINE.md](docs/ENGINE.md) · [GAME_PROFILE.md](docs/GAME_PROFILE.md) (adding another game) — in Korean.
 
 ## Install
 
-Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). The installer is not code-signed yet, so SmartScreen asks for "More info → Run anyway". On first launch it downloads about 3.3 GB of engine components. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
+Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). The installer is not code-signed yet, so SmartScreen asks for "More info → Run anyway". On first launch it downloads a few GB of engine components; the setup screen shows the size and time left. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
 
 ## Develop
 
 ```powershell
-python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.txt
+python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.txt -c constraints.txt
 cd app ; npm install ; npm run build ; cd ..
 python -m clipforge.app                    # http://127.0.0.1:8765
 cd desktop ; npm install ; npm start       # desktop window
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # everything CI runs
 ```
 
-Quality gates: ruff (lint + format) and 56 pytest tests for the engine; Prettier, ESLint, strict TypeScript and 37 Vitest tests for the UI; Prettier, ESLint and 9 node tests for the desktop shell — all on a Windows CI runner.
+Quality gates: ruff (lint + format) and pytest for the engine; Prettier, ESLint, strict TypeScript and Vitest for the UI; Prettier, ESLint and node --test for the desktop shell — all on a Windows CI runner.
 
 ## Status
 

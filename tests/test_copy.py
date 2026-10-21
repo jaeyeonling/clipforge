@@ -7,8 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FORMAL = re.compile(r"[가-힣](?:습니다|니다)(?=[\s.!?\"')\]]|$)")
-# 실제 영상 제목을 예로 든 곳처럼, 사용자 문구가 아닌 데이터 문자열
-ALLOW = {"clipforge/weaklabel.py"}
+# 사용자 문구가 아닌 데이터 문자열만 있는 파일을 뺄 때 쓴다. 지금은 없다 — 생기면 이유와 함께 적는다.
+ALLOW: set[str] = set()
 
 
 def _strings(tree: ast.AST):

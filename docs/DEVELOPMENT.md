@@ -15,7 +15,7 @@ clipforge 는 세 덩어리로 나뉩니다. 각자 따로 띄우고 고칠 수 
 ```powershell
 winget install Gyan.FFmpeg                 # ffmpeg (설치 뒤 터미널 재시작)
 python -m venv .venv ; .\.venv\Scripts\activate
-pip install -r requirements.txt            # NVIDIA GPU 가 없으면 nvidia-* 두 줄은 빼도 돼요
+pip install -r requirements.txt -c constraints.txt   # NVIDIA GPU 가 없으면 nvidia-* 두 줄은 빼도 돼요
 cd app ; npm install ; npm run build ; cd ..
 cd desktop ; npm install ; cd ..
 ```
@@ -34,10 +34,10 @@ cd desktop ; npm start                     # 데스크톱 창. 8765 에 엔진�
 ## 테스트
 
 ```powershell
-python -m pytest                           # 엔진 56개 (ffmpeg·GPU 없이 돌아요. 실제 방송 샘플이 있을 때만 도는 검증 2개 포함)
+python -m pytest                           # 엔진 (ffmpeg·GPU 없이 돌아요. 실제 방송 샘플이 있을 때만 도는 검증 2개는 없으면 건너뛰어요)
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사를 한 번에 (lint · 포맷 · 테스트 · 빌드)
-cd desktop ; npm test                      # 구성요소 다운로드·설치·패키징 9개
-cd app ; npm test                          # 화면 37개 (Vitest)
+cd desktop ; npm test                      # 구성요소 다운로드·설치·패키징
+cd app ; npm test                          # 화면 (Vitest)
 cd app ; npm run build                     # 타입 검사 + 빌드
 cd desktop ; npm run smoke                 # 창·엔진이 실제로 뜨는지 5초 점검 (로그 %APPDATA%\clipforge\shell.log)
 ```

@@ -13,7 +13,7 @@ npm run dist                                     # release/clipforge-Setup-<ver>
 set CLIPFORGE_SKIP_ENGINE=1 && npm run pack      # 엔진 없이 빠른 빌드 (툴체인 점검용)
 ```
 
-설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe ≈ 88MB.
+설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe. 크기는 빌드 로그에 나온다.
 대용량 구성요소(파이썬 런타임·CUDA·ffmpeg·Whisper)는 첫 실행 때 `latest.json` 을 보고 받아 `%LOCALAPPDATA%\clipforge\runtime\` 에 둔다.
 데이터는 `%LOCALAPPDATA%\clipforge\data`. 제거해도 런타임·데이터는 남긴다.
 구성요소는 **3개씩 동시에** 받고(`components.apply` concurrency), 받아진 것부터 순서대로 푼다(python-base → cuda 순서 보장). 설치 화면은 기다리는 동안 서비스 소개 슬라이드 5장을 돌린다.

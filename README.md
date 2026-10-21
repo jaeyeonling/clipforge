@@ -44,7 +44,7 @@
 
 1. [Releases](https://github.com/jaeyeonling/clipforge/releases) 에서 `clipforge-Setup-x.y.z.exe` 를 받아 실행해요. 관리자 권한은 필요 없어요.
 2. "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**. 아직 코드 서명이 없어서 떠요.
-3. 처음 켜면 분석 엔진 구성요소(파이썬 런타임 · FFmpeg · 음성 인식 모델 · GPU 가속)를 받아요. 약 3.3GB, 3개씩 동시에 받아요.
+3. 처음 켜면 분석 엔진 구성요소(파이썬 런타임 · FFmpeg · 음성 인식 모델 · GPU 가속)를 받아요. 몇 GB 라 시간이 걸리고, 받을 크기와 남은 시간은 설치 화면에 나와요.
 
 인터넷 없이 전달하려면 구성요소까지 담은 폴더를 만들 수 있어요. [desktop/README.md](desktop/README.md) 를 보세요.
 
@@ -52,7 +52,7 @@
 |---|---|---|
 | OS | Windows 10/11 64비트 | |
 | GPU | 없어도 돼요 (전사가 느려요) | NVIDIA (CUDA 12) — 전사 약 20배, 렌더 NVENC |
-| 디스크 | 런타임 4GB + 회차당 수백 MB | |
+| 디스크 | 여유 10GB 이상 (구성요소 + 회차마다 캐시) | |
 
 사용법은 [docs/USER_GUIDE.md](docs/USER_GUIDE.md) 한 장에 정리돼 있어요.
 
@@ -73,14 +73,14 @@ flowchart LR
 
 - **엔진** (`clipforge/`, Python 3.12): FFmpeg 로 소리·프레임·화면 영역을 한 번에 뽑고, RapidOCR 로 득템 배너와 채팅을, faster-whisper 로 말을 읽어요. 신호는 플러그인이고 게임별 화면 배치는 `games/<게임>.yaml` 에 있어요.
 - **화면** (`app/`, React + Vite): 엔진이 HTTP · WebSocket 으로 진행률과 결과를 보내요. 토스 디자인 결(한 화면 한 버튼, 큰 숫자, '~해요' 문구)을 따라요.
-- **데스크톱** (`desktop/`, Electron): 엔진을 자식 프로세스로 띄우고 트레이 상주 · 알림 · 첫 실행 설치 · 앱 내 업데이트를 맡아요. 설치본은 88MB 이고 큰 구성요소는 처음 켤 때 받아요.
+- **데스크톱** (`desktop/`, Electron): 엔진을 자식 프로세스로 띄우고 트레이 상주 · 알림 · 첫 실행 설치 · 앱 내 업데이트를 맡아요. 설치본은 작게 두고 큰 구성요소는 처음 켤 때 받아요.
 
 지금은 디아블로2 레저렉션(한국어 클라이언트) 방송 화면에 맞춰져 있어요. 다른 게임은 화면 영역과 신호 묶음을 프로필로 더하면 돼요.
 
 ## 개발
 
 ```powershell
-python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.txt
+python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.txt -c constraints.txt
 cd app ; npm install ; npm run build ; cd ..
 python -m clipforge.app                    # http://127.0.0.1:8765
 cd desktop ; npm install ; npm start       # 데스크톱 창
@@ -90,9 +90,9 @@ FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, CLI �
 
 | 영역 | 포맷 · lint | 테스트 |
 |---|---|---|
-| 엔진 | ruff format · ruff check | pytest 56개 |
-| 화면 | Prettier · ESLint · TypeScript strict | Vitest 37개 |
-| 데스크톱 | Prettier · ESLint | node --test 9개 |
+| 엔진 | ruff format · ruff check | pytest |
+| 화면 | Prettier · ESLint · TypeScript strict | Vitest |
+| 데스크톱 | Prettier · ESLint | node --test |
 
 CI 는 Windows 러너에서 세 영역을 모두 돌려요.
 

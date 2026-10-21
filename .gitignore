@@ -24,6 +24,7 @@ app/tsconfig.tsbuildinfo
 /private/
 /episodes.csv
 labels/*.csv
+labels/*.json
 !labels/_template.csv
 !labels/demo.csv
 experiments/*.json

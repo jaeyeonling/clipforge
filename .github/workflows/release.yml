@@ -36,13 +36,13 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12.10" # 런타임과 같은 버전 (python.org 의 Windows 임베더블 배포판이 있는 마지막 3.12)
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -91,7 +91,7 @@ jobs:
       - name: 서명할 앱 실행 파일 올리기
         id: unsigned-app
         if: env.SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-app-exe
           path: desktop/release/win-unpacked/clipforge.exe
@@ -132,7 +132,7 @@ jobs:
       - name: 서명할 설치본 올리기
         id: unsigned-installer
         if: env.SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-installer
           path: desktop/release-installer/clipforge-Setup-*.exe
@@ -190,7 +190,7 @@ jobs:
 
       - name: 결과물 (수동 실행)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clipforge-windows
           path: |

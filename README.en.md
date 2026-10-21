@@ -86,7 +86,7 @@ cd desktop ; npm install ; npm start       # desktop window
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # everything CI runs
 ```
 
-Quality gates: ruff (lint + format), mypy and pytest for the engine; Prettier, ESLint, strict TypeScript and Vitest for the UI; Prettier, ESLint and node --test for the desktop shell — all on a Windows CI runner.
+Quality gates: ruff (lint + format), mypy and pytest for the engine; Prettier, ESLint, strict TypeScript and Vitest for the UI; Prettier, ESLint and node --test for the desktop shell. An integration job renders a synthetic broadcast end to end with the shipped FFmpeg and launches both the dev shell and the packaged app's first-run screen — all on a Windows CI runner.
 
 ## Status
 

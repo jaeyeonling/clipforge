@@ -174,7 +174,7 @@ HTTP 경로는 `/api` 아래에 있고, 실시간 이벤트는 `/ws` 하나로 �
 | 화면 | Prettier · ESLint (typescript-eslint · react-hooks) · `tsc` strict | Vitest: 실행 규칙 · 문구 규칙 · 시간 표시 · 탭 · 토스트 · 툴팁 · 판정 반영 표시 |
 | 데스크톱 | Prettier · ESLint | node --test: 구성요소 판정 · 다운로드 검증 · 병렬 설치 순서 · 실패 시 되돌리기 · 패키징 누락 검사 |
 
-- `scripts/check.ps1` 이 CI 와 같은 순서로 전부 돌려요. CI 는 Windows 러너에서 세 영역을 따로 돌려요.
+- `scripts/check.ps1` 이 CI 와 같은 순서로 전부 돌려요. CI 는 Windows 러너에서 세 영역을 따로 돌리고, 통합 작업이 합성 방송을 실제 ffmpeg · OCR 로 세로 초안 · Premiere XML 까지 만든 뒤 데스크톱 앱(개발 모드 · 설치본 첫 실행 화면)을 띄워 확인해요.
 - 화면이 걸린 변경은 데스크톱 `--smoke` 캡처로 확인해요. 설치본은 빈 런타임 폴더에서 `--auto-setup --smoke` 로 첫 실행 전체를 돌려 봐요.
 - 한글 렌더는 `scripts/check_fonts.py` 가 번들 글꼴로 완성형 한글 전체를 그려 빠진 글자와 획이 얇아지는 글자를 잡아요.
 

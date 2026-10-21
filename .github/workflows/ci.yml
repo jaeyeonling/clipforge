@@ -79,3 +79,70 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm test
+
+  integration:
+    name: 통합 · 실제 영상 · 데스크톱 실행
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12.10" # 런타임과 같은 버전
+          cache: pip
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            desktop/package-lock.json
+      - name: 엔진 의존성 (GPU 휠 제외)
+        run: |
+          grep -v '^nvidia-' requirements.txt > requirements-ci.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt -c constraints.txt
+      # 사용자가 첫 실행 때 받는 것과 같은 FFmpeg · 런타임 매니페스트를 런타임 릴리스에서 받는다
+      - name: 런타임 릴리스 (FFmpeg · latest.json)
+        run: |
+          rt=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("runtime-"))][0].tagName')
+          mkdir -p runtime-feed ffmpeg
+          gh release download "$rt" --repo "$GITHUB_REPOSITORY" --pattern latest.json --pattern 'ffmpeg-*.zip' --dir runtime-feed
+          7z x -y -offmpeg runtime-feed/ffmpeg-*.zip > /dev/null
+          rm runtime-feed/ffmpeg-*.zip
+          echo "$PWD/ffmpeg/bin" >> "$GITHUB_PATH"
+      - name: OCR 모델 위치
+        id: ocr
+        run: echo "dir=$(python -c 'import os, rapidocr; print(os.path.join(os.path.dirname(rapidocr.__file__), "models"))')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ${{ steps.ocr.outputs.dir }}
+          key: rapidocr-models-${{ hashFiles('constraints.txt') }}
+      - name: 합성 방송 → 세로 초안 · Premiere XML (ffmpeg · OCR)
+        run: python -m pytest -m integration -p no:cacheprovider
+      - name: 화면 빌드
+        working-directory: app
+        run: npm ci && npm run build
+      - name: 데스크톱 의존성
+        working-directory: desktop
+        run: npm ci
+      - name: 데스크톱 실행 (개발 모드 → 엔진 → 화면)
+        working-directory: desktop
+        run: node scripts/smoke.js dev
+      - name: 설치본 첫 실행 화면 (패키징된 앱, 빈 런타임)
+        working-directory: desktop
+        run: |
+          CLIPFORGE_SKIP_ENGINE=1 npx electron-builder --win --dir --config electron-builder.config.js --publish never
+          node scripts/smoke.js setup release/win-unpacked/clipforge.exe ../runtime-feed
+      - name: 화면 캡처 남기기
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-screens
+          path: ~/AppData/Roaming/clipforge/*.png
+          if-no-files-found: ignore

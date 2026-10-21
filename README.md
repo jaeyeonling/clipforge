@@ -100,6 +100,7 @@ FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, 검사
 | 영역 | 포맷 · lint | 테스트 |
 |---|---|---|
 | 엔진 | ruff format · ruff check · mypy | pytest |
+| 통합 | — | 합성 방송 → 세로 초안 · Premiere XML (실제 ffmpeg · OCR), 데스크톱 실행 · 설치본 첫 실행 화면 |
 | 화면 | Prettier · ESLint · TypeScript strict | Vitest |
 | 데스크톱 | Prettier · ESLint | node --test |
 

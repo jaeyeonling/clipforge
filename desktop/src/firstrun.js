@@ -75,6 +75,7 @@ function runSetup(cfg) {
             selected: it.entry.optional ? gpu : true,
             have: C.savedBytes(cfg.downloads, it.entry),
           }));
+        log(`setup: 받을 구성요소 ${items.length}개 (${items.map((it) => it.name).join(", ")})`);
         sendSetup({
           type: "plan",
           items,

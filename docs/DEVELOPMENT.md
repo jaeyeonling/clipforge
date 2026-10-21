@@ -40,6 +40,8 @@ cd desktop ; npm test                      # 구성요소 다운로드·설치·
 cd app ; npm test                          # 화면 (Vitest)
 cd app ; npm run build                     # 타입 검사 + 빌드
 cd desktop ; npm run smoke                 # 창·엔진이 실제로 뜨는지 5초 점검 (로그 %APPDATA%\clipforge\shell.log)
+python -m pytest -m integration           # 통합: ffmpeg 로 합성 방송을 만들어 세로 초안 · Premiere XML 까지 (ffmpeg 가 없으면 건너뜀)
+cd desktop ; node scripts/smoke.js dev    # 데스크톱 실행 점검 (로그로 확인). 설치본은 smoke.js setup <exe> <매니페스트 폴더>
 ```
 
 | 영역 | 포맷 | lint | 테스트 |

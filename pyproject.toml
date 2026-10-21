@@ -15,6 +15,7 @@ Changelog = "https://github.com/jaeyeonling/clipforge/blob/main/CHANGELOG.md"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["integration: ffmpeg 로 실제 영상을 처리하는 느린 테스트 (ffmpeg 가 없으면 건너뜀)"]
 
 [tool.ruff]
 target-version = "py312"

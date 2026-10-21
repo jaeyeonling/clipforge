@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .preference import DEFAULT_WEIGHTS as WEIGHTS  # 기본 축 가중치. 판정이 쌓이면 preference 가 다시 맞춘다
+from .preference import AXIS_WEIGHTS as WEIGHTS  # 기본 축 가중치. 판정이 쌓이면 preference 가 다시 맞춘다
 from .timeline import Curve, Segments, fmt_time
 
 VARIANTS = {"short": {"pre": 5.0, "post": 12.0}, "story": {"pre": 12.0, "post": 22.0}}

@@ -99,3 +99,15 @@ def write_weak_labels(
         w.writeheader()
         w.writerows(rows)
     return p
+
+
+def short_episode_label(title: str) -> str:
+    """제목 → 회차 라벨. "(N시간 편집본) 래더 12기 59일차만에 … 【…】" → "래더 12기 59일차". 못 찾으면 앞 28자."""
+    import re as _re
+
+    t = _re.sub(r"^\s*\([^)]*\)\s*", "", title or "")
+    m = _re.search(r"(래더\s*\d+기[^0-9]*?\d+\s*(?:~\s*\d+\s*)?일차)", t)
+    if m:
+        return _re.sub(r"\s+", " ", m.group(1)).strip()
+    t = t.split("【")[0].strip(" !")
+    return (t[:28] + "…") if len(t) > 28 else t

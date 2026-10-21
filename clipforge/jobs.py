@@ -517,16 +517,15 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, f"순간 신호 {len(names)}가지를 찾았어요")
     elif stage == "candidates":
         # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터
-        from .candidates import make_candidates
+        from .candidates import SIGNAL_WEIGHTS, make_candidates
         from .profiles import load_profile
-        from .run import DEFAULT_WEIGHTS
 
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
         meta = _meta(project, vid)
         curves, events = _signals(project, vid)
         if not curves and not events:
             raise EngineError("E_NO_SIGNALS", "신호 결과가 없어요", "signals 단계를 먼저 실행하세요.")
-        weights = dict(DEFAULT_WEIGHTS)
+        weights = dict(SIGNAL_WEIGHTS)
         weights.update(job.params.get("weights") or {})
         kernels = load_profile(meta.get("game", "d2r")).get("events", {}) or {}
         segs = make_candidates(
@@ -633,7 +632,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         prog(1.0, f"쇼츠 후보 {len(cands)}개를 골랐어요")
     elif stage == "export":
         from .render import render_shorts
-        from .run import load_episode, short_episode_label
+        from .weaklabel import load_episode, short_episode_label
 
         _require(cache / "shorts.json", "E_NO_SHORTS", "후보(shorts.json)", "shorts 단계를 먼저 실행하세요.")
         meta = _meta(project, vid)

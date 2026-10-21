@@ -24,7 +24,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from .candidates import DEFAULT_WEIGHTS, make_candidates
+from .candidates import SIGNAL_WEIGHTS, make_candidates
 from .errors import EngineError, classify
 from .eval_shorts import evaluate_shorts
 from .evaluate import evaluate
@@ -32,6 +32,7 @@ from .export_xml import export_xml
 from .lexicon import Lexicon, banner_tokens, report_md
 from .preprocess import preprocess
 from .profiles import load_profile
+from .project import Project
 from .render import render_shorts
 from .schema import load_json
 from .shorts import ShortCandidate, make_shorts, save_shorts
@@ -39,10 +40,18 @@ from .shorts import pretty as shorts_pretty
 from .signals import REGISTRY, run_signal
 from .timeline import Curve, Segments, fmt_time
 from .transcribe import transcribe
-from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
+from .weaklabel import (
+    load_episode,
+    load_slang,
+    match_banner,
+    short_episode_label,
+    title_keywords,
+    write_weak_labels,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE, LABELS, REVIEW = ROOT / "cache", ROOT / "labels", ROOT / "review"
+_PROJECT = Project()  # CLIPFORGE_DATA 가 있으면 그 데이터 폴더, 없으면 저장소
+CACHE, LABELS, REVIEW = _PROJECT.cache, _PROJECT.labels, _PROJECT.review
 
 
 def load_meta(vid: str) -> dict:
@@ -71,7 +80,7 @@ def load_kernels(vid: str) -> dict[str, dict]:
 
 
 def parse_weights(items: list[str] | None) -> dict[str, float]:
-    w = dict(DEFAULT_WEIGHTS)
+    w = dict(SIGNAL_WEIGHTS)
     for it in items or []:
         k, v = it.split("=")
         w[k] = float(v)
@@ -226,18 +235,6 @@ def cmd_sweep(a):
         print(f"{thr:5.2f} {r.recall:7.1%} {r.precision:7.1%} {r.coverage:7.1%} {r.n_candidates:4d}")
 
 
-def short_episode_label(title: str) -> str:
-    """제목 → 회차 라벨. "(7시간 편집본) 래더 12기 59일차만에 … 【래더12기#42】" → "래더 12기 59일차"."""
-    import re as _re
-
-    t = _re.sub(r"^\s*\([^)]*\)\s*", "", title or "")
-    m = _re.search(r"(래더\s*\d+기[^0-9]*?\d+\s*(?:~\s*\d+\s*)?일차)", t)
-    if m:
-        return _re.sub(r"\s+", " ", m.group(1)).strip()
-    t = t.split("【")[0].strip(" !")
-    return (t[:28] + "…") if len(t) > 28 else t
-
-
 def cmd_export(a):
     """후보를 mp4 클립으로 잘라 review/<vid>/ 에 저장. 쓸 것은 keep/ 로 옮기면 그게 레이블이 된다.
     --shorts: shorts.json 의 후보를 9:16 세로 초안으로 렌더 (review/<vid>/shorts/)."""
@@ -352,7 +349,7 @@ def cmd_lexicon(a):
         print(
             f"  {fmt_time(t)}  {m.token:<28} -> {m.head or '?':<14} {m.kind or '':<8} {m.source:<12} {m.score:.0f}  {m.option}"
         )
-    out = ROOT / "reports"
+    out = _PROJECT.reports
     out.mkdir(exist_ok=True)
     (out / f"{a.vid}_tokens.md").write_text(report_md(a.vid, matches), encoding="utf-8")
     print(f"  -> {out / (a.vid + '_tokens.md')}")
@@ -370,7 +367,7 @@ def cmd_xml(a):
         if ui_p.exists()
         else None
     )
-    out = ROOT / "premiere"
+    out = _PROJECT.premiere
     for p in export_xml(meta, cands, shorts, ui, out, a.vid, k=a.k):
         print(f"  {p}")
     print(

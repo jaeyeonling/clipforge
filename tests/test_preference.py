@@ -7,7 +7,7 @@ import pytest
 
 from clipforge.preference import (
     AXES,
-    DEFAULT_WEIGHTS,
+    AXIS_WEIGHTS,
     MIN_SAMPLES,
     Judgment,
     collect_judgments,
@@ -24,12 +24,12 @@ def _j(keep: bool, **axes) -> Judgment:
 
 def test_too_few_judgments_keep_default():
     pref = fit_preference([_j(True), _j(False)] * ((MIN_SAMPLES - 1) // 2))
-    assert not pref.learned and pref.weights == DEFAULT_WEIGHTS and "부터 반영" in pref.reason
+    assert not pref.learned and pref.weights == AXIS_WEIGHTS and "부터 반영" in pref.reason
 
 
 def test_one_sided_judgments_keep_default():
     pref = fit_preference([_j(True, chat=0.9)] * 12)
-    assert not pref.learned and pref.weights == DEFAULT_WEIGHTS and pref.n_keep == 12 and pref.n_no == 0
+    assert not pref.learned and pref.weights == AXIS_WEIGHTS and pref.n_keep == 12 and pref.n_no == 0
 
 
 def test_clear_preference_moves_weight_toward_that_axis():
@@ -38,8 +38,8 @@ def test_clear_preference_moves_weight_toward_that_axis():
     nos = [_j(False, chat=0.05, payoff=1.0) for _ in range(8)]
     pref = fit_preference(keeps + nos)
     assert pref.learned and 0 < pref.blend < 1
-    assert pref.weights["chat"] > DEFAULT_WEIGHTS["chat"]
-    assert pref.weights["payoff"] < DEFAULT_WEIGHTS["payoff"]
+    assert pref.weights["chat"] > AXIS_WEIGHTS["chat"]
+    assert pref.weights["payoff"] < AXIS_WEIGHTS["payoff"]
     assert sum(pref.weights.values()) == pytest.approx(1.0, abs=1e-3)
     assert all(v >= 0 for v in pref.weights.values())
 

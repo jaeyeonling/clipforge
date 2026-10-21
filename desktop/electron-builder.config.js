@@ -53,7 +53,7 @@ module.exports = {
     createStartMenuShortcut: true,
     shortcutName: "clipforge",
     runAfterFinish: true,
-    deleteAppDataOnUninstall: false, // 라벨·판정·런타임은 지우지 않는다 (§6 원칙)
+    deleteAppDataOnUninstall: false, // 라벨·판정·런타임은 지우지 않는다 (docs/ARCHITECTURE.md · 데이터와 폴더: 앱과 데이터를 나눈다)
     installerIcon: "assets/icon.ico",
     uninstallerIcon: "assets/icon.ico",
     uninstallDisplayName: "clipforge",

@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 AXES = ("payoff", "reaction", "chat", "completeness", "hook")
-DEFAULT_WEIGHTS: dict[str, float] = {"payoff": 0.35, "reaction": 0.25, "chat": 0.15, "completeness": 0.15, "hook": 0.10}
+AXIS_WEIGHTS: dict[str, float] = {"payoff": 0.35, "reaction": 0.25, "chat": 0.15, "completeness": 0.15, "hook": 0.10}
 MIN_SAMPLES = 6  # 이보다 적으면 배우지 않는다
 SHRINK = 20.0  # 판정 20개에서 학습값과 기본값을 반반 섞는다
 PRIOR_SCALE = 4.0  # 기본 가중치를 로지스틱 계수로 옮길 때의 배율 (사전 분포의 중심)
@@ -41,7 +41,7 @@ class Judgment:
 @dataclass
 class Preference:
     weights: dict[str, float]
-    default: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+    default: dict[str, float] = field(default_factory=lambda: dict(AXIS_WEIGHTS))
     n_keep: int = 0
     n_no: int = 0
     learned: bool = False
@@ -119,7 +119,7 @@ def _fit_logistic(x: np.ndarray, y: np.ndarray, prior: np.ndarray, l2: float = L
 
 
 def fit_preference(judgments: list[Judgment], default: dict[str, float] | None = None) -> Preference:
-    default = dict(default or DEFAULT_WEIGHTS)
+    default = dict(default or AXIS_WEIGHTS)
     n_keep = sum(1 for j in judgments if j.keep)
     n_no = len(judgments) - n_keep
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S")

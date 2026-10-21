@@ -1,4 +1,4 @@
-"""§10-6 오류 분류·로그·매니페스트, §10-8 스키마 버전."""
+"""오류 분류·작업 로그·매니페스트, 저장 파일의 스키마 버전 (docs/ARCHITECTURE.md · 오류, 데이터와 폴더)."""
 
 import json
 import subprocess

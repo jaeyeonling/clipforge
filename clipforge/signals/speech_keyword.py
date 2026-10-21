@@ -14,8 +14,6 @@ from pathlib import Path
 from ..timeline import Segment, Segments
 from .base import signal
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-
 
 @signal("speech_keyword")
 def speech_keyword(cache: Path) -> Segments:

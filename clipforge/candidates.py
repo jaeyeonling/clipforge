@@ -20,7 +20,7 @@ from .adapters import events_to_curve
 from .timeline import Curve, Segment, Segments
 
 # 베이스라인 가중치. Curve 신호는 z-score 후 곱해지고, Events 신호는 어댑터의 0~1 곡선에 곱해진다.
-DEFAULT_WEIGHTS = {
+SIGNAL_WEIGHTS = {
     "audio_loudness": 1.0,
     "frame_motion": 0.0,
     "chat_burst": 0.5,
@@ -59,7 +59,7 @@ def make_candidates(
     min_len: float = 3.0,
     max_candidates: int = 40,
 ) -> Segments:
-    weights = weights or DEFAULT_WEIGHTS
+    weights = weights or SIGNAL_WEIGHTS
     events = events or {}
     kernels = {**DEFAULT_KERNELS, **(kernels or {})}
     n = int(duration / hop) + 1

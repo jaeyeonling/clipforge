@@ -13,7 +13,7 @@ import json
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from .paths import APP_ROOT
 
 
 def _cfg(game: str | None = None) -> dict:
@@ -42,7 +42,7 @@ def transcribe_faster(wav: Path, cfg: dict, language: str) -> dict:
 
     t0 = time.time()
     name = cfg.get("model", "large-v3-turbo")
-    local = ROOT / "models" / f"faster-whisper-{name}"  # 배포 번들(engine-dist/models) → 오프라인
+    local = APP_ROOT / "models" / f"faster-whisper-{name}"  # 배포 번들(engine-dist/models) → 오프라인
     src = str(local) if (local / "model.bin").exists() else name
     device, compute = cfg.get("device", "cuda"), cfg.get("compute_type", "int8_float16")
     try:

@@ -16,10 +16,11 @@ from pathlib import Path
 
 from PIL import ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parent.parent
+from .paths import APP_ROOT
+
 FONT_FILES = {
-    "pen": ROOT / "assets" / "fonts" / "NanumPenScript-Regular.ttf",
-    "black": ROOT / "assets" / "fonts" / "BlackHanSans-Regular.ttf",
+    "pen": APP_ROOT / "assets" / "fonts" / "NanumPenScript-Regular.ttf",
+    "black": APP_ROOT / "assets" / "fonts" / "BlackHanSans-Regular.ttf",
     "gothic": Path("C:/Windows/Fonts/malgunbd.ttf"),
     "gothic_regular": Path("C:/Windows/Fonts/malgun.ttf"),
 }

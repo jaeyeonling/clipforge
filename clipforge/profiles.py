@@ -7,13 +7,13 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
-GAMES = ROOT / "games"
+from .paths import APP_ROOT, data_root
+
+GAMES = APP_ROOT / "games"
 
 # 게임 프로필이 덮어쓸 수 있는 공통 설정 키
 SHARED_KEYS = ("speech_keywords", "chat_keywords", "speech_kernel", "transcribe", "pipelines", "label_categories")
@@ -60,7 +60,7 @@ USER_KEYS = ("rois", "panel_bands")
 
 
 def user_profiles_dir() -> Path:
-    return Path(os.environ.get("CLIPFORGE_DATA", str(ROOT))) / "profiles"
+    return data_root() / "profiles"
 
 
 def load_user_overrides(game: str, user_dir: Path | None = None) -> dict:

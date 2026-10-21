@@ -14,9 +14,9 @@ from pathlib import Path
 import yaml
 from rapidfuzz import fuzz
 
+from .paths import APP_ROOT, data_root
 from .timeline import Segments
 
-ROOT = Path(__file__).resolve().parent.parent
 NORM = re.compile(r"[\s,.'\"`★()\[\]【】!?/~:·-]")
 
 
@@ -25,12 +25,12 @@ def norm(s: str) -> str:
 
 
 def load_slang(game: str) -> dict:
-    p = ROOT / "data" / game / "slang.yaml"
+    p = APP_ROOT / "data" / game / "slang.yaml"
     return yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
 def load_episode(vid: str, csv_path: Path | None = None) -> dict | None:
-    p = Path(csv_path) if csv_path else ROOT / "episodes.csv"
+    p = Path(csv_path) if csv_path else data_root() / "episodes.csv"  # 회차 목록은 데이터 폴더
     if not p.exists():
         return None
     with open(p, encoding="utf-8", newline="") as f:

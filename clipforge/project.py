@@ -15,9 +15,8 @@ from pathlib import Path
 
 from . import __version__ as ENGINE_VERSION
 from .errors import EngineError
+from .paths import APP_ROOT
 from .schema import SCHEMA, load_json, load_project_file
-
-APP_ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_ffmpeg() -> Path | None:

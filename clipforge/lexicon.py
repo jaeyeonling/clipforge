@@ -13,12 +13,12 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 import yaml
 from rapidfuzz import fuzz, process
 
-ROOT = Path(__file__).resolve().parent.parent
+from .paths import APP_ROOT
+
 STRIP = re.compile(r"[\s'\"`★()\[\]【】!?~:·\-]")
 PAREN = re.compile(r"\([^)]*\)")  # "기드참(매찬34)" → 괄호 안은 옵션
 HEADER = re.compile(r"^(득템|득렘|득램|특템|특램|템|렘|엄|츠)+")
@@ -40,7 +40,7 @@ class Match:
 
 class Lexicon:
     def __init__(self, game: str = "d2r"):
-        d = ROOT / "data" / game
+        d = APP_ROOT / "data" / game
         self.items = (
             json.loads((d / "items.json").read_text(encoding="utf-8"))["items"] if (d / "items.json").exists() else []
         )

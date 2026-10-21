@@ -49,9 +49,9 @@ from .weaklabel import (
     write_weak_labels,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
-_PROJECT = Project()  # CLIPFORGE_DATA 가 있으면 그 데이터 폴더, 없으면 저장소
-CACHE, LABELS, REVIEW = _PROJECT.cache, _PROJECT.labels, _PROJECT.review
+# 데이터 폴더 경로. 명령을 실행할 때(main) 채운다 — --help 만으로 폴더를 만들거나 PATH 를 바꾸지 않게.
+_PROJECT: Project | None = None
+CACHE = LABELS = REVIEW = Path()
 
 
 def load_meta(vid: str) -> dict:
@@ -195,7 +195,7 @@ def cmd_align(a):
 def cmd_weaklabel(a):
     """제목 → 아이템 키워드 → 배너 추가 시각 → labels/<vid>.shorts.csv (label=title_item)."""
     meta = load_meta(a.vid)
-    ep = load_episode(a.vid)
+    ep = load_episode(a.vid, _PROJECT.episodes_csv)
     title = a.title or (ep or {}).get("title")
     if not title:
         raise SystemExit(f"제목 없음 — episodes.csv 에 {a.vid} 행을 추가하거나 --title 로 주세요")
@@ -264,7 +264,7 @@ def cmd_export(a):
             if chat_p.exists()
             else None
         )
-        ep = load_episode(a.vid) or {}
+        ep = load_episode(a.vid, _PROJECT.episodes_csv) or {}
         label = short_episode_label(ep.get("title", "")) or a.vid
         # 기본(card + title) = 확정 포맷 → shorts/. 그 외 실험 렌더는 shorts_<layout|top>/ 로 분리
         if a.layout == "feed":
@@ -517,6 +517,9 @@ def main():
     p.set_defaults(f=cmd_transcribe)
 
     a = ap.parse_args()
+    global _PROJECT, CACHE, LABELS, REVIEW
+    _PROJECT = Project()  # CLIPFORGE_DATA 가 있으면 그 데이터 폴더, 없으면 저장소
+    CACHE, LABELS, REVIEW = _PROJECT.cache, _PROJECT.labels, _PROJECT.review
     try:
         a.f(a)
     except (FileNotFoundError, EngineError) as e:

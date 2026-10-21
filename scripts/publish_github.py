@@ -106,6 +106,8 @@ def cmd_runtime(a, cfg) -> None:
         ]
     )
     zips = sorted(p for p in rel.glob("*.zip") if not p.name.startswith("engine-code"))
+    # latest.json 도 올린다: 앱 릴리스 워크플로가 여기서 구성요소 항목(주소·해시)을 그대로 가져간다
+    assets = [*zips, rel / "latest.json"]
     print(f"[publish] {tag}: " + ", ".join(f"{z.name} ({z.stat().st_size / 1e6:.0f}MB)" for z in zips))
     if a.dry_run:
         return
@@ -113,7 +115,7 @@ def cmd_runtime(a, cfg) -> None:
         r["tagName"] for r in gh_json(["release", "list", "--repo", slug, "--json", "tagName", "--limit", "50"])
     ]
     if tag in existing:
-        sh([GH, "release", "upload", "--repo", slug, tag, "--clobber", *map(str, zips)])
+        sh([GH, "release", "upload", "--repo", slug, tag, "--clobber", *map(str, assets)])
     else:
         sh(
             [
@@ -126,8 +128,10 @@ def cmd_runtime(a, cfg) -> None:
                 "--title",
                 f"런타임 {tag}",
                 "--notes",
-                "파이썬 런타임·GPU 가속(선택)·FFmpeg·Whisper 모델. 앱이 첫 실행 때 내려받는 구성요소.",
-                *map(str, zips),
+                "파이썬 런타임 · FFmpeg · Whisper 모델. 앱이 첫 실행 때 내려받는 구성요소예요 (GPU 가속은 PyPI 의 NVIDIA 휠).",
+                # 앱은 releases/latest 에서 업데이트를 찾으므로 런타임 릴리스는 '최신'이 되면 안 된다
+                "--latest=false",
+                *map(str, assets),
             ]
         )
 

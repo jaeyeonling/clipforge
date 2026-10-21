@@ -441,18 +441,43 @@ def _media_routes(engine: Engine) -> APIRouter:
     return r
 
 
+# 화면이 쓰는 것만 허용한다: 자기 출처의 스크립트 · 스타일 · 미디어, 같은 엔진으로의 WebSocket.
+# 인라인 스크립트 · 외부 리소스 · 다른 사이트에 끼워 넣기는 막는다. (React 의 style 속성은 CSSOM 이라 영향 없음)
+CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "img-src 'self' data: blob:",
+        "media-src 'self' blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' ws://127.0.0.1:* ws://localhost:*",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ]
+)
+SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
+API_DOCS = ("/docs", "/redoc")  # FastAPI 문서 페이지는 CDN 스크립트를 써서 CSP 에서 뺀다 (개발용)
+
+
 def _add_ui(app: FastAPI, ui_dir: Path | None) -> None:
-    """화면 정적 파일. index.html 은 캐시 금지 (빌드마다 자산 해시가 바뀌므로 오래된 index 가 옛 JS 를 가리키면 안 된다).
-    해시 붙은 assets/ 는 길게 캐시."""
+    """화면 정적 파일과 응답 헤더.
+    - index.html 은 캐시 금지 (빌드마다 자산 해시가 바뀌므로 오래된 index 가 옛 JS 를 가리키면 안 된다). 해시 붙은 assets/ 는 길게 캐시.
+    - 모든 응답에 CSP · nosniff · no-referrer (응답이 직접 CSP 를 정했으면 그대로 둔다)."""
 
     @app.middleware("http")
-    async def _ui_cache_headers(request, call_next):
+    async def _ui_headers(request, call_next):
         resp = await call_next(request)
         path = request.url.path
         if path.startswith("/assets/"):
             resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         elif path == "/" or path.endswith(".html"):
             resp.headers["Cache-Control"] = "no-cache"
+        resp.headers.update(SECURITY_HEADERS)
+        if not path.startswith(API_DOCS) and "content-security-policy" not in resp.headers:
+            resp.headers["Content-Security-Policy"] = CSP
         return resp
 
     if ui_dir:
@@ -460,8 +485,11 @@ def _add_ui(app: FastAPI, ui_dir: Path | None) -> None:
     else:
 
         @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-        def _no_ui() -> str:
-            return NO_UI_PAGE
+        def _no_ui() -> HTMLResponse:
+            # 안내 한 장뿐이라 인라인 스타일만 허용한다 (스크립트 없음)
+            return HTMLResponse(
+                NO_UI_PAGE, headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
+            )
 
 
 # 화면 빌드(app/dist)가 없을 때: 엔진 API 는 살아 있고, 화면을 만드는 방법을 알려 준다.

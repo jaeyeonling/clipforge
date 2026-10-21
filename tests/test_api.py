@@ -349,3 +349,16 @@ def test_engine_refuses_other_sites_and_rebinding(tmp_project):
         raise AssertionError("Origin: null 인 WebSocket 이 열렸다")
     except WebSocketDisconnect as e:
         assert e.code == 1008
+
+
+def test_responses_carry_csp_and_security_headers(client):
+    """화면 · API 응답에는 CSP 와 nosniff 가: 인라인 스크립트 · 외부 리소스 · 다른 사이트에 끼워 넣기를 막는다."""
+    for path in ("/", "/api/health"):
+        h = client.get(path).headers
+        csp = h["content-security-policy"]
+        assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
+        assert "frame-ancestors 'none'" in csp or "default-src 'none'" in csp
+        assert h["x-content-type-options"] == "nosniff"
+        assert h["referrer-policy"] == "no-referrer"
+    # API 문서(개발용)는 CDN 스크립트를 쓰므로 CSP 를 걸지 않는다
+    assert "content-security-policy" not in client.get("/docs").headers

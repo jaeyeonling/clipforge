@@ -91,7 +91,7 @@ jobs:
       - name: 서명할 앱 실행 파일 올리기
         id: unsigned-app
         if: env.SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-app-exe
           path: desktop/release/win-unpacked/clipforge.exe
@@ -132,7 +132,7 @@ jobs:
       - name: 서명할 설치본 올리기
         id: unsigned-installer
         if: env.SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-installer
           path: desktop/release-installer/clipforge-Setup-*.exe
@@ -190,7 +190,7 @@ jobs:
 
       - name: 결과물 (수동 실행)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clipforge-windows
           path: |

@@ -1,0 +1,199 @@
+# 앱 릴리스: v* 태그를 올리면 GitHub 가 호스팅하는 Windows 러너에서 설치본을 만들고, SignPath 로 서명해 릴리스 초안을 만든다.
+# 서명된 바이너리는 이 저장소의 소스에서 이 워크플로가 만든 것뿐이다 (SignPath 가 GitHub 아티팩트의 출처를 확인한다).
+#
+#   1. 화면 빌드 · 엔진 코드 번들 · 앱 내 업데이트 매니페스트(latest.json, 구성요소는 런타임 릴리스 것을 그대로)
+#   2. 앱 폴더(win-unpacked) → clipforge.exe 서명 (SignPath, artifact configuration: app-exe)
+#   3. 서명된 폴더로 NSIS 설치본 → 설치본 서명 (SignPath, artifact configuration: installer)
+#   4. 서명으로 바뀐 설치본 기준으로 latest.yml · blockmap 을 다시 계산하고 서명을 확인
+#   5. 릴리스 초안 (사람이 확인한 뒤 공개)
+#
+# SignPath 설정이 없으면(비밀 SIGNPATH_API_TOKEN · 변수 SIGNPATH_ORGANIZATION_ID) 서명 없이 같은 과정을 거친다.
+# 설정 방법: docs/CODE_SIGNING.md
+name: 릴리스
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # 릴리스 초안
+  actions: read # SignPath 가 이 실행의 아티팩트를 읽는다
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows 설치본
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10" # 런타임과 같은 버전 (python.org 의 Windows 임베더블 배포판이 있는 마지막 3.12)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            desktop/package-lock.json
+
+      - name: 태그와 앱 버전이 같은지
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ver=$(python -c "import clipforge; print(clipforge.__version__)")
+          shell=$(node -p "require('./desktop/package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag=$tag engine=$ver desktop=$shell"
+          [ "$tag" = "$ver" ] && [ "$tag" = "$shell" ] || { echo "::error::태그($tag)와 버전(엔진 $ver, 데스크톱 $shell)이 달라요"; exit 1; }
+
+      - name: 버전
+        run: echo "VERSION=$(node -p "require('./desktop/package.json').version")" >> "$GITHUB_ENV"
+
+      - name: 화면 빌드
+        working-directory: app
+        run: npm ci && npm run build
+
+      - name: 런타임 릴리스 매니페스트
+        run: |
+          rt=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("runtime-"))][0].tagName')
+          [ -n "$rt" ] || { echo "::error::runtime-* 릴리스가 없어요. 먼저 python scripts/publish_github.py runtime"; exit 1; }
+          gh release download "$rt" --repo "$GITHUB_REPOSITORY" --pattern latest.json --output runtime-latest.json
+          echo "RUNTIME_TAG=$rt" >> "$GITHUB_ENV"
+
+      - name: 엔진 코드 번들 · 앱 내 업데이트 매니페스트
+        run: >
+          python scripts/build_engine_dist.py --skip-packages --skip-ffmpeg --skip-models
+          --release release-app
+          --base-url "https://github.com/$GITHUB_REPOSITORY/releases/latest/download"
+          --components-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$RUNTIME_TAG"
+          --components-manifest runtime-latest.json
+
+      - name: 앱 폴더 (win-unpacked)
+        working-directory: desktop
+        run: |
+          npm ci
+          npx electron-builder --win --dir --config electron-builder.config.js
+
+      # ---------- 서명 1: 앱 실행 파일 ----------
+      - name: 서명할 앱 실행 파일 올리기
+        id: unsigned-app
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-app-exe
+          path: desktop/release/win-unpacked/clipforge.exe
+          if-no-files-found: error
+
+      - name: SignPath 서명 (clipforge.exe)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'clipforge' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: app-exe # .signpath/artifact-configurations/app-exe.xml
+          parameters: |
+            version: "${{ env.VERSION }}.0"
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600 # 서명마다 사람이 승인한다
+          output-artifact-directory: signed-app
+
+      - name: 서명된 실행 파일을 앱 폴더에
+        if: env.SIGN == 'true'
+        run: cp signed-app/clipforge.exe desktop/release/win-unpacked/clipforge.exe
+
+      # ---------- 설치본 ----------
+      - name: 업데이트 설정 (app-update.yml)
+        working-directory: desktop
+        env:
+          CLIPFORGE_PUBLISHER: ${{ env.SIGN == 'true' && (vars.SIGNPATH_PUBLISHER || 'SignPath Foundation') || '' }}
+        run: node scripts/app-update-yml.js release/win-unpacked
+
+      - name: 설치본 (서명된 앱 폴더로)
+        working-directory: desktop
+        run: npx electron-builder --win nsis --prepackaged release/win-unpacked --config electron-builder.config.js -c.directories.output=release-installer
+
+      # ---------- 서명 2: 설치본 ----------
+      - name: 서명할 설치본 올리기
+        id: unsigned-installer
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: desktop/release-installer/clipforge-Setup-*.exe
+          if-no-files-found: error
+
+      - name: SignPath 서명 (설치본)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'clipforge' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: installer # .signpath/artifact-configurations/installer.xml
+          parameters: |
+            version: "${{ env.VERSION }}"
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-installer
+
+      - name: 서명된 설치본으로 바꾸고 latest.yml · blockmap 다시 계산
+        if: env.SIGN == 'true'
+        working-directory: desktop
+        run: |
+          cp ../signed-installer/clipforge-Setup-*.exe release-installer/
+          node scripts/refresh-latest.js release-installer
+
+      - name: 확인 (latest.yml 이 설치본과 맞는지 · 서명)
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          node scripts/refresh-latest.js release-installer --check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($env:SIGN -ne 'true') { Write-Output "::warning::SignPath 설정이 없어 서명 없이 만들었어요 (docs/CODE_SIGNING.md)"; exit 0 }
+          $setup = Get-ChildItem release-installer/clipforge-Setup-*.exe | Select-Object -First 1
+          & node_modules/7zip-bin/win/x64/7za.exe x -y -oinner $setup.FullName clipforge.exe | Out-Null
+          foreach ($f in @($setup.FullName, "inner/clipforge.exe")) {
+            $s = Get-AuthenticodeSignature $f
+            Write-Output "$f : $($s.Status) — $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid' -or -not $s.TimeStamperCertificate) { Write-Output "::error::$f 의 서명이 유효하지 않아요"; exit 1 }
+          }
+
+      - name: 릴리스 초안
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python scripts/release_notes.py "${GITHUB_REF_NAME#v}" "$RUNTIME_TAG" > notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "clipforge ${GITHUB_REF_NAME#v}" --notes-file notes.md \
+            desktop/release-installer/clipforge-Setup-*.exe \
+            desktop/release-installer/clipforge-Setup-*.exe.blockmap \
+            desktop/release-installer/latest.yml \
+            release-app/engine-code-*.zip \
+            release-app/latest.json
+
+      - name: 결과물 (수동 실행)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipforge-windows
+          path: |
+            desktop/release-installer/clipforge-Setup-*
+            desktop/release-installer/latest.yml
+            release-app/

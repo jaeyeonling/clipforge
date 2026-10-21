@@ -137,9 +137,17 @@ docs/             사용 안내 · 설계 문서
 
 - 검증됨: 편집본 → 쇼츠 초안 · 자막 전체 흐름, 첫 실행 설치(깨끗한 런타임 폴더), 앱 내 업데이트 화면.
 - 실사용 확인 전: Premiere XML 가져오기, 원본 VOD 편집 포인트 실측, 라이브 탭 실방송.
-- 설치본 서명은 연결돼 있고 인증서를 정하는 중이에요. 그 전 버전은 설치할 때 SmartScreen 경고가 떠요 ([CODE_SIGNING.md](docs/CODE_SIGNING.md)).
+- 설치본 서명: SignPath Foundation 에 신청하는 중이에요. 서명된 릴리스 전까지는 설치할 때 SmartScreen 경고가 떠요.
 
 변경 내역은 [CHANGELOG.md](CHANGELOG.md) 에 있어요.
+
+## 코드 서명 정책 (Code signing policy)
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- 서명하는 것은 이 저장소의 소스로 [릴리스 워크플로](.github/workflows/release.yml)가 GitHub 호스팅 러너에서 만든 Windows 설치본과 `clipforge.exe` 뿐이에요. 릴리스마다 승인자가 서명 요청을 직접 승인해요. 과정: [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md)
+- 작성자 · 검토자 · 승인자: [@jaeyeonling](https://github.com/jaeyeonling) (저장소 관리자). 외부 기여는 검토자가 검토한 뒤 병합해요.
+- 개인정보: [PRIVACY.md](PRIVACY.md). 영상 · 자막 · 판정은 이 PC 밖으로 나가지 않고, 업데이트 확인과 구성요소 내려받기를 위해 GitHub · PyPI 에만 접속해요.
 
 ## 라이선스
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "installer": 서명된 앱 폴더로 만든 NSIS 설치본을 서명한다.
+     제품 이름과 버전(설치본은 세 자리, 예: 0.2.0)이 맞아야 서명된다. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" />
+  </parameters>
+  <zip-file>
+    <pe-file path="clipforge-Setup-${version}.exe" product-name="clipforge" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

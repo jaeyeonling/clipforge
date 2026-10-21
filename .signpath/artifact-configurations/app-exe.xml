@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "app-exe": 릴리스 워크플로가 올린 clipforge.exe 하나를 서명한다.
+     GitHub 아티팩트는 zip 으로 올라가므로 루트는 zip-file. 제품 이름과 버전(exe 는 네 자리, 예: 0.2.0.0)이 맞아야 서명된다.
+     SignPath 프로젝트의 artifact configuration 에 이 내용을 그대로 넣는다 (docs/CODE_SIGNING.md). -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" />
+  </parameters>
+  <zip-file>
+    <pe-file path="clipforge.exe" product-name="clipforge" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

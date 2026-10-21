@@ -122,6 +122,7 @@ OBS 연동: OBS → 도구 → WebSocket 서버 설정(포트 4455) → 라이�
 ```powershell
 python scripts\build_engine_dist.py --smoke             # 포터블 런타임(engine-dist/) 구성 + 번들 파이썬으로 health 확인
 python scripts\publish_github.py runtime                # 구성요소 릴리스 (처음 한 번·런타임이 바뀔 때)
-python scripts\publish_github.py app                    # 앱 릴리스: 화면 빌드 → 엔진 코드 zip·latest.json → NSIS → 업로드
+git tag v0.3.0; git push origin v0.3.0                 # 앱 릴리스: GitHub Actions 가 설치본을 만들고 SignPath 로 서명 → 릴리스 초안 (docs/CODE_SIGNING.md)
+python scripts\publish_github.py app                    # 로컬 앱 릴리스 (서명 없음): 화면 빌드 → 엔진 코드 zip·latest.json → NSIS → 업로드
 python scripts\make_usb_release.py --out E:\clipforge   # 인터넷 없이 전달하는 폴더
 ```

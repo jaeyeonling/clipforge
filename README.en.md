@@ -74,7 +74,7 @@ Read more: [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [ENGINE.md](docs/ENGINE.md
 
 ## Install
 
-Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). Until releases are code-signed (signing is wired up; see docs/CODE_SIGNING.md), SmartScreen asks for "More info → Run anyway". On first launch it downloads a few GB of engine components; the setup screen shows the size and time left. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
+Download `clipforge-Setup-x.y.z.exe` from [Releases](https://github.com/jaeyeonling/clipforge/releases) and run it (no admin rights). Until releases are signed (signing through SignPath Foundation is in progress), SmartScreen asks for "More info → Run anyway". On first launch it downloads a few GB of engine components; the setup screen shows the size and time left. Windows 10/11 x64; an NVIDIA GPU is optional but makes transcription ~20× faster.
 
 ## Develop
 
@@ -91,6 +91,14 @@ Quality gates: ruff (lint + format) and pytest for the engine; Prettier, ESLint,
 ## Status
 
 A personal project, built and validated against one streamer's broadcasts. Verified end to end: edited episode → drafts and subtitles, first-run install from an empty runtime folder, the in-app update flow. Not yet verified in real use: Premiere XML import, edit points on a raw VOD, the live helper on a real broadcast.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Only the Windows installer and `clipforge.exe` built from this repository's source by the [release workflow](.github/workflows/release.yml) on GitHub-hosted runners are signed. Every signing request is approved manually. Details: [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) (Korean).
+- Authors, reviewers and approvers: [@jaeyeonling](https://github.com/jaeyeonling) (maintainer). External contributions are reviewed before merging.
+- Privacy: [PRIVACY.md](PRIVACY.md). Videos, subtitles and judgments never leave your PC; the app only connects to GitHub and PyPI to check for updates and download components. The application to SignPath Foundation is in progress; releases before approval are unsigned.
 
 ## License
 

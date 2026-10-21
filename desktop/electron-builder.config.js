@@ -43,7 +43,7 @@ module.exports = {
   extraResources: [
     ...(skipEngine ? [] : [{ from: ENGINE, to: "engine", filter: [...CODE, "!**/__pycache__/**"] }]),
     { from: "node_modules/7zip-bin/win/x64/7za.exe", to: "7za.exe" },
-    { from: "node_modules/7zip-bin/LICENSE", to: "7za-LICENSE.txt" },
+    { from: "node_modules/7zip-bin/LICENSE.txt", to: "7za-LICENSE.txt" },
   ],
   // rcedit 로 아이콘·버전 정보를 넣고, 서명 설정이 있으면 같은 단계에서 서명한다.
   win: {

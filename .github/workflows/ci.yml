@@ -13,6 +13,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PYTHONUTF8: "1" # Windows 러너 콘솔(cp1252)에서도 한글 출력이 깨지지 않게
+
 jobs:
   engine:
     name: 엔진 · lint + pytest

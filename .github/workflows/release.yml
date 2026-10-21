@@ -32,6 +32,7 @@ jobs:
     env:
       SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
       GH_TOKEN: ${{ github.token }}
+      PYTHONUTF8: "1" # Windows 러너 콘솔(cp1252)에서도 한글 로그를 쓸 수 있게
     defaults:
       run:
         shell: bash

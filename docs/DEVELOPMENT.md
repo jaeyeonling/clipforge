@@ -34,7 +34,7 @@ cd desktop ; npm start                     # 데스크톱 창. 8765 에 엔진�
 ## 테스트
 
 ```powershell
-python -m pytest                           # 엔진 53개 (ffmpeg·GPU 없이 돌아요)
+python -m pytest                           # 엔진 56개 (ffmpeg·GPU 없이 돌아요. 실제 방송 샘플이 있을 때만 도는 검증 2개 포함)
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # CI 와 같은 검사를 한 번에 (lint · 포맷 · 테스트 · 빌드)
 cd desktop ; npm test                      # 구성요소 다운로드·설치·패키징 9개
 cd app ; npm test                          # 화면 37개 (Vitest)

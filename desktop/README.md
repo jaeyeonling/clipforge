@@ -13,7 +13,7 @@ npm run dist                                     # release/clipforge-Setup-<ver>
 set CLIPFORGE_SKIP_ENGINE=1 && npm run pack      # 엔진 없이 빠른 빌드 (툴체인 점검용)
 ```
 
-설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe ≈ 100MB.
+설치본 = Electron + 엔진 코드(resources/engine: ../engine-dist 의 clipforge/ games/ data/ assets/ app/dist 만) + 7za.exe ≈ 88MB.
 대용량 구성요소(파이썬 런타임·CUDA·ffmpeg·Whisper)는 첫 실행 때 `latest.json` 을 보고 받아 `%LOCALAPPDATA%\clipforge\runtime\` 에 둔다.
 데이터는 `%LOCALAPPDATA%\clipforge\data`. 제거해도 런타임·데이터는 남긴다.
 구성요소는 **3개씩 동시에** 받고(`components.apply` concurrency), 받아진 것부터 순서대로 푼다(python-base → cuda 순서 보장). 설치 화면은 기다리는 동안 서비스 소개 슬라이드 5장을 돌린다.
@@ -30,7 +30,7 @@ npx electron . --auto-setup --smoke              # 같은 흐름을 클릭 없�
 
 업데이트 주소 우선순위: `CLIPFORGE_UPDATE_URL` → `%LOCALAPPDATA%\clipforge\update-url.txt` → `release.config.js`(GitHub Releases `jaeyeonling/clipforge`, 최신 릴리스).
 
-## GitHub Releases 배포 (private 저장소)
+## GitHub Releases 배포
 
 ```
 set PATH=<gh 폴더>;%PATH%
@@ -40,7 +40,7 @@ python scripts\publish_github.py app             # 앱 릴리스 v<ver>: 화면 
 python scripts\publish_github.py app --dry-run   # 올리지 않고 만들 것만 확인
 ```
 
-private 저장소라 **사용자 PC 에 읽기 전용 토큰**이 필요하다: GitHub → Settings → Developer settings → Fine-grained tokens → Repository access: clipforge, Permissions: Contents Read-only →
+공개 저장소면 아무것도 필요 없다. 비공개 저장소로 운영할 때만 **사용자 PC 에 읽기 전용 토큰**이 필요하다: GitHub → Settings → Developer settings → Fine-grained tokens → Repository access: clipforge, Permissions: Contents Read-only →
 토큰을 `%LOCALAPPDATA%\clipforge\github-token.txt` 에 저장(한 줄). 없으면 첫 실행 화면이 안내한다. 저장소를 public 으로 바꾸면 토큰이 필요 없다.
 
 ## 파일

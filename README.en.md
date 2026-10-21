@@ -77,7 +77,7 @@ cd desktop ; npm install ; npm start       # desktop window
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1   # everything CI runs
 ```
 
-Quality gates: ruff (lint + format) and 53 pytest tests for the engine; Prettier, ESLint, strict TypeScript and 37 Vitest tests for the UI; Prettier, ESLint and 9 node tests for the desktop shell — all on a Windows CI runner.
+Quality gates: ruff (lint + format) and 56 pytest tests for the engine; Prettier, ESLint, strict TypeScript and 37 Vitest tests for the UI; Prettier, ESLint and 9 node tests for the desktop shell — all on a Windows CI runner.
 
 ## Status
 

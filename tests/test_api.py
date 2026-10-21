@@ -16,7 +16,7 @@ def engine(tmp_project):
 
 @pytest.fixture
 def client(engine):
-    return TestClient(create_app(engine))
+    return TestClient(create_app(engine), base_url="http://127.0.0.1")
 
 
 def _fake_episode(engine, vid="epX"):
@@ -308,3 +308,37 @@ def test_games_list_and_placeholder_guard(engine, tmp_path, monkeypatch):
     with pytest.raises(ApiError) as ei:
         engine.episode_add(str(src), None, "", "d2r", link=False)
     assert ei.value.code == "E_FILE_OFFLINE" and "OneDrive" in ei.value.hint
+
+
+def test_engine_refuses_other_sites_and_rebinding(tmp_project):
+    """다른 웹사이트(Origin)나 DNS 리바인딩(Host)으로는 엔진을 쓸 수 없다. 로컬 화면과 Origin 없는 요청은 된다."""
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    from clipforge.api.methods import Engine
+    from clipforge.api.server import create_app
+
+    app = create_app(Engine(tmp_project))
+    local = TestClient(app, base_url="http://127.0.0.1:8765")
+    assert local.get("/api/health").status_code == 200
+    assert local.get("/api/health", headers={"Origin": "http://127.0.0.1:5173"}).status_code == 200  # 개발 서버 화면
+    assert local.get("/api/health", headers={"Origin": "http://localhost:8765"}).status_code == 200
+
+    r = local.get("/api/episodes", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "E_FORBIDDEN_ORIGIN"
+    assert local.post("/api/jobs", json={"episode": "x"}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+    rebound = TestClient(app, base_url="http://attacker.example:8765")
+    assert rebound.get("/api/episodes").status_code == 403
+
+    local_host = {
+        "host": "127.0.0.1:8765"
+    }  # 테스트 클라이언트는 WebSocket 에서 base_url 대신 testserver 를 Host 로 보낸다
+    with local.websocket_connect("/ws", headers=local_host) as ws:  # Origin 없는 연결(셸)은 된다
+        ws.close()
+    try:
+        with local.websocket_connect("/ws", headers={**local_host, "Origin": "https://evil.example"}) as ws:
+            ws.receive_text()
+        raise AssertionError("다른 사이트의 WebSocket 이 열렸다")
+    except WebSocketDisconnect as e:
+        assert e.code == 1008

@@ -111,7 +111,7 @@ def test_job_precondition_error_manifest_and_log(tmp_project):
 
 def test_http_error_shapes(tmp_project):
     engine = Engine(tmp_project)
-    client = TestClient(create_app(engine), raise_server_exceptions=False)
+    client = TestClient(create_app(engine), raise_server_exceptions=False, base_url="http://127.0.0.1")
     r = client.post("/api/jobs", json={"stages": ["eval"]})  # episode 누락 → 검증 오류도 같은 형태
     assert r.status_code == 400 and r.json()["error"]["code"] == "E_BAD_REQUEST" and r.json()["error"]["hint"]
     r = client.get("/api/jobs/nope")

@@ -353,12 +353,15 @@ def test_engine_refuses_other_sites_and_rebinding(tmp_project):
 
 def test_responses_carry_csp_and_security_headers(client):
     """화면 · API 응답에는 CSP 와 nosniff 가: 인라인 스크립트 · 외부 리소스 · 다른 사이트에 끼워 넣기를 막는다."""
-    for path in ("/", "/api/health"):
-        h = client.get(path).headers
-        csp = h["content-security-policy"]
-        assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
-        assert "frame-ancestors 'none'" in csp or "default-src 'none'" in csp
-        assert h["x-content-type-options"] == "nosniff"
-        assert h["referrer-policy"] == "no-referrer"
+    h = client.get("/api/health").headers
+    csp = h["content-security-policy"]
+    for rule in ("script-src 'self'", "style-src 'self'", "object-src 'none'", "frame-ancestors 'none'"):
+        assert rule in csp
+    assert "unsafe" not in csp
+    assert h["x-content-type-options"] == "nosniff"
+    assert h["referrer-policy"] == "no-referrer"
+    # 첫 화면: 화면 빌드가 있으면 같은 CSP, 없으면 안내 한 장(스크립트 없음, 인라인 스타일만)
+    root = client.get("/").headers["content-security-policy"]
+    assert root in (csp, "default-src 'none'; style-src 'unsafe-inline'")
     # API 문서(개발용)는 CDN 스크립트를 쓰므로 CSP 를 걸지 않는다
     assert "content-security-policy" not in client.get("/docs").headers

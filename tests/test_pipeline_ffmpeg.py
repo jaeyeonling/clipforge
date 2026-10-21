@@ -2,10 +2,12 @@
 
 화면: 테스트 패턴 위 좌상단 득템 배너 영역을 검게 덮고, 12초부터 아이템 이름이 뜬다. 소리: 같은 순간 크게.
 → 배너 OCR 이 12초 무렵 추가를 잡고, 쇼츠 후보가 그 순간을 덮고, 세로 초안(1080×1920)과 Premiere XML 이 나와야 한다.
-ffmpeg 가 없으면 건너뛴다 (CI 는 통합 작업에서 런타임 릴리스의 ffmpeg 를 받아 돌린다). 전사(Whisper)는 모델이 커서 뺀다.
+ffmpeg 가 없으면 건너뛴다. 단 CLIPFORGE_REQUIRE_FFMPEG=1 (CI 통합 작업)이면 건너뛰지 않고 실패한다 — 조용히 빠지지 않게.
+전사(Whisper)는 모델이 커서 뺀다.
 """
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -17,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FFMPEG_DIR = find_ffmpeg()
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skipif(FFMPEG_DIR is None, reason="ffmpeg 없음"),
+    pytest.mark.skipif(FFMPEG_DIR is None and not os.environ.get("CLIPFORGE_REQUIRE_FFMPEG"), reason="ffmpeg 없음"),
 ]
 
 DROP_AT = 12  # 득템 순간 (초)
@@ -25,7 +27,7 @@ LENGTH = 30
 
 
 def ff(name: str) -> str:
-    assert FFMPEG_DIR is not None
+    assert FFMPEG_DIR is not None, "ffmpeg 를 찾지 못했어요 (PATH 또는 CLIPFORGE_FFMPEG)"
     exe = FFMPEG_DIR / (name + ".exe")
     return str(exe if exe.exists() else FFMPEG_DIR / name)
 

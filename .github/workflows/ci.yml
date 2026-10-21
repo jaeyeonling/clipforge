@@ -115,7 +115,10 @@ jobs:
           gh release download "$rt" --repo "$GITHUB_REPOSITORY" --pattern latest.json --pattern 'ffmpeg-*.zip' --dir runtime-feed
           7z x -y -offmpeg runtime-feed/ffmpeg-*.zip > /dev/null
           rm runtime-feed/ffmpeg-*.zip
-          echo "$PWD/ffmpeg/bin" >> "$GITHUB_PATH"
+          ffbin=$(cygpath -w "$PWD/ffmpeg/bin")  # Windows 프로그램(파이썬)이 읽는 경로로
+          echo "$ffbin" >> "$GITHUB_PATH"
+          echo "CLIPFORGE_FFMPEG=$ffbin" >> "$GITHUB_ENV"
+          "$PWD/ffmpeg/bin/ffmpeg.exe" -hide_banner -version | head -1
       - name: OCR 모델 위치
         id: ocr
         run: echo "dir=$(python -c 'import os, rapidocr; print(os.path.join(os.path.dirname(rapidocr.__file__), "models"))')" >> "$GITHUB_OUTPUT"
@@ -124,7 +127,9 @@ jobs:
           path: ${{ steps.ocr.outputs.dir }}
           key: rapidocr-models-${{ hashFiles('constraints.txt') }}
       - name: 합성 방송 → 세로 초안 · Premiere XML (ffmpeg · OCR)
-        run: python -m pytest -m integration -p no:cacheprovider
+        env:
+          CLIPFORGE_REQUIRE_FFMPEG: "1" # 건너뛰지 말고 실패
+        run: python -m pytest -m integration -p no:cacheprovider -rs
       - name: 화면 빌드
         working-directory: app
         run: npm ci && npm run build

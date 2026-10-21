@@ -10,9 +10,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   engine:
-    name: 엔진 (pytest)
+    name: 엔진 · lint + pytest
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,12 +28,16 @@ jobs:
         run: |
           grep -v '^nvidia-' requirements.txt > requirements-ci.txt
           python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
+          pip install -r requirements-ci.txt ruff
+      - name: ruff lint
+        run: ruff check .
+      - name: ruff format
+        run: ruff format --check .
       - name: pytest
         run: python -m pytest
 
   app:
-    name: 화면 (타입 검사 + 빌드)
+    name: 화면 · lint + 테스트 + 빌드
     runs-on: windows-latest
     defaults:
       run:
@@ -43,10 +50,13 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   desktop:
-    name: 데스크톱 (node --test)
+    name: 데스크톱 · lint + 테스트
     runs-on: windows-latest
     defaults:
       run:
@@ -61,4 +71,6 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
       - run: npm test

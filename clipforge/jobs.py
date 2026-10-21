@@ -529,7 +529,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             raise EngineError(
                 "E_BAD_PARAMS",
                 "align 에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다",
-                "원본이면 친구 편집본을, 편집본이면 친구 쇼츠를 지정하세요.",
+                "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
             )
         _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
         if shorts:
@@ -587,13 +587,22 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         job.log(pretty(segs, diag))
         prog(1.0, f"{n} kept 구간 · 최종본 {diag['matched_frac'] * 100:.0f}% 매칭")
     elif stage == "shorts":
+        from .preference import current_preference
         from .shorts import make_shorts, save_shorts
 
         _require(cache / "meta.json", "E_NO_PREP", "prep 결과(meta.json)", "prep 단계를 먼저 실행하세요.")
         _require(cache / "item_banner.json", "E_NO_SIGNALS", "신호 결과", "signals 단계를 먼저 실행하세요.")
         meta = _meta(project, vid)
         curves, events = _signals(project, vid)
-        cands = make_shorts(cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)))
+        # 지금까지의 판정(모든 회차)으로 축 가중치를 맞춘다. 판정이 적으면 기본값 그대로.
+        pref = current_preference(project.labels, project.cache, save_to=project.reports / "preference.json")
+        job.log(
+            f"판정 반영: {pref.reason} (쓸 만함 {pref.n_keep} · 안 씀 {pref.n_no})"
+            + (" — " + " · ".join(f"{k} {v:.2f}" for k, v in pref.weights.items()) if pref.learned else "")
+        )
+        cands = make_shorts(
+            cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)), weights=pref.weights
+        )
         save_shorts(cands, cache / "shorts.json")
         prog(1.0, f"{len(cands)} candidates")
     elif stage == "export":

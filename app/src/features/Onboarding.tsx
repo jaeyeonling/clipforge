@@ -174,7 +174,7 @@ export function Help() {
         </p>
         <p className="muted small">
           끝나면 쇼츠 초안 탭으로 넘어가요. 세로 초안이 순위대로 나오니 재생해 보고 <b>쓸 만함</b> / <b>안 씀</b>(이유
-          하나). 판정은 자동 저장되고 다음 영상부터 순위에 반영돼요.
+          하나). 판정은 자동 저장되고, 6개 이상 쌓이면 다음 초안부터 순위에 반영돼요.
         </p>
         {!simple && (
           <p className="muted small">

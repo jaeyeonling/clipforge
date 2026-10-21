@@ -255,7 +255,7 @@ export interface Candidate {
   decision?: "keep" | "no" | "";
   reason?: string;
   media_url?: string;
-  gt?: string[]; // 겹치는 친구 쇼츠(역매핑)·확정본 이름
+  gt?: string[]; // 겹치는 올린 쇼츠(역매핑)·확정본 이름
 }
 
 export interface CalibCheck {
@@ -292,6 +292,26 @@ export interface Profile {
   panel_bands?: Record<string, number[]>;
   [k: string]: unknown;
 }
+
+/** 판정 학습 상태 (GET /api/preference). weights 는 지금 쇼츠 순위에 쓰는 축 가중치. */
+export interface Preference {
+  weights: Record<PrefAxis, number>;
+  default: Record<PrefAxis, number>;
+  n_keep: number;
+  n_no: number;
+  learned: boolean;
+  blend: number;
+  reason: string;
+  updated: string;
+}
+export type PrefAxis = "payoff" | "reaction" | "chat" | "completeness" | "hook";
+export const PREF_AXIS_LABEL: Record<PrefAxis, string> = {
+  payoff: "득템",
+  reaction: "리액션",
+  chat: "채팅 반응",
+  completeness: "완결성",
+  hook: "첫 2초",
+};
 
 export interface MetricRow {
   episode: string;

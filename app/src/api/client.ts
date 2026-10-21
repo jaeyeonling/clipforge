@@ -18,6 +18,7 @@ import type {
   LiveSuggestion,
   LogLine,
   MetricRow,
+  Preference,
   PreviewResult,
   Profile,
   StageName,
@@ -137,6 +138,7 @@ export const api = {
   saveProfile: (game: string, rois: Record<string, number[]>) =>
     put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
   metrics: () => request<MetricRow[]>("/api/metrics"),
+  preference: () => request<Preference>("/api/preference"),
   episodePaths: (id: string) => request<EpisodePaths>(`/api/episodes/${encodeURIComponent(id)}/paths`),
   feedbackExport: () => post<{ path: string; dir: string; files: number; size: number }>("/api/feedback/export", {}),
   games: () => request<GameInfo[]>("/api/games"),

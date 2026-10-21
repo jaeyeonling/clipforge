@@ -338,6 +338,10 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     def metrics():
         return engine.metrics_summary()
 
+    @app.get("/api/preference")
+    def preference():
+        return engine.preference()
+
     # ---- media (초안 mp4 등, review/ 아래만). HEAD 도 받아야 브라우저 <video> 가 메타데이터를 읽는다 ----
     @app.api_route("/media/review/{path:path}", methods=["GET", "HEAD"])
     def media(path: str):

@@ -5,6 +5,7 @@ import { STAGE_LABEL, type StageName } from "../api/types";
 import { Badge, Button, Card, Empty, cx, fmtWhen } from "../components/ui";
 import { TIP } from "../api/tips";
 import { useApp } from "../state/store";
+import { PreferenceCard } from "./Preference";
 
 const STATUS_KO: Record<string, string> = {
   queued: "대기",
@@ -171,6 +172,7 @@ export function Metrics() {
             봐요.
           </p>
         </Card>
+        <PreferenceCard version={tick} />
       </div>
       <Jobs />
     </div>

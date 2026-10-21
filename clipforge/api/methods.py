@@ -151,7 +151,7 @@ class Engine:
             raise ApiError(
                 "E_BAD_PARAMS",
                 "align 단계에는 최종본 파일(final) 또는 쇼츠 파일(shorts)이 필요합니다",
-                "원본이면 친구 편집본을, 편집본이면 친구 쇼츠를 지정하세요.",
+                "원본이면 스트리머 편집본을, 편집본이면 스트리머 쇼츠를 지정하세요.",
             )
         from ..jobs import DEFAULT_STAGES, episode_kind
 
@@ -252,11 +252,11 @@ class Engine:
             r["reason"] = decisions.get(key, {}).get("reason", "")
             r["media_url"] = f"/media/review/{vid}/shorts/{r['file']}"
             ov = [g for g in gt if min(r["end"], g["end"]) - max(r["start"], g["start"]) >= 3.0]
-            r["gt"] = [g["name"] for g in ov]  # 이 후보와 겹치는 친구 쇼츠(역매핑)·확정 정답
+            r["gt"] = [g["name"] for g in ov]  # 이 후보와 겹치는 스트리머 쇼츠(역매핑)·확정 정답
         return rows
 
     def _shorts_ground_truth(self, vid: str) -> list[dict]:
-        """labels/<vid>.shorts.csv 의 keep 행 중 사람이 UI 에서 누른 것(note 'ui …')이 아닌 것 = 친구 쇼츠 역매핑·확정본."""
+        """labels/<vid>.shorts.csv 의 keep 행 중 사람이 UI 에서 누른 것(note 'ui …')이 아닌 것 = 스트리머 쇼츠 역매핑·확정본."""
         p = self._labels_path(vid)
         out = []
         if not p.exists():
@@ -330,7 +330,7 @@ class Engine:
         return out
 
     def feedback_export(self) -> dict:
-        """친구 PC 의 판정·매니페스트·로그를 zip 하나로 (카톡으로 보내는 용도). 영상·캐시는 넣지 않는다."""
+        """스트리머 PC 의 판정·매니페스트·로그를 zip 하나로 (카톡으로 보내는 용도). 영상·캐시는 넣지 않는다."""
         import time
         import zipfile
 
@@ -582,7 +582,32 @@ class Engine:
             w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"])
             w.writeheader()
             w.writerows(rows)
+        self._remember_axes(vid, key, keep=bool(label))
         return {"ok": True, "labels": len(rows)}
+
+    def _remember_axes(self, vid: str, key: tuple[str, str], keep: bool) -> None:
+        """판정한 초안의 축 점수를 남긴다. 후보를 다시 만들어 구간이 바뀌어도 판정 학습(preference)이 이 값을 쓴다."""
+        from ..preference import axes_path, load_axes
+
+        ap = axes_path(self.project.labels, vid)
+        saved = load_axes(ap)
+        k = f"{key[0]}-{key[1]}"
+        if not keep:
+            saved.pop(k, None)
+        else:
+            sp = self.project.cache / vid / "shorts.json"
+            cands = []
+            if sp.exists():
+                data = json.loads(sp.read_text(encoding="utf-8"))
+                cands = data.get("candidates", []) if isinstance(data, dict) else data
+            hit = next(
+                (c for c in cands if (f"{float(c['start']):.1f}", f"{float(c['end']):.1f}") == key and c.get("axes")),
+                None,
+            )
+            if hit is None:
+                return
+            saved[k] = hit["axes"]
+        ap.write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
 
     def _decision_editpoint(self, vid: str, start: float, end: float, label: str, reason: str) -> dict:
         """Phase 2 사람 판정 → labels/<vid>.csv (kept|no, note 'ui …'). align 의 auto 행과 공존."""
@@ -763,6 +788,12 @@ class Engine:
             raise ApiError("E_BAD_ROI", str(e)) from e
 
     # ---- metrics ----
+    def preference(self) -> dict:
+        """판정 학습 상태: 판정 수, 반영 여부, 지금 쓰는 축 가중치와 기본값."""
+        from ..preference import current_preference
+
+        return current_preference(self.project.labels, self.project.cache).to_dict()
+
     def metrics_summary(self) -> list[dict]:
         from ..eval_shorts import evaluate_shorts
         from ..evaluate import evaluate

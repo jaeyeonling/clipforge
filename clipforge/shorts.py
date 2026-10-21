@@ -19,9 +19,9 @@ from pathlib import Path
 
 import numpy as np
 
+from .preference import DEFAULT_WEIGHTS as WEIGHTS  # 기본 축 가중치. 판정이 쌓이면 preference 가 다시 맞춘다
 from .timeline import Curve, Segments, fmt_time
 
-WEIGHTS = {"payoff": 0.35, "reaction": 0.25, "chat": 0.15, "completeness": 0.15, "hook": 0.10}
 VARIANTS = {"short": {"pre": 5.0, "post": 12.0}, "story": {"pre": 12.0, "post": 22.0}}
 MIN_LEN, MAX_LEN = 15.0, 60.0
 
@@ -204,6 +204,7 @@ def score_candidate(
     pauses: list[tuple[float, float]],
     chat_ref: float,
     duration: float,
+    weights: dict[str, float] | None = None,
 ) -> None:
     items = [
         s
@@ -261,7 +262,7 @@ def score_candidate(
     if not (MIN_LEN <= c.duration <= MAX_LEN):
         penalty += 0.2
 
-    # 임팩트 게이트 (친구 피드백 2026-10-18 "임팩트 없음"): 리액션도 채팅 반응도 약하면 득템이 있어도 감점
+    # 임팩트 게이트 (스트리머 피드백 2026-10-18 "임팩트 없음"): 리액션도 채팅 반응도 약하면 득템이 있어도 감점
     if reaction < 0.3 and chat < 0.5:
         penalty += 0.15
     axes = {
@@ -273,7 +274,8 @@ def score_candidate(
         "penalty": round(penalty, 2),
     }
     c.axes = axes
-    c.score = round(sum(WEIGHTS[k] * axes[k] for k in WEIGHTS) - penalty, 3)
+    w = weights or WEIGHTS
+    c.score = round(sum(w[k] * axes[k] for k in WEIGHTS) - penalty, 3)
     c.evidence = {
         "anchor_kinds": sorted(anchor["kinds"]),
         "items": [s.meta.get("added", "") for s in items],
@@ -396,6 +398,7 @@ def make_shorts(
     duration: float,
     k: int = 5,
     variants: dict | None = None,
+    weights: dict[str, float] | None = None,
 ) -> list[ShortCandidate]:
     variants = variants or VARIANTS
     cuts_p = cache / "cuts.json"
@@ -433,7 +436,7 @@ def make_shorts(
                 e = (prv[-1] + MARGIN) if prv and prv[-1] + MARGIN > s + MIN_LEN else s + MAX_LEN
             e = min(duration, e)
             c = ShortCandidate(round(s, 2), round(e, 2), a["t"], vname)
-            score_candidate(c, a, events, curves, cuts, pauses, chat_ref, duration)
+            score_candidate(c, a, events, curves, cuts, pauses, chat_ref, duration, weights)
             out.append(c)
     # 같은 variant 끼리 IoU > 0.5 중복 제거 (높은 점수 유지)
     out.sort(key=lambda c: -c.score)
@@ -450,7 +453,7 @@ def make_shorts(
                 break
         if not dup:
             kept.append(c)
-    # 순간(moment) 단위 중복 제거 (친구 피드백 2026-10-18 "중복"): 한 순간에서는 variant 를 통틀어 점수 최고 1개만.
+    # 순간(moment) 단위 중복 제거 (스트리머 피드백 2026-10-18 "중복"): 한 순간에서는 variant 를 통틀어 점수 최고 1개만.
     # 같은 순간 = 앵커 간격 ≤ moment_gap 또는 창이 1/3 이상 겹침. 드랍→리액션이 이어지는 긴 창이 리액션만 있는 창보다 선호되도록
     # story 에 +0.02 타이브레이크.
     moment_gap = 45.0
@@ -468,7 +471,7 @@ def make_shorts(
         else:
             clusters.append([c])
     # (b) 대표: 순간의 '원인'(가장 이른 득템 앵커)을 담은 창 중 점수 최고. 없으면 점수 최고.
-    #     친구 피드백 2026-10-18: 같은 지존참 순간에서 드랍→리액션 전체(2:38~3:17)를 고르고 줌 리액션만 있는 창은 거절.
+    #     스트리머 피드백 2026-10-18: 같은 지존참 순간에서 드랍→리액션 전체(2:38~3:17)를 고르고 줌 리액션만 있는 창은 거절.
     moments: list[ShortCandidate] = []
     for cl in clusters:
         cause = min((c.anchor for c in cl if "item" in c.evidence.get("anchor_kinds", [])), default=None)

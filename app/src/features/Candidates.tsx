@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { ANCHOR_LABEL, REASONS, VARIANT_LABEL, type Candidate, type EpisodePaths } from "../api/types";
 import { inShell, shell } from "../shell";
 import { TIP } from "../api/tips";
+import { PreferenceLine } from "./Preference";
 import { Button, Empty, Spinner, cx, fmtTime } from "../components/ui";
 import { useApp } from "../state/store";
 
@@ -27,6 +28,7 @@ export function Candidates() {
   const [reasonPrompt, setReasonPrompt] = useState(false);
   const [compare, setCompare] = useState<string[]>([]); // keyOf 목록 (최대 2)
   const videos = useRef(new Map<string, HTMLVideoElement>());
+  const keyMoved = useRef(false); // 다음 포커스 변경이 키보드에서 왔는가
 
   const load = useCallback(async () => {
     if (!selected) {
@@ -125,19 +127,23 @@ export function Candidates() {
         case "ArrowRight":
         case "ArrowDown":
           e.preventDefault();
+          keyMoved.current = true;
           setFocus((i) => Math.min(shown.length - 1, i + 1));
           break;
         case "ArrowLeft":
         case "ArrowUp":
           e.preventDefault();
+          keyMoved.current = true;
           setFocus((i) => Math.max(0, i - 1));
           break;
         case "Home":
           e.preventDefault();
+          keyMoved.current = true;
           setFocus(0);
           break;
         case "End":
           e.preventDefault();
+          keyMoved.current = true;
           setFocus(shown.length - 1);
           break;
         case "k":
@@ -175,7 +181,9 @@ export function Candidates() {
   }, [shown, focus, reasonPrompt, decide, toggleCompare]);
 
   useEffect(() => {
-    // 포커스 카드가 보이게
+    // 키보드로 옮긴 포커스 카드만 보이게 스크롤한다 (탭을 열 때·클릭할 때는 화면을 움직이지 않는다)
+    if (!keyMoved.current) return;
+    keyMoved.current = false;
     const c = shown[focus];
     if (!c) return;
     document.querySelector<HTMLElement>(`[data-key="${keyOf(c)}"]`)?.scrollIntoView({ block: "nearest" });
@@ -261,6 +269,7 @@ export function Candidates() {
   return (
     <>
       {outputs}
+      <PreferenceLine version={`${counts.keep}-${counts.no}`} />
       <div className="filters">
         {(["all", "undecided", "keep", "no"] as Filter[]).map((f) => (
           <Button
@@ -288,7 +297,7 @@ export function Candidates() {
       {reasonPrompt && shown[focus] && (
         <div className="sheet" role="dialog" aria-label="안 쓰는 이유">
           <h3>#{shown[focus].rank} 초안, 왜 안 쓰나요?</h3>
-          <div className="sub">이유를 하나 고르면 다음 회차부터 같은 실수를 줄여요. 숫자키로도 고를 수 있어요.</div>
+          <div className="sub">이유를 하나 골라 주세요. 판정과 함께 기록돼요. 숫자키로도 고를 수 있어요.</div>
           <div className="opts">
             {REASONS.map((r, i) => (
               <button
@@ -387,7 +396,7 @@ function CandidateCard({
             {fmtTime(c.start)}–{fmtTime(c.end)} · {len}초
           </span>
           {c.gt && c.gt.length > 0 && (
-            <span className="badge ok" title={`친구 쇼츠·확정본과 겹침: ${c.gt.join(", ")}`}>
+            <span className="badge ok" title={`올린 쇼츠·확정본과 겹침: ${c.gt.join(", ")}`}>
               정답
             </span>
           )}

@@ -29,7 +29,7 @@ eng = RapidOCR(
 )
 
 cache: dict[int, str] = {}
-IGNORE = {"준영"}  # 스트리머 이름 라벨 등 배너 본문이 아닌 고정 텍스트
+IGNORE = {"준영"}  # 배너 왼쪽 끝 용병 초상화 아래의 용병 이름 (엔진은 이름 대신 위치로 거른다: banner_skip_left)
 
 
 def ocr(i: int) -> str:

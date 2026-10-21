@@ -187,3 +187,20 @@ def test_clean_chat_fixes():
     assert clean_chat("120자룬헐") == "120자룬 헐"
     assert clean_chat("혈 지참 나왔어요??") == "헐 지참 나왔어요??"
     assert clean_chat("a  b   c") == "a b c"
+
+
+def test_banner_skips_the_mercenary_portrait_column():
+    """배너 영역 왼쪽 끝(용병 초상화 아래 이름)에서 끝나는 글자는 버리고, 배너 글은 남긴다 — 이름이 무엇이든."""
+    from clipforge.signals.item_banner import banner_texts, normalize
+
+    W = 1700
+    boxes = [
+        [[176, 25], [890, 25], [890, 70], [176, 70]],  # 득템 : … (배너 본문)
+        [[42, 172], [110, 172], [110, 205], [42, 205]],  # 용병 이름
+        [[184, 102], [400, 102], [400, 140], [184, 140]],  # 배너 둘째 줄
+    ]
+    txts = ["득템:화염5/3주얼,슬가", "아무개", "스웹벨트"]
+    kept = banner_texts(boxes, txts, W, 0.095)
+    assert kept == ["득템:화염5/3주얼,슬가", "스웹벨트"]
+    assert normalize(kept) == "득템:화염5/3주얼,슬가,스웹벨트".replace(":", "")
+    assert banner_texts(boxes, txts, W, 0.0) == txts  # 프로필 값이 없으면 거르지 않는다

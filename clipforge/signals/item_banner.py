@@ -27,7 +27,6 @@ from typing import Any
 from ..timeline import Segment, Segments
 from .base import signal
 
-IGNORE_TOKENS = {"준영"}  # 배너 본문이 아닌 고정 텍스트(스트리머 이름 라벨)
 NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%,]")  # 쉼표는 토큰 경계라 남긴다
 DECOR_RE = re.compile(r"[★츠]")
 HEADER_RE = re.compile(r"^(득템|득렘|득램|특템|특램|독템)")  # OCR 변형 포함
@@ -47,15 +46,22 @@ def _engine():
 
 
 def normalize(txts: list[str]) -> str:
-    kept = [t for t in txts if t not in IGNORE_TOKENS]
-    return re.sub(r",{2,}", ",", NORM_RE.sub("", ",".join(kept))).strip(",")
+    return re.sub(r",{2,}", ",", NORM_RE.sub("", ",".join(txts))).strip(",")
+
+
+def banner_texts(boxes, txts: list[str], width: int, skip_left: float) -> list[str]:
+    """OCR 상자 중 배너 글만 남긴다. 영역 왼쪽 skip_left 비율 안에서 끝나는 상자는 뺀다 —
+    D2R 은 그 자리에 용병 초상화와 그 아래 용병 이름이 걸친다 (이름은 사람마다 달라 이름으로 거르지 않는다)."""
+    limit = skip_left * width
+    return [t for b, t in zip(boxes, txts, strict=True) if max(p[0] for p in b) > limit]
 
 
 class BannerOCR:
     """초 → 정규화 텍스트. 디스크 캐시 + 지연 OCR."""
 
-    def __init__(self, roi_dir: Path, cache_path: Path):
+    def __init__(self, roi_dir: Path, cache_path: Path, skip_left: float = 0.0):
         self.files = sorted(roi_dir.glob("*.jpg"))
+        self.skip_left = skip_left
         self.cache_path = cache_path
         self.cache: dict[int, str] = {}
         if cache_path.exists():
@@ -73,7 +79,13 @@ class BannerOCR:
             self._eng = _engine()
         r = self._eng(str(self.files[i]))
         self.calls += 1
-        self.cache[i] = normalize(list(r.txts or []))
+        txts = list(r.txts or [])
+        if txts and self.skip_left:
+            from PIL import Image
+
+            with Image.open(self.files[i]) as im:
+                txts = banner_texts(r.boxes, txts, im.width, self.skip_left)
+        self.cache[i] = normalize(txts)
         return self.cache[i]
 
     def save(self) -> None:
@@ -163,6 +175,17 @@ def change_runs(files: list[Path], thr: float = 6.0, size: tuple[int, int] = (64
     return runs
 
 
+def _skip_left(cache: Path) -> float:
+    """게임 프로필의 banner_skip_left (배너 영역 왼쪽에 걸치는 게임 UI 비율). 모르면 0."""
+    try:
+        from ..profiles import episode_game, load_profile
+
+        game = episode_game(cache)
+        return float(load_profile(game).get("banner_skip_left", 0.0)) if game else 0.0
+    except Exception:
+        return 0.0
+
+
 @signal("item_banner")
 def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | None = None) -> Segments:
     """mode: coarse(기본, 편집본 — step 초마다 OCR 후 변하는 곳만 1초 단위) | change(원본 — 크롭 변화 감지 후 구간당 1회 OCR).
@@ -179,7 +202,7 @@ def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | Non
             )
         except OSError:
             mode = "coarse"
-    ocr = BannerOCR(roi_dir, cache / "banner_ocr.json")
+    ocr = BannerOCR(roi_dir, cache / "banner_ocr.json", _skip_left(cache))
     n = len(ocr)
     t0 = time.time()
     seq: list[str] = []

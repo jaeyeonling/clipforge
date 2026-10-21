@@ -5,6 +5,7 @@
   - 큐 최소 0.6s, 다음 큐와 겹치지 않게. 클립 시작 전·끝 후는 잘라낸다.
   - 위치: 게임 영역 하단 (하단 채팅 띠 위). 상단 훅 자막과 겹치지 않는다.
 """
+
 from __future__ import annotations
 
 import re
@@ -57,21 +58,24 @@ def _split_words(words: list[dict], max_chars: int) -> list[tuple[float, float, 
     return cues
 
 
-def cues_for_clip(transcript: dict, start: float, end: float, max_chars: int = 18, min_dur: float = 0.6) -> list[tuple[float, float, str]]:
+def cues_for_clip(
+    transcript: dict, start: float, end: float, max_chars: int = 18, min_dur: float = 0.6
+) -> list[tuple[float, float, str]]:
     out: list[tuple[float, float, str]] = []
     for sg in transcript.get("segments", []):
         if sg["end"] <= start or sg["start"] >= end or not sg.get("text", "").strip():
             continue
         text = _clean(sg["text"])
         if len(text) <= max_chars or not sg.get("words"):
-            if len(text) > max_chars:            # 단어 없음: 길이 비례 시간 분할
+            if len(text) > max_chars:  # 단어 없음: 길이 비례 시간 분할
                 parts = re.findall(rf".{{1,{max_chars}}}(?:\s|$)", text)
                 parts = [p.strip() for p in parts if p.strip()]
                 total = sum(len(p) for p in parts) or 1
                 t = sg["start"]
                 for p in parts:
                     d = (sg["end"] - sg["start"]) * len(p) / total
-                    out.append((t, t + d, p)); t += d
+                    out.append((t, t + d, p))
+                    t += d
             else:
                 out.append((sg["start"], sg["end"], text))
         else:
@@ -93,9 +97,13 @@ def cues_for_clip(transcript: dict, start: float, end: float, max_chars: int = 1
 
 def write_srt(cues: list[tuple[float, float, str]], path: Path, clip_start: float) -> Path:
     """Premiere 캡션 임포트용 SRT (같은 큐)."""
+
     def ts(sec):
-        sec = max(0.0, sec); h, r = divmod(sec, 3600); m, s = divmod(r, 60)
+        sec = max(0.0, sec)
+        h, r = divmod(sec, 3600)
+        m, s = divmod(r, 60)
         return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{int(round((s - int(s)) * 1000)):03d}"
+
     lines = []
     for i, (a, b, t) in enumerate(cues, 1):
         lines += [str(i), f"{ts(a - clip_start)} --> {ts(b - clip_start)}", t, ""]
@@ -105,9 +113,13 @@ def write_srt(cues: list[tuple[float, float, str]], path: Path, clip_start: floa
 
 def write_vtt(cues: list[tuple[float, float, str]], path: Path, clip_start: float) -> Path:
     """WebVTT (같은 큐). 유튜브 자막 업로드·브라우저 재생용."""
+
     def ts(sec):
-        sec = max(0.0, sec); h, r = divmod(sec, 3600); m, s = divmod(r, 60)
+        sec = max(0.0, sec)
+        h, r = divmod(sec, 3600)
+        m, s = divmod(r, 60)
         return f"{int(h):02d}:{int(m):02d}:{int(s):02d}.{int(round((s - int(s)) * 1000)):03d}"
+
     lines = ["WEBVTT", ""]
     for i, (a, b, t) in enumerate(cues, 1):
         lines += [str(i), f"{ts(a - clip_start)} --> {ts(b - clip_start)}", t, ""]
@@ -122,12 +134,15 @@ def vegas_timecode(sec: float, fps: float) -> str:
     frame = int(round(sec * fps))
     drop = nominal != 0 and abs(fps - nominal) > 0.01 and nominal in (30, 60)
     if drop:
-        drop_frames = int(round(fps * 0.066666))             # 30→2, 60→4
-        per_10min = int(round(fps * 600)); per_min = nominal * 60 - drop_frames
+        drop_frames = int(round(fps * 0.066666))  # 30→2, 60→4
+        per_10min = int(round(fps * 600))
+        per_min = nominal * 60 - drop_frames
         d, m = divmod(frame, per_10min)
         frame += drop_frames * 9 * d + (drop_frames * ((m - drop_frames) // per_min) if m > drop_frames else 0)
-    ff = frame % nominal; total_s = frame // nominal
-    hh, r = divmod(total_s, 3600); mm, ss = divmod(r, 60)
+    ff = frame % nominal
+    total_s = frame // nominal
+    hh, r = divmod(total_s, 3600)
+    mm, ss = divmod(r, 60)
     return f"{hh:02d}:{mm:02d}:{ss:02d}{';' if drop else ':'}{ff:02d}"
 
 
@@ -142,7 +157,9 @@ def write_vegas_txt(cues: list[tuple[float, float, str]], path: Path, clip_start
     return path
 
 
-def write_ass(cues: list[tuple[float, float, str]], path: Path, clip_start: float, size: int = 58, margin_v: int = 500) -> Path:
+def write_ass(
+    cues: list[tuple[float, float, str]], path: Path, clip_start: float, size: int = 58, margin_v: int = 500
+) -> Path:
     lines = [ASS_HEADER.format(size=size, margin_v=margin_v)]
     for a, b, t in cues:
         t = t.replace("{", "(").replace("}", ")")

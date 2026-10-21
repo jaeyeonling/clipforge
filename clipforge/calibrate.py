@@ -4,6 +4,7 @@ check(project, vid)   → 각 ROI 의 적중률과 판정 (pass / warn / fail) +
 preview(project, vid, t) → ROI 박스를 그린 PNG (frames/ 의 1080p 프레임 위)
 set_rois(project, game, rois) → games/<game>.yaml 의 rois 갱신 (비율). meta.json 은 다음 prep 때 반영되므로 안내
 """
+
 from __future__ import annotations
 
 import json
@@ -19,8 +20,15 @@ from .signals._panels import DEFAULT_BANDS
 from .textdraw import FontStack, draw_text
 
 HEADER_RE = re.compile(r"(득템|득렘|득램|특템|특램)")
-COLORS = {"banner": (240, 246, 96), "chat": (120, 200, 255), "zone": (200, 160, 255), "hud_red_orb": (255, 90, 80),
-          "hud_blue_orb": (90, 140, 255), "panel_left": (120, 255, 160), "panel_right": (120, 255, 160)}
+COLORS = {
+    "banner": (240, 246, 96),
+    "chat": (120, 200, 255),
+    "zone": (200, 160, 255),
+    "hud_red_orb": (255, 90, 80),
+    "hud_blue_orb": (90, 140, 255),
+    "panel_left": (120, 255, 160),
+    "panel_right": (120, 255, 160),
+}
 
 
 def _rate(xs: list[bool]) -> float:
@@ -37,7 +45,9 @@ def check(project: Project, vid: str) -> dict:
 
     def add(name, rate, warn, fail, detail, hint):
         status = "pass" if rate >= warn else ("warn" if rate >= fail else "fail")
-        checks.append({"name": name, "rate": rate, "status": status, "detail": detail, "hint": hint if status != "pass" else ""})
+        checks.append(
+            {"name": name, "rate": rate, "status": status, "detail": detail, "hint": hint if status != "pass" else ""}
+        )
 
     # 1) 득템 배너: OCR 캐시에서 머리말이 읽힌 초의 비율
     b = cache / "banner_ocr.json"
@@ -45,45 +55,91 @@ def check(project: Project, vid: str) -> dict:
         d = json.loads(b.read_text(encoding="utf-8"))
         vals = list(d.values())
         hit = [bool(HEADER_RE.search(v)) for v in vals]
-        add("득템 배너 ROI", _rate(hit), 0.5, 0.15, f"OCR {len(vals)}초 중 '득템' 머리말 {sum(hit)}초",
-            "배너 위치/크기가 화면과 안 맞습니다. 미리보기에서 노란 박스가 '득템 :' 줄을 덮는지 확인하고 rois.banner 를 조정하세요.")
+        add(
+            "득템 배너 ROI",
+            _rate(hit),
+            0.5,
+            0.15,
+            f"OCR {len(vals)}초 중 '득템' 머리말 {sum(hit)}초",
+            "배너 위치/크기가 화면과 안 맞습니다. 미리보기에서 노란 박스가 '득템 :' 줄을 덮는지 확인하고 rois.banner 를 조정하세요.",
+        )
     else:
-        checks.append({"name": "득템 배너 ROI", "rate": None, "status": "skip", "detail": "signals(item_banner) 미실행", "hint": ""})
+        checks.append(
+            {
+                "name": "득템 배너 ROI",
+                "rate": None,
+                "status": "skip",
+                "detail": "signals(item_banner) 미실행",
+                "hint": "",
+            }
+        )
     # 2) 패널 제목: 초당 OCR 에서 좌/우 패널명이 1개라도 읽힌 비율 (인벤토리는 자주 열리므로 10% 이상이면 정상)
     pt = cache / "panel_titles.json"
     if pt.exists():
         d = json.loads(pt.read_text(encoding="utf-8"))
         hit = [bool(v.get("left") or v.get("right")) for v in d.values()]
-        add("패널 제목 ROI (소지품/캐릭터)", _rate(hit), 0.08, 0.02, f"{len(d)}초 중 패널 검출 {sum(hit)}초",
-            "인벤토리를 여는 장면이 있는데도 검출이 없으면 panel_bands 위치가 틀린 것입니다. 미리보기의 초록 박스가 창 제목을 덮어야 합니다.")
+        add(
+            "패널 제목 ROI (소지품/캐릭터)",
+            _rate(hit),
+            0.08,
+            0.02,
+            f"{len(d)}초 중 패널 검출 {sum(hit)}초",
+            "인벤토리를 여는 장면이 있는데도 검출이 없으면 panel_bands 위치가 틀린 것입니다. 미리보기의 초록 박스가 창 제목을 덮어야 합니다.",
+        )
     else:
-        checks.append({"name": "패널 제목 ROI", "rate": None, "status": "skip", "detail": "signals(ui_state) 미실행", "hint": ""})
+        checks.append(
+            {"name": "패널 제목 ROI", "rate": None, "status": "skip", "detail": "signals(ui_state) 미실행", "hint": ""}
+        )
     # 3) 채팅: OCR 캐시에서 '닉 : 메시지' 줄이 읽힌 비율
     ch = cache / "chat_ocr.json"
     if ch.exists():
         d = json.loads(ch.read_text(encoding="utf-8"))
-        hit = [any(re.match(r"^\s*[0-9A-Za-z가-힣_\-]{2,24}\s*[:：]", ln.get("text", "")) for ln in lines) for lines in d.values()]
-        add("채팅 ROI", _rate(hit), 0.5, 0.15, f"OCR {len(d)}초 중 채팅 줄 검출 {sum(hit)}초",
-            "채팅 오버레이 위치가 다릅니다. 파란 박스가 채팅 영역을 덮도록 rois.chat 을 조정하세요.")
+        hit = [
+            any(re.match(r"^\s*[0-9A-Za-z가-힣_\-]{2,24}\s*[:：]", ln.get("text", "")) for ln in lines)
+            for lines in d.values()
+        ]
+        add(
+            "채팅 ROI",
+            _rate(hit),
+            0.5,
+            0.15,
+            f"OCR {len(d)}초 중 채팅 줄 검출 {sum(hit)}초",
+            "채팅 오버레이 위치가 다릅니다. 파란 박스가 채팅 영역을 덮도록 rois.chat 을 조정하세요.",
+        )
     else:
-        checks.append({"name": "채팅 ROI", "rate": None, "status": "skip", "detail": "signals(chat_text) 미실행", "hint": ""})
+        checks.append(
+            {"name": "채팅 ROI", "rate": None, "status": "skip", "detail": "signals(chat_text) 미실행", "hint": ""}
+        )
     # 4) HUD 구슬: 둘 다 보이는 초의 비율
     hud = cache / "hud_orbs.json"
     if hud.exists():
         d = json.loads(hud.read_text(encoding="utf-8"))
         hit = [r >= 0.05 or b_ >= 0.05 for r, b_ in d]
-        add("HUD 구슬 ROI", _rate(hit), 0.7, 0.3, f"{len(d)}초 중 구슬 검출 {sum(hit)}초",
-            "체력/마나 구슬 박스(빨강/파랑)가 구슬 위에 있어야 합니다. 게임 UI 배율이 다르면 hud_*_orb 를 조정하세요.")
+        add(
+            "HUD 구슬 ROI",
+            _rate(hit),
+            0.7,
+            0.3,
+            f"{len(d)}초 중 구슬 검출 {sum(hit)}초",
+            "체력/마나 구슬 박스(빨강/파랑)가 구슬 위에 있어야 합니다. 게임 UI 배율이 다르면 hud_*_orb 를 조정하세요.",
+        )
     else:
-        checks.append({"name": "HUD 구슬 ROI", "rate": None, "status": "skip", "detail": "signals(ui_state) 미실행", "hint": ""})
+        checks.append(
+            {"name": "HUD 구슬 ROI", "rate": None, "status": "skip", "detail": "signals(ui_state) 미실행", "hint": ""}
+        )
     worst = "pass"
     for c in checks:
         if c["status"] == "fail":
             worst = "fail"
         elif c["status"] == "warn" and worst != "fail":
             worst = "warn"
-    return {"ok": True, "game": meta.get("game"), "resolution": [meta.get("width"), meta.get("height")],
-            "status": worst, "checks": checks}
+    return {
+        "ok": True,
+        "game": meta.get("game"),
+        "resolution": [meta.get("width"), meta.get("height")],
+        "status": worst,
+        "checks": checks,
+    }
 
 
 def frame_for(project: Project, vid: str, t: int | None = None) -> tuple[Path, int, dict]:
@@ -101,8 +157,10 @@ def frame_for(project: Project, vid: str, t: int | None = None) -> tuple[Path, i
 
 def effective_rois(meta: dict) -> dict:
     """meta 의 픽셀 ROI → 비율 (화면 편집기의 초기값)."""
-    return {k: [v[0] / meta["width"], v[1] / meta["height"], v[2] / meta["width"], v[3] / meta["height"]]
-            for k, v in meta.get("rois", {}).items()}
+    return {
+        k: [v[0] / meta["width"], v[1] / meta["height"], v[2] / meta["width"], v[3] / meta["height"]]
+        for k, v in meta.get("rois", {}).items()
+    }
 
 
 def preview(project: Project, vid: str, t: int | None = None, rois_override: dict | None = None) -> Path:
@@ -123,7 +181,16 @@ def preview(project: Project, vid: str, t: int | None = None, rois_override: dic
     for side, (fx, fy, fw, fh) in bands.items():
         x, y, w, h = int(fx * W), int(fy * H), int(fw * W), int(fh * H)
         d.rectangle((x, y, x + w, y + h), outline=COLORS["panel_left"], width=2)
-        draw_text(d, (x + 4, y - 26), f"panel_{side}", font, 20, fill=COLORS["panel_left"], outline=(0, 0, 0), outline_weight=1)
+        draw_text(
+            d,
+            (x + 4, y - 26),
+            f"panel_{side}",
+            font,
+            20,
+            fill=COLORS["panel_left"],
+            outline=(0, 0, 0),
+            outline_weight=1,
+        )
     out = cache / "calib_preview.png"
     im.save(out)
     return out
@@ -132,8 +199,13 @@ def preview(project: Project, vid: str, t: int | None = None, rois_override: dic
 def get_rois(project: Project, game: str) -> dict:
     p = project.games / f"{game}.yaml"
     prof = yaml.safe_load(p.read_text(encoding="utf-8"))
-    return {"game": game, "resolution_ref": prof.get("resolution_ref"), "rois": prof.get("rois", {}),
-            "roi_crops": prof.get("roi_crops", []), "panel_bands": prof.get("panel_bands") or DEFAULT_BANDS}
+    return {
+        "game": game,
+        "resolution_ref": prof.get("resolution_ref"),
+        "rois": prof.get("rois", {}),
+        "roi_crops": prof.get("roi_crops", []),
+        "panel_bands": prof.get("panel_bands") or DEFAULT_BANDS,
+    }
 
 
 def set_rois(project: Project, game: str, rois: dict, panel_bands: dict | None = None) -> dict:

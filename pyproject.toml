@@ -1,0 +1,51 @@
+# 엔진(clipforge/)의 메타데이터와 도구 설정. 설치 의존성은 requirements.txt(개발) / requirements-runtime.txt(배포 런타임)가 기준이다.
+[project]
+name = "clipforge"
+version = "0.2.0"
+description = "게임 방송 편집본에서 세로 쇼츠 초안과 자막을 만드는 분석 엔진"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "jaeyeonling" }]
+
+[project.urls]
+Repository = "https://github.com/jaeyeonling/clipforge"
+Changelog = "https://github.com/jaeyeonling/clipforge/blob/main/CHANGELOG.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["engine-dist", "release-test", "app", "desktop", "private"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # import 정렬
+  "B",        # bugbear
+  "UP",       # 최신 문법
+  "SIM",      # 단순화
+  "RUF",      # ruff 고유 규칙
+]
+ignore = [
+  "E501",                        # 줄 길이는 포매터에 맡긴다 (긴 한국어 문자열·SQL 같은 줄은 그대로 둔다)
+  "E741",                        # l / I 같은 짧은 루프 변수는 문맥이 분명할 때 허용
+  "RUF001", "RUF002", "RUF003",  # 한국어 문서·주석의 '·' '–' '…' 는 의도한 문자
+  "SIM105",                      # contextlib.suppress 강제하지 않음 (try/except/pass 가 더 읽히는 곳이 있다)
+  "SIM108",                      # 삼항 연산자 강제하지 않음
+  "RUF046",                      # numpy 값의 round() 는 int 가 아닐 수 있어 int(round(x)) 를 명시한다
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B017"]
+"clipforge/signals/__init__.py" = ["F401"]   # import 하는 것만으로 신호가 등록된다
+
+[tool.ruff.lint.isort]
+known-first-party = ["clipforge"]

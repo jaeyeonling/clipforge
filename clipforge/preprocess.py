@@ -12,6 +12,7 @@
 
 video_id = 파일명(확장자 제외). 이미 있는 산출물은 건너뛴다(--force 로 재생성).
 """
+
 from __future__ import annotations
 
 import json
@@ -28,16 +29,22 @@ def run(cmd: list[str], quiet: bool = True, cwd: Path | None = None) -> None:
     shown = " ".join(c if len(c) < 60 else c[:57] + "..." for c in cmd[:10])
     print(f"  $ {shown}{' ...' if len(cmd) > 10 else ''}", flush=True)
     t0 = time.time()
-    subprocess.run(cmd, check=True, cwd=cwd,
-                   stdout=subprocess.DEVNULL if quiet else None,
-                   stderr=subprocess.DEVNULL if quiet else None)
+    subprocess.run(
+        cmd,
+        check=True,
+        cwd=cwd,
+        stdout=subprocess.DEVNULL if quiet else None,
+        stderr=subprocess.DEVNULL if quiet else None,
+    )
     print(f"    ({time.time() - t0:.0f}s)", flush=True)
 
 
 def probe(video: Path) -> dict:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(video)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     info = json.loads(out)
     v = next(s for s in info["streams"] if s["codec_type"] == "video")
@@ -83,8 +90,7 @@ def build_single_pass(video: Path, out: Path, meta: dict, want_audio: bool) -> l
     if scene_cuts:
         # 전체 프레임레이트 스트림을 320p 로 줄여 장면 전환 감지. 비용 측정 결과 추가 시간 ~0 (디코딩이 병목)
         fc.append("[0:v]split=2[v0][v1]")
-        fc.append(f"[v1]scale=320:-2,scdet=t={meta.get('scdet_threshold', 10)},"
-                  f"metadata=mode=print:file=scdet.txt[sc]")
+        fc.append(f"[v1]scale=320:-2,scdet=t={meta.get('scdet_threshold', 10)},metadata=mode=print:file=scdet.txt[sc]")
     fc.append(f"{src}fps={fps}" + (f",split={n_out}{labels}" if n_out > 1 else "[s0]"))
     fc.append(f"[s0]scale=-2:{frame_h}[frames]")
     for i, name in enumerate(crops, 1):
@@ -103,10 +109,18 @@ def build_single_pass(video: Path, out: Path, meta: dict, want_audio: bool) -> l
     return cmd
 
 
-def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | None = None,
-               proxy: bool = False, vid: str | None = None, kind: str = "edited", scene_cuts: bool | None = None) -> Path:
+def preprocess(
+    video: Path,
+    cache_root: Path,
+    force: bool = False,
+    game: str | None = None,
+    proxy: bool = False,
+    vid: str | None = None,
+    kind: str = "edited",
+    scene_cuts: bool | None = None,
+) -> Path:
     """kind: edited(편집본→쇼츠) | original(원본→편집 포인트). 원본은 scdet 를 끈다(컷이 없으니 의미 없고 느리다)."""
-    vid = vid or video.stem                       # 참조 등록이면 파일 이름과 회차 id 가 다를 수 있다
+    vid = vid or video.stem  # 참조 등록이면 파일 이름과 회차 id 가 다를 수 있다
     out = cache_root / vid
     out.mkdir(parents=True, exist_ok=True)
     game = game or guess_game(video)
@@ -119,16 +133,24 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
         meta["source"] = str(video.resolve())
         meta["game"] = game
         meta["rois"] = roi_pixels(prof, meta["width"], meta["height"])
-        meta["frames"] = {"fps": float(prof["frames"].get("fps", 1.0)),
-                          "height": min(int(prof["frames"].get("max_height", 1080)), meta["height"])}
+        meta["frames"] = {
+            "fps": float(prof["frames"].get("fps", 1.0)),
+            "height": min(int(prof["frames"].get("max_height", 1080)), meta["height"]),
+        }
         meta["roi_crops"] = [n for n in prof["roi_crops"] if n in meta["rois"]]
         meta["kind"] = kind
-        meta["scene_cuts"] = bool(scene_cuts) if scene_cuts is not None else (bool(prof["frames"].get("scene_cuts", True)) and kind != "original")
+        meta["scene_cuts"] = (
+            bool(scene_cuts)
+            if scene_cuts is not None
+            else (bool(prof["frames"].get("scene_cuts", True)) and kind != "original")
+        )
         meta["scdet_threshold"] = float(prof["frames"].get("scdet_threshold", 10))
         write_json(meta_p, "meta", meta)
     meta = load_json(meta_p, "meta")
-    print(f"  duration={meta['duration']:.0f}s  {meta['width']}x{meta['height']}@{meta['fps']:.2f}  "
-          f"frames {meta['frames']['fps']}fps@{meta['frames']['height']}p  rois={meta['roi_crops']}")
+    print(
+        f"  duration={meta['duration']:.0f}s  {meta['width']}x{meta['height']}@{meta['fps']:.2f}  "
+        f"frames {meta['frames']['fps']}fps@{meta['frames']['height']}p  rois={meta['roi_crops']}"
+    )
 
     frames_d, rois_d, audio_p = out / "frames", out / "rois", out / "audio.wav"
     need_frames = force or not frames_d.exists() or not any(frames_d.glob("*.jpg"))
@@ -152,27 +174,71 @@ def preprocess(video: Path, cache_root: Path, force: bool = False, game: str | N
             (out / "cuts.json").write_text(json.dumps(cuts), encoding="utf-8")
             (out / "scdet.txt").unlink()
             print(f"  scene cuts: {len(cuts)}")
-    elif need_audio:   # 프레임은 있고 오디오만 빠진 경우: 비디오 디코딩 없이
-        run(["ffmpeg", "-y", "-v", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000",
-             "-c:a", "pcm_s16le", str(audio_p)])
+    elif need_audio:  # 프레임은 있고 오디오만 빠진 경우: 비디오 디코딩 없이
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
+                str(audio_p),
+            ]
+        )
 
     proxy_p = out / "proxy.mp4"
     if proxy and (force or not proxy_p.exists()):
         base = ["ffmpeg", "-y", "-v", "error"]
-        tail = ["-i", str(video), "-vf", "scale=-2:480", "-an", "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "30",
-                str(proxy_p)]
+        tail = [
+            "-i",
+            str(video),
+            "-vf",
+            "scale=-2:480",
+            "-an",
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p4",
+            "-cq",
+            "30",
+            str(proxy_p),
+        ]
         try:
             run(base + hw_decode_args() + tail)
         except subprocess.CalledProcessError:
             print("  (nvenc proxy failed, falling back to libx264)")
-            run(base + ["-i", str(video), "-vf", "scale=-2:480", "-an", "-c:v", "libx264", "-preset", "veryfast",
-                        "-crf", "28", str(proxy_p)])
+            run(
+                [
+                    *base,
+                    "-i",
+                    str(video),
+                    "-vf",
+                    "scale=-2:480",
+                    "-an",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "28",
+                    str(proxy_p),
+                ]
+            )
     print("  done")
     return out
 
 
 if __name__ == "__main__":
     import argparse
+
     ap = argparse.ArgumentParser(description="원본 영상을 캐시로 전처리")
     ap.add_argument("videos", nargs="+", type=Path)
     ap.add_argument("--cache", type=Path, default=Path("cache"))

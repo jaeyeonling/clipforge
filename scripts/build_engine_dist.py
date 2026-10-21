@@ -12,6 +12,7 @@
     THIRD_PARTY_NOTICES.md, VERSION.json
 Electron 껍데기는 이 폴더를 resources/engine 으로 넣고 python.exe -m clipforge.app 을 띄운다. 데이터 폴더는 CLIPFORGE_DATA 로 분리.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,11 +27,11 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PY_VER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"      # 개발 venv 와 같은 버전
+PY_VER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # 개발 venv 와 같은 버전
 EMBED_URL = f"https://www.python.org/ftp/python/{PY_VER}/python-{PY_VER}-embed-amd64.zip"
 HF_REPO = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 MODEL_DIR_NAME = "faster-whisper-large-v3-turbo"
-RUNTIME_EXCLUDE = {"pytest", "httpx"}        # 개발 전용
+RUNTIME_EXCLUDE = {"pytest", "httpx"}  # 개발 전용
 
 
 def log(msg: str) -> None:
@@ -52,7 +53,8 @@ def du(p: Path) -> int:
 # ---------- 1. 임베더블 파이썬 ----------
 def step_python(out: Path) -> None:
     if (out / "python.exe").exists():
-        log(f"python: 이미 있음 ({out / 'python.exe'})"); return
+        log(f"python: 이미 있음 ({out / 'python.exe'})")
+        return
     zp = out.parent / f"python-{PY_VER}-embed-amd64.zip"
     if not zp.exists():
         log(f"python: 다운로드 {EMBED_URL}")
@@ -70,18 +72,42 @@ def step_python(out: Path) -> None:
 # ---------- 2. 패키지 ----------
 def step_packages(out: Path, force: bool) -> None:
     req_src = (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
-    runtime = [l for l in req_src if l.strip() and not l.startswith("#") and l.split("[")[0].split("=")[0].strip() not in RUNTIME_EXCLUDE]
+    runtime = [
+        l
+        for l in req_src
+        if l.strip() and not l.startswith("#") and l.split("[")[0].split("=")[0].strip() not in RUNTIME_EXCLUDE
+    ]
     req = ROOT / "requirements-runtime.txt"
-    req.write_text("# 배포 런타임용 (requirements.txt 에서 개발 전용 제외). scripts/build_engine_dist.py 가 생성\n" + "\n".join(runtime) + "\n", encoding="utf-8")
+    req.write_text(
+        "# 배포 런타임용 (requirements.txt 에서 개발 전용 제외). scripts/build_engine_dist.py 가 생성\n"
+        + "\n".join(runtime)
+        + "\n",
+        encoding="utf-8",
+    )
     site = out / "Lib" / "site-packages"
     if force and site.exists():
         shutil.rmtree(site)
     site.mkdir(parents=True, exist_ok=True)
     if (site / "fastapi").exists() and not force:
-        log("packages: 이미 있음 (--force-packages 로 다시)"); return
+        log("packages: 이미 있음 (--force-packages 로 다시)")
+        return
     log(f"packages: pip install --target {site} ({len(runtime)} 개)")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--target", str(site), "--only-binary=:all:", "--upgrade",
-                    "--no-warn-script-location", "-r", str(req)], check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            str(site),
+            "--only-binary=:all:",
+            "--upgrade",
+            "--no-warn-script-location",
+            "-r",
+            str(req),
+        ],
+        check=True,
+    )
     # 설치 스크립트(bin/)는 필요 없다
     shutil.rmtree(site / "bin", ignore_errors=True)
     log(f"packages: {human(du(site))}")
@@ -112,10 +138,12 @@ def step_code(out: Path) -> None:
 def step_ffmpeg(out: Path) -> None:
     sys.path.insert(0, str(ROOT))
     from clipforge.project import find_ffmpeg
+
     src = find_ffmpeg()
     if not src:
         raise SystemExit("ffmpeg 를 찾지 못했습니다 (winget Gyan.FFmpeg 설치 또는 CLIPFORGE_FFMPEG)")
-    b = out / "bin"; b.mkdir(exist_ok=True)
+    b = out / "bin"
+    b.mkdir(exist_ok=True)
     for exe in ("ffmpeg.exe", "ffprobe.exe"):
         shutil.copy2(src / exe, b / exe)
     for lic in ("LICENSE", "LICENSE.txt", "COPYING.GPLv3"):
@@ -128,7 +156,11 @@ def step_ffmpeg(out: Path) -> None:
 
 # ---------- 5. 모델 ----------
 def step_models(out: Path) -> None:
-    cache = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub" / ("models--" + HF_REPO.replace("/", "--"))
+    cache = (
+        Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+        / "hub"
+        / ("models--" + HF_REPO.replace("/", "--"))
+    )
     snaps = sorted((cache / "snapshots").glob("*")) if cache.exists() else []
     if not snaps:
         raise SystemExit(f"HF 캐시에 {HF_REPO} 가 없습니다. 한 번 transcribe 를 돌려 받아 두거나 --skip-models")
@@ -137,11 +169,13 @@ def step_models(out: Path) -> None:
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
-    for f in snap.iterdir():                       # HF 는 blobs 로 심볼릭/하드 링크 → 실제 파일로 복사
+    for f in snap.iterdir():  # HF 는 blobs 로 심볼릭/하드 링크 → 실제 파일로 복사
         if f.is_file() or f.is_symlink():
             shutil.copyfile(f.resolve(), dst / f.name)
     (out / "models" / "README.md").write_text(
-        f"# models\n- {MODEL_DIR_NAME}/ : {HF_REPO} (CTranslate2 변환, faster-whisper 용). transcribe 가 이 폴더를 우선 사용한다 (오프라인).\n", encoding="utf-8")
+        f"# models\n- {MODEL_DIR_NAME}/ : {HF_REPO} (CTranslate2 변환, faster-whisper 용). transcribe 가 이 폴더를 우선 사용한다 (오프라인).\n",
+        encoding="utf-8",
+    )
     log(f"models: {MODEL_DIR_NAME} {human(du(dst))} ← {snap}")
 
 
@@ -149,10 +183,24 @@ def step_models(out: Path) -> None:
 def step_meta(out: Path) -> None:
     sys.path.insert(0, str(ROOT))
     from clipforge import __version__
-    (out / "VERSION.json").write_text(json.dumps({"engine_version": __version__, "python": PY_VER, "built": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                                  "components": {k: human(du(out / k)) for k in ("Lib/site-packages", "bin", "models", "app/dist", "clipforge")}},
-                                                 ensure_ascii=False, indent=1), encoding="utf-8")
-    (out / "THIRD_PARTY_NOTICES.md").write_text("""# 제3자 구성요소 고지 (engine-dist)
+
+    (out / "VERSION.json").write_text(
+        json.dumps(
+            {
+                "engine_version": __version__,
+                "python": PY_VER,
+                "built": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "components": {
+                    k: human(du(out / k)) for k in ("Lib/site-packages", "bin", "models", "app/dist", "clipforge")
+                },
+            },
+            ensure_ascii=False,
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    (out / "THIRD_PARTY_NOTICES.md").write_text(
+        """# 제3자 구성요소 고지 (engine-dist)
 
 | 구성요소 | 라이선스 | 비고 |
 |---|---|---|
@@ -167,7 +215,9 @@ def step_meta(out: Path) -> None:
 | React, Vite 산출물 (app/dist) | MIT | |
 
 설치본 배포 전 확인: GPL ffmpeg 를 동봉하므로 고지와 소스 입수 방법(ffmpeg.org)을 제품 정보 화면에 표기한다.
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     log("meta: VERSION.json, THIRD_PARTY_NOTICES.md")
 
 
@@ -175,14 +225,28 @@ def step_meta(out: Path) -> None:
 def step_smoke(out: Path) -> dict:
     import tempfile
     import urllib.error
+
     data = Path(tempfile.mkdtemp(prefix="cf-dist-"))
     port = 8799
-    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")} | {"CLIPFORGE_DATA": str(data), "PYTHONIOENCODING": "utf-8"}
-    env.pop("PATH", None); env["PATH"] = str(out / "bin")            # PATH 에서 개발 ffmpeg 를 숨긴다 → 번들 bin/ 만으로 돼야 한다
-    env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", r"C:\Windows"); env["PATH"] += os.pathsep + env["SYSTEMROOT"] + r"\System32"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")} | {
+        "CLIPFORGE_DATA": str(data),
+        "PYTHONIOENCODING": "utf-8",
+    }
+    env.pop("PATH", None)
+    env["PATH"] = str(out / "bin")  # PATH 에서 개발 ffmpeg 를 숨긴다 → 번들 bin/ 만으로 돼야 한다
+    env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    env["PATH"] += os.pathsep + env["SYSTEMROOT"] + r"\System32"
     log(f"smoke: {out / 'python.exe'} -m clipforge.app --port {port}  (CLIPFORGE_DATA={data}, PATH=bin 만)")
-    proc = subprocess.Popen([str(out / "python.exe"), "-m", "clipforge.app", "--no-browser", "--port", str(port)], cwd=str(out), env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.Popen(
+        [str(out / "python.exe"), "-m", "clipforge.app", "--no-browser", "--port", str(port)],
+        cwd=str(out),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     health = None
     try:
         t0 = time.time()
@@ -191,7 +255,8 @@ def step_smoke(out: Path) -> dict:
                 break
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=3) as r:
-                    health = json.loads(r.read().decode("utf-8")); break
+                    health = json.loads(r.read().decode("utf-8"))
+                    break
             except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
                 time.sleep(0.5)
     finally:
@@ -200,7 +265,8 @@ def step_smoke(out: Path) -> dict:
         tail = (proc.stdout.read() if proc.stdout else "")[-1500:]
     shutil.rmtree(data, ignore_errors=True)
     if not health:
-        print(tail); raise SystemExit("smoke: 엔진이 뜨지 않았습니다")
+        print(tail)
+        raise SystemExit("smoke: 엔진이 뜨지 않았습니다")
     keys = ("engine_version", "ffmpeg_ok", "nvenc", "gpu", "whisper_gpu", "rapidocr", "fonts_ok")
     log("smoke: " + "  ".join(f"{k}={health.get(k)}" for k in keys))
     log(f"smoke: ffmpeg={health.get('ffmpeg')}  problems={[p['code'] for p in health.get('problems', [])]}")
@@ -211,8 +277,17 @@ def step_smoke(out: Path) -> dict:
 
 
 # ---------- 8. 릴리스 아티팩트 (앱 내 업데이트용, PRODUCT_ARCHITECTURE §9.2) ----------
-CODE_PATHS = ["clipforge", "games", "data", "assets", "app"]       # 층 A
-DATA_DIRS = {"cache", "labels", "review", "premiere", "reports", "videos", "project.json", "episodes.csv"}   # 번들에 들어가면 안 되는 것
+CODE_PATHS = ["clipforge", "games", "data", "assets", "app"]  # 층 A
+DATA_DIRS = {
+    "cache",
+    "labels",
+    "review",
+    "premiere",
+    "reports",
+    "videos",
+    "project.json",
+    "episodes.csv",
+}  # 번들에 들어가면 안 되는 것
 NOTICE_FILES = {"VERSION.json", "THIRD_PARTY_NOTICES.md"}
 
 
@@ -221,12 +296,17 @@ def component_paths(out: Path, name: str) -> list[str]:
     python-base = 루트의 파일 전부(고지 제외) + Lib (단, Lib/site-packages/nvidia 제외)  ·  cuda = Lib/site-packages/nvidia (선택: GPU 가속)
     ffmpeg = bin  ·  whisper = models"""
     if name == "python-base":
-        return sorted(p.name for p in out.iterdir() if p.is_file() and p.name not in NOTICE_FILES and p.name not in DATA_DIRS) + ["Lib"]
+        return [
+            *sorted(
+                p.name for p in out.iterdir() if p.is_file() and p.name not in NOTICE_FILES and p.name not in DATA_DIRS
+            ),
+            "Lib",
+        ]
     return {"cuda": ["Lib/site-packages/nvidia"], "ffmpeg": ["bin"], "whisper": ["models"]}[name]
 
 
 COMPONENTS = ("python-base", "cuda", "ffmpeg", "whisper")
-COMPONENT_INFO = {   # 첫 실행 화면에 보여줄 설명. optional 은 사용자가 끌 수 있다.
+COMPONENT_INFO = {  # 첫 실행 화면에 보여줄 설명. optional 은 사용자가 끌 수 있다.
     "python-base": {"label": "파이썬 런타임 + 분석 패키지", "optional": False},
     "cuda": {"label": "GPU 가속 (NVIDIA cuBLAS/cuDNN) — 전사 20배 빠름", "optional": True},
     "ffmpeg": {"label": "FFmpeg (영상 디코딩·렌더)", "optional": False},
@@ -237,6 +317,7 @@ EXCLUDE_IN = {"python-base": ["Lib/site-packages/nvidia"]}
 
 def sha256_of(p: Path) -> str:
     import hashlib
+
     h = hashlib.sha256()
     with open(p, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -246,7 +327,9 @@ def sha256_of(p: Path) -> str:
 
 def zip_paths(out: Path, rel_paths: list[str], dst: Path, exclude: list[str] | None = None) -> None:
     ex = [out / e for e in (exclude or [])]
-    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:      # 속도 우선 (DLL·모델은 거의 안 줄어든다)
+    with zipfile.ZipFile(
+        dst, "w", zipfile.ZIP_DEFLATED, compresslevel=1
+    ) as z:  # 속도 우선 (DLL·모델은 거의 안 줄어든다)
         for rel in rel_paths:
             p = out / rel
             if p.is_file():
@@ -257,35 +340,64 @@ def zip_paths(out: Path, rel_paths: list[str], dst: Path, exclude: list[str] | N
                         z.write(f, f.relative_to(out).as_posix())
 
 
-def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str, components_url: str | None = None) -> None:
+def step_release(
+    out: Path, rel_dir: Path, with_components: bool, base_url: str, components_url: str | None = None
+) -> None:
     """engine-code-<ver>.zip (+ 구성요소 zip) 과 latest.json.
     base_url       = 앱 릴리스 자산 주소 (engine-code zip·latest.json. GitHub: .../releases/latest/download)
     components_url = 구성요소 zip 주소 (드물게 갱신되는 런타임 릴리스. GitHub: .../releases/download/runtime-YYYY.MM). 없으면 base_url"""
     sys.path.insert(0, str(ROOT))
     from clipforge import __version__
+
     rel_dir.mkdir(parents=True, exist_ok=True)
     ver = json.loads((out / "VERSION.json").read_text(encoding="utf-8"))
-    comp_ver = ver.get("component_versions") or {"python-base": f"{PY_VER}+pkg{time.strftime('%Y.%m')}", "cuda": "12.9+cudnn9.27",
-                                                  "ffmpeg": "9.0.2", "whisper": "large-v3-turbo-ct2-1"}
+    comp_ver = ver.get("component_versions") or {
+        "python-base": f"{PY_VER}+pkg{time.strftime('%Y.%m')}",
+        "cuda": "12.9+cudnn9.27",
+        "ffmpeg": "9.0.2",
+        "whisper": "large-v3-turbo-ct2-1",
+    }
     comp_base = (components_url or base_url).rstrip("/")
+
     # base_url 이 "rel"/""/"." 이면 파일 이름만 적는다 → 껍데기가 latest.json 을 읽은 주소 기준으로 상대 해석 (USB: 드라이브 문자가 달라도 됨)
-    rel = lambda base: base.strip() in ("", ".", "rel")
-    entry = lambda p, v, base=base_url.rstrip("/"): {"version": v, "url": p.name if rel(base) else f"{base}/{p.name}", "sha256": sha256_of(p), "size": p.stat().st_size}
+    def rel(base: str) -> bool:
+        return base.strip() in ("", ".", "rel")
+
+    def entry(p: Path, v: str, base: str | None = None) -> dict:
+        base = (base if base is not None else base_url).rstrip("/")
+        return {
+            "version": v,
+            "url": p.name if rel(base) else f"{base}/{p.name}",
+            "sha256": sha256_of(p),
+            "size": p.stat().st_size,
+        }
+
     code_zip = rel_dir / f"engine-code-{__version__}.zip"
     zip_paths(out, CODE_PATHS, code_zip)
-    manifest = {"published": time.strftime("%Y-%m-%dT%H:%M:%S"), "shell": {"version": __version__, "min_engine_code": __version__},
-                "engine_code": entry(code_zip, __version__), "components": {}, "compat": {}}
+    manifest = {
+        "published": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "shell": {"version": __version__, "min_engine_code": __version__},
+        "engine_code": entry(code_zip, __version__),
+        "components": {},
+        "compat": {},
+    }
     log(f"release: {code_zip.name} {human(code_zip.stat().st_size)}")
     for name in COMPONENTS:
         zp = rel_dir / f"{name}-{comp_ver[name].replace('+', '_')}.zip"
         if with_components:
             zip_paths(out, component_paths(out, name), zp, EXCLUDE_IN.get(name))
             log(f"release: {zp.name} {human(zp.stat().st_size)}")
-        info = {**COMPONENT_INFO[name], "paths": component_paths(out, name) if name != "python-base" else ["<root files>", "Lib"]}
+        info = {
+            **COMPONENT_INFO[name],
+            "paths": component_paths(out, name) if name != "python-base" else ["<root files>", "Lib"],
+        }
         if zp.exists():
             manifest["components"][name] = {**entry(zp, comp_ver[name], comp_base), **info}
         else:
-            manifest["components"][name] = {"version": comp_ver[name], **info}          # zip 없이 버전만 (서버에 이미 있는 경우)
+            manifest["components"][name] = {
+                "version": comp_ver[name],
+                **info,
+            }  # zip 없이 버전만 (서버에 이미 있는 경우)
     (rel_dir / "latest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     ver["component_versions"] = comp_ver
     (out / "VERSION.json").write_text(json.dumps(ver, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -295,12 +407,26 @@ def step_release(out: Path, rel_dir: Path, with_components: bool, base_url: str,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "engine-dist"))
-    ap.add_argument("--release", metavar="DIR", help="앱 내 업데이트용 아티팩트(engine-code zip + latest.json)를 DIR 에 생성")
-    ap.add_argument("--release-components", action="store_true", help="--release 에 구성요소 zip(python/ffmpeg/whisper, 4GB)도 포함")
-    ap.add_argument("--base-url", default="https://github.com/jaeyeonling/clipforge/releases/latest/download", help="engine-code zip·latest.json 의 url 접두 (앱 릴리스)")
-    ap.add_argument("--components-url", default=None, help="구성요소 zip 의 url 접두 (런타임 릴리스, 예: .../releases/download/runtime-2026.10). 없으면 --base-url")
-    ap.add_argument("--skip-packages", action="store_true"); ap.add_argument("--force-packages", action="store_true")
-    ap.add_argument("--skip-ffmpeg", action="store_true"); ap.add_argument("--skip-models", action="store_true")
+    ap.add_argument(
+        "--release", metavar="DIR", help="앱 내 업데이트용 아티팩트(engine-code zip + latest.json)를 DIR 에 생성"
+    )
+    ap.add_argument(
+        "--release-components", action="store_true", help="--release 에 구성요소 zip(python/ffmpeg/whisper, 4GB)도 포함"
+    )
+    ap.add_argument(
+        "--base-url",
+        default="https://github.com/jaeyeonling/clipforge/releases/latest/download",
+        help="engine-code zip·latest.json 의 url 접두 (앱 릴리스)",
+    )
+    ap.add_argument(
+        "--components-url",
+        default=None,
+        help="구성요소 zip 의 url 접두 (런타임 릴리스, 예: .../releases/download/runtime-2026.10). 없으면 --base-url",
+    )
+    ap.add_argument("--skip-packages", action="store_true")
+    ap.add_argument("--force-packages", action="store_true")
+    ap.add_argument("--skip-ffmpeg", action="store_true")
+    ap.add_argument("--skip-models", action="store_true")
     ap.add_argument("--smoke", action="store_true", help="구성 뒤 번들 파이썬으로 엔진을 띄워 health 확인")
     a = ap.parse_args()
     out = Path(a.out).resolve()

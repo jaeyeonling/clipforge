@@ -7,6 +7,7 @@
 텍스트는 전부 textdraw.py 로만 그린다 (스트로커 금지, 글자 단위 폰트 폴백). 폰트: assets/fonts (OFL) + 맑은 고딕.
 출력 PNG 는 1080×height. 렌더가 [1:v] 로 받아 vstack 한다.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -18,8 +19,8 @@ from PIL import Image, ImageDraw
 from .textdraw import FontStack, draw_text, fit_size
 
 W = 1080
-TITLE_H, CHAT_H_TOP = 400, 560          # 모드별 상단 높이
-PEN = FontStack("pen", "gothic")        # 손글씨 + 폴백(가운뎃점·★ 등 손글씨체에 없는 기호)
+TITLE_H, CHAT_H_TOP = 400, 560  # 모드별 상단 높이
+PEN = FontStack("pen", "gothic")  # 손글씨 + 폴백(가운뎃점·★ 등 손글씨체에 없는 기호)
 GOTHIC = FontStack("gothic", "gothic_regular")
 BLACK = FontStack("black", "gothic")
 
@@ -43,12 +44,12 @@ def title_band(lines: list[str], path: Path, height: int = TITLE_H, stack: FontS
     d = ImageDraw.Draw(img)
     start = int(height * (0.42 if len(lines) == 2 else 0.6))
     sizes = [fit_size(stack, l, W - 120, start, floor=48) for l in lines]
-    boxes = [stack.height(l, s) for l, s in zip(lines, sizes)]
+    boxes = [stack.height(l, s) for l, s in zip(lines, sizes, strict=True)]
     heights = [b - t for t, b in boxes]
     gap = int(height * 0.06)
     total = sum(heights) + gap * (len(lines) - 1)
     y = (height - total) // 2
-    for l, s, (top, _), h in zip(lines, sizes, boxes, heights):
+    for l, s, (top, _), h in zip(lines, sizes, boxes, heights, strict=True):
         x = (W - stack.width(l, s)) / 2
         draw_text(d, (x, y - top), l, stack, s, fill=(20, 20, 20), weight=2)
         y += h + gap
@@ -69,18 +70,20 @@ def _wrap(stack: FontStack, text: str, size: int, max_w: int, max_lines: int = 2
         if stack.width(cand, size) <= max_w or not cur:
             cur = cand
         else:
-            lines.append(cur); cur = w
+            lines.append(cur)
+            cur = w
         if len(lines) == max_lines:
             break
     if cur and len(lines) < max_lines:
         lines.append(cur)
     out = []
-    for l in lines:                                 # 단어 경계 없는 긴 한국어: 글자 단위로 자른다
+    for l in lines:  # 단어 경계 없는 긴 한국어: 글자 단위로 자른다
         while stack.width(l, size) > max_w and len(l) > 1:
             cut = len(l)
             while cut > 1 and stack.width(l[:cut], size) > max_w:
                 cut -= 1
-            out.append(l[:cut]); l = l[cut:]
+            out.append(l[:cut])
+            l = l[cut:]
             if len(out) == max_lines:
                 break
         if l and len(out) < max_lines:
@@ -97,7 +100,10 @@ def chat_band(messages: list[dict], path: Path, height: int = CHAT_H_TOP, max_ms
     pad_x, y = 48, 36
     blocks = [(m.get("nick", ""), _wrap(GOTHIC, m.get("text", ""), body_size, W - pad_x * 2, 2)) for m in msgs]
     line_h = 70
-    needed = lambda b: (52 if b[0] else 0) + line_h * len(b[1]) + 26
+
+    def needed(b) -> int:
+        return (52 if b[0] else 0) + line_h * len(b[1]) + 26
+
     while blocks and sum(needed(b) for b in blocks) > height - 40:
         blocks.pop(0)
     for nick, body in blocks:

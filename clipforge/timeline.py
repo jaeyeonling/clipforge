@@ -9,12 +9,13 @@
 둘 다 JSON으로 직렬화되며, 파일명 규칙은 `<video_id>/<signal_name>.json`.
 신호를 추가할 때는 이 포맷으로만 내놓으면 평가/후보 생성이 그대로 동작한다.
 """
+
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 
@@ -22,7 +23,7 @@ import numpy as np
 @dataclass
 class Curve:
     name: str
-    hop: float                       # 샘플 간격(초)
+    hop: float  # 샘플 간격(초)
     values: list[float]
     meta: dict[str, Any] = field(default_factory=dict)
 
@@ -38,7 +39,7 @@ class Curve:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: Path) -> "Curve":
+    def load(cls, path: Path) -> Curve:
         return cls(**json.loads(path.read_text(encoding="utf-8")))
 
 
@@ -46,15 +47,15 @@ class Curve:
 class Segment:
     start: float
     end: float
-    label: str = ""                  # 예) "candidate", "keep", "rune_drop", "reaction"
-    score: float = 1.0               # 신뢰도/강도. 정답 레이블은 1.0
+    label: str = ""  # 예) "candidate", "keep", "rune_drop", "reaction"
+    score: float = 1.0  # 신뢰도/강도. 정답 레이블은 1.0
     meta: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration(self) -> float:
         return max(0.0, self.end - self.start)
 
-    def overlap(self, other: "Segment") -> float:
+    def overlap(self, other: Segment) -> float:
         return max(0.0, min(self.end, other.end) - max(self.start, other.start))
 
 
@@ -67,10 +68,10 @@ class Segments:
     def total_duration(self) -> float:
         return sum(s.duration for s in self.items)
 
-    def sorted(self) -> "Segments":
+    def sorted(self) -> Segments:
         return Segments(self.name, sorted(self.items, key=lambda s: s.start), self.meta)
 
-    def merge_close(self, gap: float) -> "Segments":
+    def merge_close(self, gap: float) -> Segments:
         """gap초 이내로 붙은 구간을 하나로 합친다 (score는 max)."""
         out: list[Segment] = []
         for s in self.sorted().items:
@@ -87,25 +88,28 @@ class Segments:
         path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=1), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: Path) -> "Segments":
+    def load(cls, path: Path) -> Segments:
         d = json.loads(path.read_text(encoding="utf-8"))
         return cls(d["name"], [Segment(**s) for s in d["items"]], d.get("meta", {}))
 
     @classmethod
-    def from_csv(cls, path: Path, name: str = "labels") -> "Segments":
+    def from_csv(cls, path: Path, name: str = "labels") -> Segments:
         """labels CSV: start,end,label[,note]  (start/end는 초 또는 mm:ss / hh:mm:ss)"""
         import csv
+
         items = []
         with open(path, encoding="utf-8", newline="") as f:
             for row in csv.DictReader(f):
                 if not row.get("start"):
                     continue
-                items.append(Segment(
-                    start=parse_time(row["start"]),
-                    end=parse_time(row["end"]),
-                    label=row.get("label", "").strip(),
-                    meta={"note": row.get("note", "")},
-                ))
+                items.append(
+                    Segment(
+                        start=parse_time(row["start"]),
+                        end=parse_time(row["end"]),
+                        label=row.get("label", "").strip(),
+                        meta={"note": row.get("note", "")},
+                    )
+                )
         return cls(name, items)
 
 

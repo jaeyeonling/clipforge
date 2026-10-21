@@ -8,6 +8,7 @@
   coverage    : 후보 총 길이 / 원본 길이                             ← 사람이 검토해야 할 양(비용)
   missed      : 놓친 정답 구간 목록 (라벨별) ← 다음에 어떤 신호를 만들어야 하는지 알려주는 데이터
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -59,6 +60,9 @@ def evaluate(candidates: Segments, labels: Segments, duration: float, min_overla
         recall=(n_l - len(missed)) / n_l if n_l else 0.0,
         precision=tp_c / n_c if n_c else 0.0,
         coverage=candidates.total_duration() / duration if duration else 0.0,
-        n_labels=n_l, n_candidates=n_c,
-        missed=missed, missed_by_label=miss_c, hit_by_label=hit_c,
+        n_labels=n_l,
+        n_candidates=n_c,
+        missed=missed,
+        missed_by_label=miss_c,
+        hit_by_label=hit_c,
     )

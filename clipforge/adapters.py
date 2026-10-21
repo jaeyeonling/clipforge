@@ -4,6 +4,7 @@
 창 가장자리 25% 는 선형으로 줄어드는 사다리꼴. 여러 이벤트가 겹치면 max.
 커널 파라미터(pre/post/labels)는 게임 프로필 `events:` 절에서 온다.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -11,8 +12,16 @@ import numpy as np
 from .timeline import Curve, Segments
 
 
-def events_to_curve(segs: Segments, duration: float, hop: float = 0.5, pre: float = 8.0, post: float = 6.0,
-                    labels: list[str] | None = None, ramp: float = 0.25, name: str | None = None) -> Curve:
+def events_to_curve(
+    segs: Segments,
+    duration: float,
+    hop: float = 0.5,
+    pre: float = 8.0,
+    post: float = 6.0,
+    labels: list[str] | None = None,
+    ramp: float = 0.25,
+    name: str | None = None,
+) -> Curve:
     n = int(duration / hop) + 1
     y = np.zeros(n, dtype=np.float32)
     t = np.arange(n) * hop
@@ -27,5 +36,9 @@ def events_to_curve(segs: Segments, duration: float, hop: float = 0.5, pre: floa
         v = np.clip(np.minimum((t - a) / r, (b - t) / r), 0.0, 1.0) * float(s.score if s.score else 1.0)
         y = np.maximum(y, v.astype(np.float32))
         used += 1
-    return Curve(name=name or segs.name, hop=hop, values=[round(float(v), 3) for v in y],
-                 meta={"adapter": "trapezoid", "pre": pre, "post": post, "labels": labels, "n_events": used})
+    return Curve(
+        name=name or segs.name,
+        hop=hop,
+        values=[round(float(v), 3) for v in y],
+        meta={"adapter": "trapezoid", "pre": pre, "post": post, "labels": labels, "n_events": used},
+    )

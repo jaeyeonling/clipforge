@@ -5,6 +5,7 @@
   offscreen  : HUD 구슬 둘 다 없음 (줌·카드·로딩·엔딩) → 게임 화면 아님 (_hud.py)
 출력: Segments("ui_state"), label ∈ {inventory, left_panel, offscreen}, meta={"len", "panel"}.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,7 +29,7 @@ def ui_state(cache: Path, orb_min: float = 0.05, min_len: int = 1) -> Segments:
     items = []
     for i, j in runs([bool(r) and r in RIGHT_SIDE for r in right], min_len):
         items.append(Segment(i * hop, j * hop, "inventory", 1.0, {"len": j - i, "panel": right[i]}))
-    for i, j in runs([bool(l) and not (right[k] in RIGHT_SIDE) for k, l in enumerate(left)], min_len):
+    for i, j in runs([bool(l) and right[k] not in RIGHT_SIDE for k, l in enumerate(left)], min_len):
         items.append(Segment(i * hop, j * hop, "left_panel", 1.0, {"len": j - i, "panel": left[i]}))
     for i, j in runs([r < orb_min and b < orb_min for r, b in orbs], min_len):
         items.append(Segment(i * hop, j * hop, "offscreen", 1.0, {"len": j - i}))

@@ -7,10 +7,11 @@
     @signal("my_signal")
     def my_signal(cache: Path) -> Curve | Segments: ...
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..timeline import Curve, Segments
 
@@ -22,6 +23,7 @@ def signal(name: str):
     def deco(fn: SignalFn) -> SignalFn:
         REGISTRY[name] = fn
         return fn
+
     return deco
 
 

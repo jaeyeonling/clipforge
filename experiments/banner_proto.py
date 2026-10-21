@@ -4,18 +4,29 @@
 방법: 3초 간격으로 OCR → 텍스트가 바뀐 구간만 1초 단위로 다시 OCR → "추가된 토큰"과 시각을 이벤트로.
 출력: JSON 이벤트 리스트 + 콘솔 요약.
 """
-import glob, json, re, sys, time
+
+import itertools
+import json
+import re
+import sys
+import time
 from pathlib import Path
 
-from rapidocr import RapidOCR, LangRec, ModelType, OCRVersion
+from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
 
 src = Path(sys.argv[1])
 out = Path(sys.argv[2])
 step = int(sys.argv[3]) if len(sys.argv) > 3 else 3
 files = sorted(src.glob("*.jpg"))
 n = len(files)
-eng = RapidOCR(params={"Rec.lang_type": LangRec.KOREAN, "Rec.model_type": ModelType.MOBILE,
-                       "Rec.ocr_version": OCRVersion.PPOCRV5, "Global.log_level": "error"})
+eng = RapidOCR(
+    params={
+        "Rec.lang_type": LangRec.KOREAN,
+        "Rec.model_type": ModelType.MOBILE,
+        "Rec.ocr_version": OCRVersion.PPOCRV5,
+        "Global.log_level": "error",
+    }
+)
 
 cache: dict[int, str] = {}
 IGNORE = {"준영"}  # 스트리머 이름 라벨 등 배너 본문이 아닌 고정 텍스트
@@ -41,11 +52,11 @@ coarse = list(range(0, n, step))
 for k, i in enumerate(coarse):
     ocr(i)
     if k % 20 == 0:
-        print(f"  coarse {k}/{len(coarse)}  {time.time()-t0:.0f}s", flush=True)
+        print(f"  coarse {k}/{len(coarse)}  {time.time() - t0:.0f}s", flush=True)
 
 # 바뀐 구간을 1초 단위로 정밀화
 events = []
-for a, b in zip(coarse, coarse[1:]):
+for a, b in itertools.pairwise(coarse):
     if ocr(a) == ocr(b):
         continue
     for i in range(a, b):
@@ -53,15 +64,24 @@ for a, b in zip(coarse, coarse[1:]):
             before, after = tokens(ocr(i)), tokens(ocr(i + 1))
             added = [t for t in after if t not in before]
             removed = [t for t in before if t not in after]
-            events.append({"t": i + 1, "len_delta": len(ocr(i + 1)) - len(ocr(i)),
-                           "added": added, "removed": removed, "after": ocr(i + 1)})
+            events.append(
+                {
+                    "t": i + 1,
+                    "len_delta": len(ocr(i + 1)) - len(ocr(i)),
+                    "added": added,
+                    "removed": removed,
+                    "after": ocr(i + 1),
+                }
+            )
 
-print(f"OCR calls: {len(cache)}  elapsed {time.time()-t0:.0f}s")
+print(f"OCR calls: {len(cache)}  elapsed {time.time() - t0:.0f}s")
 print("--- banner change events ---")
 for e in events:
     m, s = divmod(e["t"], 60)
     kind = "APPEND" if e["len_delta"] > 5 and e["added"] else ("SWAP" if e["added"] else "noise")
     print(f"{m}:{s:02d}  {kind:6s} Δ{e['len_delta']:+4d}  +{e['added']}  -{e['removed']}")
-out.write_text(json.dumps({"events": events, "ocr": {str(k): v for k, v in sorted(cache.items())}},
-                          ensure_ascii=False, indent=1), encoding="utf-8")
+out.write_text(
+    json.dumps({"events": events, "ocr": {str(k): v for k, v in sorted(cache.items())}}, ensure_ascii=False, indent=1),
+    encoding="utf-8",
+)
 print("saved", out)

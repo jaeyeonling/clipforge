@@ -6,6 +6,7 @@ rois/chat/%06d.jpg (1fps, 네이티브 크롭) 에서 밝은 글자 픽셀 마�
 
 한국 클립 채널 관례 "채팅이 몰린 곳이 곧 하이라이트"(Captus) 의 가장 싼 구현.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,12 +35,17 @@ def chat_burst(cache: Path, text_thr: int = 200, smooth: int = 5) -> Curve:
         if prev is None:
             vals.append(0.0)
         else:
-            x = np.logical_xor(m, prev).sum(); u = np.logical_or(m, prev).sum()
+            x = np.logical_xor(m, prev).sum()
+            u = np.logical_or(m, prev).sum()
             vals.append(float(x / u) if u else 0.0)
         prev = m
     v = np.asarray(vals, dtype=np.float32)
     if smooth > 1:
         k = np.ones(smooth, dtype=np.float32) / smooth
         v = np.convolve(v, k, mode="same")
-    return Curve(name="chat_burst", hop=hop, values=[round(float(x), 3) for x in v],
-                 meta={"unit": "xor ratio of bright-text mask, smoothed", "text_thr": text_thr, "smooth": smooth})
+    return Curve(
+        name="chat_burst",
+        hop=hop,
+        values=[round(float(x), 3) for x in v],
+        meta={"unit": "xor ratio of bright-text mask, smoothed", "text_thr": text_thr, "smooth": smooth},
+    )

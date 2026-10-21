@@ -14,9 +14,9 @@
 구현: 텍스트 층은 ASS 한 파일(libass) — 발화(Talk)·하이라이트(Hi)·채팅 피드(Feed)·인트로(Intro) 스타일.
 정적 요소는 PNG 한 장(textdraw). 영상은 scale→overlay(인트로 enable 식). 한 번의 ffmpeg 패스.
 """
+
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -26,7 +26,7 @@ from .subtitles import _ts, cues_for_clip
 from .textdraw import FontStack, draw_text, fit_size
 
 W, H = 1080, 1920
-VID_W, VID_H, VID_Y = 1080, 608, 110          # 16:9
+VID_W, VID_H, VID_Y = 1080, 608, 110  # 16:9
 BAR_Y, HOOK_Y, FEED_Y0, FEED_Y1, FOOT_Y = 740, 820, 930, 1700, 1720
 INTRO_SEC = 1.6
 GOTHIC = FontStack("gothic", "gothic_regular")
@@ -66,7 +66,8 @@ def _wrap_chars(text: str, per_line: int) -> list[str]:
             if cur:
                 out.append(cur)
             while len(w) > per_line:
-                out.append(w[:per_line]); w = w[per_line:]
+                out.append(w[:per_line])
+                w = w[per_line:]
             cur = w
     if cur:
         out.append(cur)
@@ -74,8 +75,13 @@ def _wrap_chars(text: str, per_line: int) -> list[str]:
 
 
 # ---------- ASS 텍스트 층 ----------
-def build_ass(c: ShortCandidate, transcript: dict | None, chat: list[dict] | None, intro_lines: list[str],
-              intro_sec: float = INTRO_SEC) -> str:
+def build_ass(
+    c: ShortCandidate,
+    transcript: dict | None,
+    chat: list[dict] | None,
+    intro_lines: list[str],
+    intro_sec: float = INTRO_SEC,
+) -> str:
     ev: list[str] = []
     t0 = c.start
 
@@ -87,7 +93,13 @@ def build_ass(c: ShortCandidate, transcript: dict | None, chat: list[dict] | Non
     if intro_lines:
         y = VID_Y + int(VID_H * 0.6) + 70
         for i, line in enumerate(intro_lines[:2]):
-            dlg("IntroG" if i == 1 else "IntroW", 0.0, intro_sec, f"{{\\an8\\pos({W // 2},{y + i * 110})}}{_esc(line)}", 2)
+            dlg(
+                "IntroG" if i == 1 else "IntroW",
+                0.0,
+                intro_sec,
+                f"{{\\an8\\pos({W // 2},{y + i * 110})}}{_esc(line)}",
+                2,
+            )
 
     # 발화 자막: 영상 좌상단 (인트로 뒤부터)
     if transcript:
@@ -110,14 +122,17 @@ def build_ass(c: ShortCandidate, transcript: dict | None, chat: list[dict] | Non
     last_end = intro_sec
     for t, text, score in msgs:
         if score >= 1.0 and 0 <= t <= c.end - t0:
-            a = max(t, last_end); b = min(a + 3.0, c.end - t0)
+            a = max(t, last_end)
+            b = min(a + 3.0, c.end - t0)
             dlg("Hi", a, b, f"{{\\an2\\pos({W // 2},{VID_Y + VID_H - 24})}}{_esc(text)}", 1)
             last_end = b
     # 피드: 메시지 등장 시각마다 상태(최근 N줄) 교체. 클립 시작 전 메시지는 0초에 이미 보임
     per_line, line_h = 16, 82
     max_lines = (FEED_Y1 - FEED_Y0) // line_h
     times = sorted({max(0.0, t) for t, _, _ in msgs})
-    states = [(0.0, [m for m in msgs if m[0] <= 0.0])] + [(tt, [m for m in msgs if m[0] <= tt]) for tt in times if tt > 0]
+    states = [(0.0, [m for m in msgs if m[0] <= 0.0])] + [
+        (tt, [m for m in msgs if m[0] <= tt]) for tt in times if tt > 0
+    ]
     for i, (tt, shown) in enumerate(states):
         nxt = states[i + 1][0] if i + 1 < len(states) else c.end - t0
         lines: list[str] = []
@@ -159,15 +174,23 @@ def build_static(c: ShortCandidate, brand: str, episode_label: str, hook: str, p
 
 
 # ---------- ffmpeg 명령 ----------
-def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, static_png: str, ass_file: str,
-              nvenc: bool = True, intro_sec: float = INTRO_SEC) -> list[str]:
+def build_cmd(
+    src: Path,
+    c: ShortCandidate,
+    meta: dict,
+    out_name: str,
+    static_png: str,
+    ass_file: str,
+    nvenc: bool = True,
+    intro_sec: float = INTRO_SEC,
+) -> list[str]:
     dur = c.end - c.start
     small_w = int(VID_W * 0.6) // 2 * 2
     small_h = int(VID_H * 0.6) // 2 * 2
     fc = [
         f"[0:v]scale={VID_W}:{VID_H}:force_original_aspect_ratio=decrease,pad={VID_W}:{VID_H}:(ow-iw)/2:(oh-ih)/2,split=2[full][sm0]",
         f"[sm0]scale={small_w}:{small_h}[small]",
-        f"[1:v]format=rgba[bg]",
+        "[1:v]format=rgba[bg]",
         f"[bg][full]overlay=0:{VID_Y}:enable='gte(t,{intro_sec})'[v1]",
         f"[v1][small]overlay={(W - small_w) // 2}:{VID_Y}:enable='lt(t,{intro_sec})'[v2]",
         f"[v2]subtitles={ass_file}[v]",
@@ -175,10 +198,30 @@ def build_cmd(src: Path, c: ShortCandidate, meta: dict, out_name: str, static_pn
     cmd = ["ffmpeg", "-y", "-v", "error"]
     if nvenc:
         cmd += ["-hwaccel", "cuda"]
-    cmd += ["-ss", f"{c.start:.2f}", "-t", f"{dur:.2f}", "-i", str(src.resolve()),
-            "-loop", "1", "-framerate", "1", "-i", static_png,
-            "-filter_complex", ";".join(fc), "-map", "[v]", "-map", "0:a?",
-            "-c:v", "h264_nvenc" if nvenc else "libx264", "-preset", "p4" if nvenc else "veryfast"]
+    cmd += [
+        "-ss",
+        f"{c.start:.2f}",
+        "-t",
+        f"{dur:.2f}",
+        "-i",
+        str(src.resolve()),
+        "-loop",
+        "1",
+        "-framerate",
+        "1",
+        "-i",
+        static_png,
+        "-filter_complex",
+        ";".join(fc),
+        "-map",
+        "[v]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "h264_nvenc" if nvenc else "libx264",
+        "-preset",
+        "p4" if nvenc else "veryfast",
+    ]
     cmd += ["-cq", "23"] if nvenc else ["-crf", "23"]
     cmd += ["-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", out_name]
     return cmd

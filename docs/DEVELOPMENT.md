@@ -89,6 +89,7 @@ python -m clipforge.run eval <원본>
 from ..timeline import Segments, Segment
 from .base import signal
 
+
 @signal("my_signal")
 def my_signal(cache: Path) -> Segments:
     # cache/rois/<name>/*.jpg 나 cache/frames/*.jpg, cache/audio.wav 를 읽어 구간을 돌려준다

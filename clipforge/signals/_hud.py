@@ -5,6 +5,7 @@ red/blue = 체력/마나 구슬 ROI 안의 "구슬 색" 픽셀 비율.
   red 만 ≈0 → 왼쪽 패널(캐릭터창·스킬트리 등)이 구슬을 가림
   blue 만 ≈0→ 오른쪽 패널(인벤토리·창고·큐브 등)이 구슬을 가림  ← 툴팁이 뜨는 자리
 """
+
 from __future__ import annotations
 
 import json
@@ -30,14 +31,23 @@ def orb_fractions(cache: Path, force: bool = False) -> list[tuple[float, float]]
         im.draft("RGB", (640, 360))
         a = np.asarray(im.convert("RGB"), dtype=np.float32)
         H, W = a.shape[:2]
-        sx, sy = W / W0, H / H0                      # 네이티브 ROI → 이 이미지 좌표
+        sx, sy = W / W0, H / H0  # 네이티브 ROI → 이 이미지 좌표
 
-        def sub(name):
+        def sub(name, a=a, sx=sx, sy=sy):
             x, y, w, h = rois[name]
-            return a[int(y * sy):int((y + h) * sy), int(x * sx):int((x + w) * sx)]
+            return a[int(y * sy) : int((y + h) * sy), int(x * sx) : int((x + w) * sx)]
+
         r, b = sub("hud_red_orb"), sub("hud_blue_orb")
-        red = float(((r[..., 0] > 120) & (r[..., 0] > r[..., 1] * 1.8) & (r[..., 0] > r[..., 2] * 1.8)).mean()) if r.size else 0.0
-        blue = float(((b[..., 2] > 120) & (b[..., 2] > b[..., 0] * 1.8) & (b[..., 2] > b[..., 1] * 1.5)).mean()) if b.size else 0.0
+        red = (
+            float(((r[..., 0] > 120) & (r[..., 0] > r[..., 1] * 1.8) & (r[..., 0] > r[..., 2] * 1.8)).mean())
+            if r.size
+            else 0.0
+        )
+        blue = (
+            float(((b[..., 2] > 120) & (b[..., 2] > b[..., 0] * 1.8) & (b[..., 2] > b[..., 1] * 1.5)).mean())
+            if b.size
+            else 0.0
+        )
         vals.append((round(red, 3), round(blue, 3)))
     out_p.write_text(json.dumps(vals), encoding="utf-8")
     return vals

@@ -16,6 +16,7 @@
 
 <video_id> 는 영상 파일명(확장자 제외).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,18 +25,19 @@ import subprocess
 from pathlib import Path
 
 from .candidates import DEFAULT_WEIGHTS, make_candidates
+from .errors import EngineError, classify
 from .eval_shorts import evaluate_shorts
-from .lexicon import Lexicon, banner_tokens, report_md
 from .evaluate import evaluate
 from .export_xml import export_xml
+from .lexicon import Lexicon, banner_tokens, report_md
 from .preprocess import preprocess
 from .profiles import load_profile
 from .render import render_shorts
-from .shorts import ShortCandidate, make_shorts, pretty as shorts_pretty, save_shorts
-from .signals import REGISTRY, run_signal
-from .timeline import Curve, Segment, Segments, fmt_time
 from .schema import load_json
-from .errors import EngineError, classify
+from .shorts import ShortCandidate, make_shorts, save_shorts
+from .shorts import pretty as shorts_pretty
+from .signals import REGISTRY, run_signal
+from .timeline import Curve, Segments, fmt_time
 from .transcribe import transcribe
 from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
@@ -91,9 +93,13 @@ def cmd_signals(a):
 def cmd_cands(a) -> Segments:
     meta = load_meta(a.vid)
     curves, events = load_signals(a.vid)
-    segs = make_candidates(curves, meta["duration"], parse_weights(a.w), events, load_kernels(a.vid), threshold=a.threshold)
+    segs = make_candidates(
+        curves, meta["duration"], parse_weights(a.w), events, load_kernels(a.vid), threshold=a.threshold
+    )
     segs.save(CACHE / a.vid / "candidates.json")
-    print(f"[cands] {len(segs.items)} candidates, coverage {segs.total_duration() / meta['duration']:.1%}  signals={segs.meta.get('signals')}")
+    print(
+        f"[cands] {len(segs.items)} candidates, coverage {segs.total_duration() / meta['duration']:.1%}  signals={segs.meta.get('signals')}"
+    )
     for s in segs.items:
         print(f"  {fmt_time(s.start)}-{fmt_time(s.end)}  score={s.score:.2f}")
     return segs
@@ -127,7 +133,17 @@ def cmd_align(a):
     --shorts 친구 쇼츠 ↔ 회차 → labels/<vid>.shorts.csv keep (Phase 1 정답 역매핑)"""
     if not a.final and not a.shorts:
         raise SystemExit("--final 또는 --shorts 중 하나는 필요합니다")
-    from .align import align_files, align_shorts, collect_shorts, extract_audio, pretty, pretty_shorts, write_labels, write_shorts_labels
+    from .align import (
+        align_files,
+        align_shorts,
+        collect_shorts,
+        extract_audio,
+        pretty,
+        pretty_shorts,
+        write_labels,
+        write_shorts_labels,
+    )
+
     cache = CACHE / a.vid
     orig_wav = cache / "audio.wav"
     if not orig_wav.exists():
@@ -144,16 +160,27 @@ def cmd_align(a):
             return
     fin = Path(a.final)
     if (CACHE / a.final / "audio.wav").exists():
-        final_wav = CACHE / a.final / "audio.wav"; final_name = a.final
+        final_wav = CACHE / a.final / "audio.wav"
+        final_name = a.final
     elif fin.is_file():
-        final_wav = extract_audio(fin, cache / "align" / f"{fin.stem}.wav"); final_name = fin.name
+        final_wav = extract_audio(fin, cache / "align" / f"{fin.stem}.wav")
+        final_name = fin.name
     else:
         raise FileNotFoundError(f"최종본을 찾지 못했습니다: {a.final} (영상 경로 또는 prep 된 회차 id)")
-    segs, diag = align_files(orig_wav, final_wav, cache_dir=cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r"))
+    segs, diag = align_files(
+        orig_wav, final_wav, cache_dir=cache, progress=lambda f, m="": print(f"  {m} {f * 100:.0f}%", end="\r")
+    )
     print(pretty(segs, diag))
-    (cache / "align.json").write_text(json.dumps({"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1), encoding="utf-8")
+    (cache / "align.json").write_text(
+        json.dumps(
+            {"final": final_name, "segments": [s.to_dict() for s in segs], **diag}, ensure_ascii=False, indent=1
+        ),
+        encoding="utf-8",
+    )
     n = write_labels(LABELS / f"{a.vid}.csv", segs, final_name)
-    print(f"[align] {n} kept 구간 → {LABELS / f'{a.vid}.csv'}  (진단 {cache / 'align.json'}, 원본 지문 캐시 {cache / 'fingerprint.npz'}, 지문 {diag.get('fingerprint_s')}s)")
+    print(
+        f"[align] {n} kept 구간 → {LABELS / f'{a.vid}.csv'}  (진단 {cache / 'align.json'}, 원본 지문 캐시 {cache / 'fingerprint.npz'}, 지문 {diag.get('fingerprint_s')}s)"
+    )
 
 
 def cmd_weaklabel(a):
@@ -172,10 +199,15 @@ def cmd_weaklabel(a):
         raise SystemExit("item_banner.json 없음 — signals 먼저")
     matches = match_banner(kws, Segments.load(banner_p))
     for m in matches:
-        print(f"  {m['keyword']:<8} -> banner append @ {fmt_time(m['t'])}  fuzz={m['score']}  added=\"{m['added'][:30]}\"")
+        print(
+            f'  {m["keyword"]:<8} -> banner append @ {fmt_time(m["t"])}  fuzz={m["score"]}  added="{m["added"][:30]}"'
+        )
     if not matches:
-        print("  (매칭 없음 — slang.yaml 별칭 보강 필요. 배너 토큰:",
-              [s.meta.get('added', '')[:20] for s in Segments.load(banner_p).items if s.label == 'append'], ")")
+        print(
+            "  (매칭 없음 — slang.yaml 별칭 보강 필요. 배너 토큰:",
+            [s.meta.get("added", "")[:20] for s in Segments.load(banner_p).items if s.label == "append"],
+            ")",
+        )
     p = write_weak_labels(a.vid, matches, LABELS, duration=meta["duration"])
     print(f"  -> {p}")
 
@@ -197,6 +229,7 @@ def cmd_sweep(a):
 def short_episode_label(title: str) -> str:
     """제목 → 회차 라벨. "(7시간 편집본) 래더 12기 59일차만에 … 【래더12기#42】" → "래더 12기 59일차"."""
     import re as _re
+
     t = _re.sub(r"^\s*\([^)]*\)\s*", "", title or "")
     m = _re.search(r"(래더\s*\d+기[^0-9]*?\d+\s*(?:~\s*\d+\s*)?일차)", t)
     if m:
@@ -214,7 +247,11 @@ def cmd_export(a):
         out = REVIEW / a.vid / "shorts"
         (out / "keep").mkdir(parents=True, exist_ok=True)
         ui_p = CACHE / a.vid / "ui_state.json"
-        ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
+        ui = (
+            [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
+            if ui_p.exists()
+            else None
+        )
         if ui is None:
             print("  (ui_state.json 없음 — 크롭 중심 고정. signals 를 먼저 돌리면 인벤토리를 따라갑니다)")
         tr_p = CACHE / a.vid / "transcript.json"
@@ -222,16 +259,39 @@ def cmd_export(a):
         if tr is None:
             print("  (transcript.json 없음 — 대사 자막 생략. python -m clipforge.run transcribe 로 전사 먼저)")
         chat_p = CACHE / a.vid / "chat_text.json"
-        chat = [{"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")} for s in Segments.load(chat_p).items] if chat_p.exists() else None
+        chat = (
+            [
+                {"t": s.start, "nick": s.meta.get("nick", ""), "text": s.meta.get("text", "")}
+                for s in Segments.load(chat_p).items
+            ]
+            if chat_p.exists()
+            else None
+        )
         ep = load_episode(a.vid) or {}
         label = short_episode_label(ep.get("title", "")) or a.vid
         # 기본(card + title) = 확정 포맷 → shorts/. 그 외 실험 렌더는 shorts_<layout|top>/ 로 분리
         if a.layout == "feed":
-            out = REVIEW / a.vid / "shorts_feed"; (out / "keep").mkdir(parents=True, exist_ok=True)
+            out = REVIEW / a.vid / "shorts_feed"
+            (out / "keep").mkdir(parents=True, exist_ok=True)
         elif a.top != "title":
-            out = REVIEW / a.vid / f"shorts_{a.top}"; (out / "keep").mkdir(parents=True, exist_ok=True)
-        idx = render_shorts(cands, meta, out, k=a.k, cx=a.cx, ui=ui, ease=a.ease, transcript=tr, subs=not a.no_subs,
-                            chat=chat, top_mode=a.top, layout=a.layout, brand=a.brand, episode_label=label)
+            out = REVIEW / a.vid / f"shorts_{a.top}"
+            (out / "keep").mkdir(parents=True, exist_ok=True)
+        idx = render_shorts(
+            cands,
+            meta,
+            out,
+            k=a.k,
+            cx=a.cx,
+            ui=ui,
+            ease=a.ease,
+            transcript=tr,
+            subs=not a.no_subs,
+            chat=chat,
+            top_mode=a.top,
+            layout=a.layout,
+            brand=a.brand,
+            episode_label=label,
+        )
         print(f"[export --shorts] {len(idx)} drafts -> {out}\n  {out / 'index.md'} 를 보고 keep/ 로 옮기세요.")
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
@@ -240,12 +300,34 @@ def cmd_export(a):
     src = meta["source"]
     for i, s in enumerate(cands.items, 1):
         name = f"{i:03d}_{fmt_time(s.start).replace(':', '-')}_{s.score:.1f}.mp4"
-        subprocess.run([
-            "ffmpeg", "-y", "-v", "error", "-ss", f"{s.start:.2f}", "-to", f"{s.end:.2f}", "-i", src,
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", str(out / name),
-        ], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-ss",
+                f"{s.start:.2f}",
+                "-to",
+                f"{s.end:.2f}",
+                "-i",
+                src,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-c:a",
+                "aac",
+                str(out / name),
+            ],
+            check=True,
+        )
         print(f"  {name}")
-    print(f"[export] {len(cands.items)} clips -> {out}\n  쓸 클립은 {out / 'keep'} 로 옮기세요. (python -m clipforge.run harvest {a.vid} 로 레이블 생성)")
+    print(
+        f"[export] {len(cands.items)} clips -> {out}\n  쓸 클립은 {out / 'keep'} 로 옮기세요. (python -m clipforge.run harvest {a.vid} 로 레이블 생성)"
+    )
 
 
 def cmd_shorts(a):
@@ -267,8 +349,11 @@ def cmd_lexicon(a):
     ok = sum(1 for _, m in matches if m.head)
     print(f"[lexicon] {ok}/{len(matches)} tokens matched  (items={len(lex.items)}, slang={len(lex.slang)})")
     for t, m in matches:
-        print(f"  {fmt_time(t)}  {m.token:<28} -> {m.head or '?':<14} {m.kind or '':<8} {m.source:<12} {m.score:.0f}  {m.option}")
-    out = ROOT / "reports"; out.mkdir(exist_ok=True)
+        print(
+            f"  {fmt_time(t)}  {m.token:<28} -> {m.head or '?':<14} {m.kind or '':<8} {m.source:<12} {m.score:.0f}  {m.option}"
+        )
+    out = ROOT / "reports"
+    out.mkdir(exist_ok=True)
     (out / f"{a.vid}_tokens.md").write_text(report_md(a.vid, matches), encoding="utf-8")
     print(f"  -> {out / (a.vid + '_tokens.md')}")
 
@@ -280,18 +365,26 @@ def cmd_xml(a):
     cands = Segments.load(cands_p) if cands_p.exists() else Segments("candidates", [])
     shorts = load_shorts(a.vid)
     ui_p = CACHE / a.vid / "ui_state.json"
-    ui = [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items] if ui_p.exists() else None
+    ui = (
+        [{"start": s.start, "end": s.end, "label": s.label} for s in Segments.load(ui_p).items]
+        if ui_p.exists()
+        else None
+    )
     out = ROOT / "premiere"
     for p in export_xml(meta, cands, shorts, ui, out, a.vid, k=a.k):
         print(f"  {p}")
-    print(f"[xml] review: V1 원본 + V2 후보 {len(cands.items)}개 + 마커 {len(shorts)}개 / shorts: 세로 시퀀스 (variant 별 {a.k}개)")
+    print(
+        f"[xml] review: V1 원본 + V2 후보 {len(cands.items)}개 + 마커 {len(shorts)}개 / shorts: 세로 시퀀스 (variant 별 {a.k}개)"
+    )
 
 
 def cmd_transcribe(a):
     """Whisper 전사 → cache/<vid>/transcript.json (faster-whisper GPU, 실패 시 CPU)."""
     tr = transcribe(CACHE / a.vid, backend=a.backend, force=a.force)
     segs = tr.get("segments", [])
-    print(f"[transcribe] {tr.get('backend')} {tr.get('model')}  segments={len(segs)}  elapsed={tr.get('elapsed_s', '?')}s")
+    print(
+        f"[transcribe] {tr.get('backend')} {tr.get('model')}  segments={len(segs)}  elapsed={tr.get('elapsed_s', '?')}s"
+    )
     for s in segs[:5]:
         print(f"  {fmt_time(s['start'])}-{fmt_time(s['end'])}  {s['text'][:70]}")
 
@@ -307,6 +400,7 @@ def cmd_harvest(a):
         kept = [p.name for p in (REVIEW / a.vid / "shorts" / "keep").glob("*.mp4") if p.name in index]
         lab_p = LABELS / f"{a.vid}.shorts.csv"
         import csv as _csv
+
         rows = []
         if lab_p.exists():
             with open(lab_p, encoding="utf-8", newline="") as f:
@@ -334,8 +428,12 @@ def cmd_harvest(a):
             rows.append({"start": key[0], "end": key[1], "label": "no", "note": f"harvest-no {name} {reason}".strip()})
             added += 1
         with open(lab_p, "w", encoding="utf-8", newline="") as f:
-            w = _csv.DictWriter(f, fieldnames=["start", "end", "label", "note"]); w.writeheader(); w.writerows(rows)
-        print(f"[harvest --shorts] {added} new labels (keep: {len(kept)} files, no: {len(list(no_dir.glob('*')))} markers) -> {lab_p}")
+            w = _csv.DictWriter(f, fieldnames=["start", "end", "label", "note"])
+            w.writeheader()
+            w.writerows(rows)
+        print(
+            f"[harvest --shorts] {added} new labels (keep: {len(kept)} files, no: {len(list(no_dir.glob('*')))} markers) -> {lab_p}"
+        )
         return
     cands = Segments.load(CACHE / a.vid / "candidates.json")
     kept = {p.name.split("_")[0] for p in (REVIEW / a.vid / "keep").glob("*.mp4")}
@@ -353,38 +451,80 @@ def main():
     ap = argparse.ArgumentParser(prog="clipforge")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sp.add_parser("prep");    p.add_argument("videos", nargs="+"); p.add_argument("--force", action="store_true")
+    p = sp.add_parser("prep")
+    p.add_argument("videos", nargs="+")
+    p.add_argument("--force", action="store_true")
     p.add_argument("--game", default=None, help="games/<game>.yaml (기본: 파일명 접두어 또는 d2r)")
-    p.add_argument("--proxy", action="store_true", help="480p NVENC 프록시도 생성"); p.set_defaults(f=cmd_prep)
-    p = sp.add_parser("signals"); p.add_argument("vid"); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_signals)
+    p.add_argument("--proxy", action="store_true", help="480p NVENC 프록시도 생성")
+    p.set_defaults(f=cmd_prep)
+    p = sp.add_parser("signals")
+    p.add_argument("vid")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(f=cmd_signals)
     for name, fn in [("cands", cmd_cands), ("sweep", cmd_sweep)]:
-        p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--threshold", type=float, default=1.5)
-        p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3"); p.set_defaults(f=fn)
-    p = sp.add_parser("shorts");  p.add_argument("vid"); p.add_argument("--k", type=int, default=5); p.set_defaults(f=cmd_shorts)
-    p = sp.add_parser("align"); p.add_argument("vid", help="회차 id (prep 완료)"); p.add_argument("--final", help="최종본 영상 경로 또는 회차 id (원본 → kept 정답)")
+        p = sp.add_parser(name)
+        p.add_argument("vid")
+        p.add_argument("--threshold", type=float, default=1.5)
+        p.add_argument("--w", action="append", help="신호 가중치, 예: --w audio_loudness=1 --w frame_motion=0.3")
+        p.set_defaults(f=fn)
+    p = sp.add_parser("shorts")
+    p.add_argument("vid")
+    p.add_argument("--k", type=int, default=5)
+    p.set_defaults(f=cmd_shorts)
+    p = sp.add_parser("align")
+    p.add_argument("vid", help="회차 id (prep 완료)")
+    p.add_argument("--final", help="최종본 영상 경로 또는 회차 id (원본 → kept 정답)")
     p.add_argument("--shorts", nargs="+", help="친구 쇼츠 파일/폴더 (편집본 → labels/<id>.shorts.csv keep 정답)")
     p.set_defaults(f=cmd_align)
-    p = sp.add_parser("export"); p.add_argument("vid"); p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
-    p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만"); p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
+    p = sp.add_parser("export")
+    p.add_argument("vid")
+    p.add_argument("--shorts", action="store_true", help="shorts.json 후보를 9:16 초안으로")
+    p.add_argument("--k", type=int, default=3, help="variant 별 상위 k 개만")
+    p.add_argument("--cx", type=float, default=0.5, help="게임 크롭 중심 x (0~1)")
     p.add_argument("--ease", type=float, default=0.0, help="크롭 중심 이동 시간(초). 0=즉시 점프(기본)")
     p.add_argument("--no-subs", action="store_true", help="대사 자막(ASS) 생략")
-    p.add_argument("--top", default="title", choices=["title", "auto", "chat"], help="상단 카드: title(기본·확정) | auto(앵커 종류별) | chat. title 외는 review/<vid>/shorts_<mode>/ 에 출력")
-    p.add_argument("--layout", default="card", choices=["card", "feed"], help="card(기본·친구 확정 2026-10-18: 손글씨 제목 띠+템 창 추적 크롭+방송 채팅) | feed(실험: @마골 구조, shorts_feed/)")
+    p.add_argument(
+        "--top",
+        default="title",
+        choices=["title", "auto", "chat"],
+        help="상단 카드: title(기본·확정) | auto(앵커 종류별) | chat. title 외는 review/<vid>/shorts_<mode>/ 에 출력",
+    )
+    p.add_argument(
+        "--layout",
+        default="card",
+        choices=["card", "feed"],
+        help="card(기본·친구 확정 2026-10-18: 손글씨 제목 띠+템 창 추적 크롭+방송 채팅) | feed(실험: @마골 구조, shorts_feed/)",
+    )
     p.add_argument("--brand", default="디아블로2 하이라이트", help="feed 레이아웃 상단 채널 띠 문구")
     p.set_defaults(f=cmd_export)
     for name, fn in [("eval", cmd_eval), ("harvest", cmd_harvest)]:
-        p = sp.add_parser(name); p.add_argument("vid"); p.add_argument("--shorts", action="store_true"); p.set_defaults(f=fn)
-    p = sp.add_parser("weaklabel"); p.add_argument("vid"); p.add_argument("--title", default=None); p.set_defaults(f=cmd_weaklabel)
-    p = sp.add_parser("lexicon"); p.add_argument("vid"); p.set_defaults(f=cmd_lexicon)
-    p = sp.add_parser("xml"); p.add_argument("vid"); p.add_argument("--k", type=int, default=3); p.set_defaults(f=cmd_xml)
-    p = sp.add_parser("transcribe"); p.add_argument("vid"); p.add_argument("--backend", default=None, choices=["faster_whisper", "ffmpeg_whisper"]); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_transcribe)
+        p = sp.add_parser(name)
+        p.add_argument("vid")
+        p.add_argument("--shorts", action="store_true")
+        p.set_defaults(f=fn)
+    p = sp.add_parser("weaklabel")
+    p.add_argument("vid")
+    p.add_argument("--title", default=None)
+    p.set_defaults(f=cmd_weaklabel)
+    p = sp.add_parser("lexicon")
+    p.add_argument("vid")
+    p.set_defaults(f=cmd_lexicon)
+    p = sp.add_parser("xml")
+    p.add_argument("vid")
+    p.add_argument("--k", type=int, default=3)
+    p.set_defaults(f=cmd_xml)
+    p = sp.add_parser("transcribe")
+    p.add_argument("vid")
+    p.add_argument("--backend", default=None, choices=["faster_whisper", "ffmpeg_whisper"])
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(f=cmd_transcribe)
 
     a = ap.parse_args()
     try:
         a.f(a)
     except (FileNotFoundError, EngineError) as e:
         info = classify(e)
-        raise SystemExit(f"[{info['code']}] {info['message']}\n  → {info['hint']}")
+        raise SystemExit(f"[{info['code']}] {info['message']}\n  → {info['hint']}") from e
 
 
 if __name__ == "__main__":

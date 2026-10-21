@@ -13,9 +13,11 @@
       meta={"added", "removed", "text"}. RESET 은 edit_emphasis 의 입력이 된다.
 OCR 결과는 cache/<id>/banner_ocr.json 에 초 단위로 캐시되어 파라미터를 바꿔도 재사용된다.
 """
+
 from __future__ import annotations
 
 import difflib
+import itertools
 import json
 import re
 import time
@@ -24,16 +26,23 @@ from pathlib import Path
 from ..timeline import Segment, Segments
 from .base import signal
 
-IGNORE_TOKENS = {"준영"}          # 배너 본문이 아닌 고정 텍스트(스트리머 이름 라벨)
-NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%,]")   # 쉼표는 토큰 경계라 남긴다
+IGNORE_TOKENS = {"준영"}  # 배너 본문이 아닌 고정 텍스트(스트리머 이름 라벨)
+NORM_RE = re.compile(r"[^0-9A-Za-z가-힣★/()~%,]")  # 쉼표는 토큰 경계라 남긴다
 DECOR_RE = re.compile(r"[★츠]")
-HEADER_RE = re.compile(r"^(득템|득렘|득램|특템|특램|독템)")   # OCR 변형 포함
+HEADER_RE = re.compile(r"^(득템|득렘|득램|특템|특램|독템)")  # OCR 변형 포함
 
 
 def _engine():
-    from rapidocr import RapidOCR, LangRec, ModelType, OCRVersion
-    return RapidOCR(params={"Rec.lang_type": LangRec.KOREAN, "Rec.model_type": ModelType.MOBILE,
-                            "Rec.ocr_version": OCRVersion.PPOCRV5, "Global.log_level": "error"})
+    from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
+
+    return RapidOCR(
+        params={
+            "Rec.lang_type": LangRec.KOREAN,
+            "Rec.model_type": ModelType.MOBILE,
+            "Rec.ocr_version": OCRVersion.PPOCRV5,
+            "Global.log_level": "error",
+        }
+    )
 
 
 def normalize(txts: list[str]) -> str:
@@ -67,8 +76,9 @@ class BannerOCR:
         return self.cache[i]
 
     def save(self) -> None:
-        self.cache_path.write_text(json.dumps({str(k): v for k, v in sorted(self.cache.items())},
-                                              ensure_ascii=False), encoding="utf-8")
+        self.cache_path.write_text(
+            json.dumps({str(k): v for k, v in sorted(self.cache.items())}, ensure_ascii=False), encoding="utf-8"
+        )
 
 
 def stable_states(seq: list[str], min_stable: int) -> list[tuple[int, int, str]]:
@@ -87,7 +97,7 @@ def stable_states(seq: list[str], min_stable: int) -> list[tuple[int, int, str]]
 def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_drop: int = 20) -> list[Segment]:
     items: list[Segment] = []
     prev: tuple[int, int, str] | None = None
-    last_banner = ""          # 마지막으로 확인된 "진짜" 득템 배너 텍스트 (머리말 있고 충분히 긴 것)
+    last_banner = ""  # 마지막으로 확인된 "진짜" 득템 배너 텍스트 (머리말 있고 충분히 긴 것)
     for s, e, t in states:
         if prev is None or t == prev[2]:
             prev = (s, e, t)
@@ -117,12 +127,18 @@ def transitions(states: list[tuple[int, int, str]], min_added: int = 3, reset_dr
                 label = "switch"
             else:
                 label = "append"
-            items.append(Segment(float(s), float(s), label, 1.0,
-                                 {"added": added, "removed": removed, "text": t, "stable": e - s}))
+            items.append(
+                Segment(
+                    float(s), float(s), label, 1.0, {"added": added, "removed": removed, "text": t, "stable": e - s}
+                )
+            )
         elif dl <= -reset_drop or (len(DECOR_RE.sub("", t)) < 5 <= len(DECOR_RE.sub("", pt)) - 3):
             # 글자가 reset_drop 이상 줄었거나, 짧은 배너라도 사실상 비워졌으면 소실(reset)
-            items.append(Segment(float(s), float(s), "reset", 1.0,
-                                 {"added": added, "removed": removed, "text": t, "stable": e - s}))
+            items.append(
+                Segment(
+                    float(s), float(s), "reset", 1.0, {"added": added, "removed": removed, "text": t, "stable": e - s}
+                )
+            )
         prev = (s, e, t)
         if HEADER_RE.match(t) and len(DECOR_RE.sub("", t)) >= 5:
             last_banner = t
@@ -134,11 +150,13 @@ def change_runs(files: list[Path], thr: float = 6.0, size: tuple[int, int] = (64
     OBS 텍스트 배너는 정적이라 7시간에 수십 번만 바뀐다 → OCR 호출이 수천 → 수십 으로 준다."""
     import numpy as np
     from PIL import Image
+
     runs, start, prev = [], 0, None
     for i, p in enumerate(files):
         cur = np.asarray(Image.open(p).convert("L").resize(size), dtype=np.float32)
         if prev is not None and float(np.abs(cur - prev).mean()) > thr:
-            runs.append((start, i)); start = i
+            runs.append((start, i))
+            start = i
         prev = cur
     runs.append((start, len(files)))
     return runs
@@ -153,7 +171,11 @@ def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | Non
         raise FileNotFoundError(f"{roi_dir} 없음 — prep 이 games/<game>.yaml 의 roi_crops 에 banner 를 포함해야 함")
     if mode is None:
         try:
-            mode = "change" if json.loads((cache / "meta.json").read_text(encoding="utf-8")).get("kind") == "original" else "coarse"
+            mode = (
+                "change"
+                if json.loads((cache / "meta.json").read_text(encoding="utf-8")).get("kind") == "original"
+                else "coarse"
+            )
         except OSError:
             mode = "coarse"
     ocr = BannerOCR(roi_dir, cache / "banner_ocr.json")
@@ -176,7 +198,7 @@ def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | Non
             ocr.text(i)
             if k % 50 == 0 and ocr.calls:
                 print(f"\n    banner ocr coarse {k}/{len(coarse)} ({time.time() - t0:.0f}s)", end="", flush=True)
-        for a, b in zip(coarse, coarse[1:]):
+        for a, b in itertools.pairwise(coarse):
             if ocr.text(a) != ocr.text(b):
                 for i in range(a, b + 1):
                     ocr.text(i)
@@ -189,7 +211,18 @@ def item_banner(cache: Path, step: int = 3, min_stable: int = 3, mode: str | Non
     ocr.save()
     states = stable_states(seq, min_stable)
     items = transitions(states)
-    return Segments("item_banner", items, meta={
-        "mode": mode, "step": step, "min_stable": min_stable, "ocr_calls": ocr.calls, "ocr_cached": len(ocr.cache), "n_runs": n_runs,
-        "n_frames": n, "n_states": len(states), "elapsed_s": round(time.time() - t0, 1),
-    })
+    return Segments(
+        "item_banner",
+        items,
+        meta={
+            "mode": mode,
+            "step": step,
+            "min_stable": min_stable,
+            "ocr_calls": ocr.calls,
+            "ocr_cached": len(ocr.cache),
+            "n_runs": n_runs,
+            "n_frames": n,
+            "n_states": len(states),
+            "elapsed_s": round(time.time() - t0, 1),
+        },
+    )

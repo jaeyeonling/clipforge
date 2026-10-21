@@ -8,6 +8,7 @@ gate 이상인 초 + every 초마다 1번만 OCR (나머지 초는 직전 결과
 출력: Segments("chat_text"), start=end=초, label="msg", score=1, meta={"nick", "text", "lines"}.
 Phase 1 에선 줌·채팅 앵커 클립의 자막 원문으로, 나중엔 채팅 키워드 신호(헐/ㄷㄷ/미쳤다)로 쓴다.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,16 +26,24 @@ NICK_RE = re.compile(r"^\s*([0-9A-Za-z가-힣_\-]{1,24})\s*[:：]\s*(.*)$")
 
 
 def _engine():
-    from rapidocr import RapidOCR, LangRec, ModelType, OCRVersion
-    return RapidOCR(params={"Rec.lang_type": LangRec.KOREAN, "Rec.model_type": ModelType.MOBILE,
-                            "Rec.ocr_version": OCRVersion.PPOCRV5, "Global.log_level": "error", "Global.use_cls": False})
+    from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
+
+    return RapidOCR(
+        params={
+            "Rec.lang_type": LangRec.KOREAN,
+            "Rec.model_type": ModelType.MOBILE,
+            "Rec.ocr_version": OCRVersion.PPOCRV5,
+            "Global.log_level": "error",
+            "Global.use_cls": False,
+        }
+    )
 
 
 def ocr_lines(eng, img: Image.Image) -> list[dict]:
     r = eng(np.asarray(img))
     boxes = r.boxes if r.boxes is not None else []
     out = []
-    for box, txt, sc in zip(boxes, list(r.txts or []), list(r.scores or [])):
+    for box, txt, sc in zip(boxes, list(r.txts or []), list(r.scores or []), strict=False):
         b = np.asarray(box)
         out.append({"y": float(b[:, 1].min()), "x": float(b[:, 0].min()), "text": txt.strip(), "score": float(sc)})
     return sorted(out, key=lambda d: d["y"])
@@ -68,7 +77,9 @@ def chat_text(cache: Path, gate: float = 0.03, every: int = 5, sim: int = 85) ->
         raise FileNotFoundError(f"{cache / 'rois' / 'chat'} 없음 — 프로필 roi_crops 에 chat 필요")
     burst = Curve.load(cache / "chat_burst.json").as_array() if (cache / "chat_burst.json").exists() else None
     cache_p = cache / "chat_ocr.json"
-    ocr_cache: dict[int, list] = {int(k): v for k, v in json.loads(cache_p.read_text(encoding="utf-8")).items()} if cache_p.exists() else {}
+    ocr_cache: dict[int, list] = (
+        {int(k): v for k, v in json.loads(cache_p.read_text(encoding="utf-8")).items()} if cache_p.exists() else {}
+    )
     eng = None
     calls = 0
     items: list[Segment] = []
@@ -92,5 +103,9 @@ def chat_text(cache: Path, gate: float = 0.03, every: int = 5, sim: int = 85) ->
                 continue
             items.append(Segment(i * hop, i * hop, "msg", 1.0, {"nick": m["nick"], "text": m["text"]}))
         prev_msgs = msgs
-    cache_p.write_text(json.dumps({str(k): v for k, v in sorted(ocr_cache.items())}, ensure_ascii=False), encoding="utf-8")
-    return Segments("chat_text", items, meta={"ocr_calls": calls, "ocr_cached": len(ocr_cache), "gate": gate, "every": every})
+    cache_p.write_text(
+        json.dumps({str(k): v for k, v in sorted(ocr_cache.items())}, ensure_ascii=False), encoding="utf-8"
+    )
+    return Segments(
+        "chat_text", items, meta={"ocr_calls": calls, "ocr_cached": len(ocr_cache), "gate": gate, "every": every}
+    )

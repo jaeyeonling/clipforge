@@ -6,6 +6,7 @@
 (2) 는 2026-10-18 '참' 사건의 회귀 테스트: FreeType 스트로커가 특정 글리프를 속 빈 획으로 그리던 문제.
 textdraw 는 스트로커를 안 쓰므로 통과해야 하고, 누군가 stroke_width 를 다시 쓰면 여기서 잡힌다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,9 +17,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from clipforge.textdraw import FONT_FILES, FontStack, coverage, draw_text  # noqa: E402
+from clipforge.textdraw import FONT_FILES, FontStack, coverage, draw_text
 
-KS_SYLLABLES = [chr(c) for c in range(0xAC00, 0xD7A4)]       # 완성형 11,172 중 KS X 1001 2,350 은 cmap 으로 거른다
+KS_SYLLABLES = [chr(c) for c in range(0xAC00, 0xD7A4)]  # 완성형 11,172 중 KS X 1001 2,350 은 cmap 으로 거른다
 EXTRA = list("0123456789!?.,:()·★…~%+-/ ") + list("“”‘’")
 
 
@@ -42,7 +43,9 @@ def main() -> int:
     for kind in ("pen", "black", "gothic"):
         p = FONT_FILES[kind]
         if not p.exists():
-            print(f"[{kind}] 없음: {p}"); failures += 1; continue
+            print(f"[{kind}] 없음: {p}")
+            failures += 1
+            continue
         cov = coverage(str(p))
         stack = FontStack(kind, "gothic")
         chars = ks2350(str(p)) + EXTRA
@@ -57,14 +60,22 @@ def main() -> int:
             i0, i2 = ink(ch, stack, a.size, 0), ink(ch, stack, a.size, 2)
             if i0 == 0 or i2 < i0:
                 bad.append((ch, i0, i2))
-        print(f"[{kind}] cmap={len(cov) or '?'}  검사 {len(chars)}자  폴백으로 처리되는 기호={missing}  "
-              f"폴백도 없는 글자={tofu[:10]}  굵기 단조성 위반={bad[:10]}")
+        print(
+            f"[{kind}] cmap={len(cov) or '?'}  검사 {len(chars)}자  폴백으로 처리되는 기호={missing}  "
+            f"폴백도 없는 글자={tofu[:10]}  굵기 단조성 위반={bad[:10]}"
+        )
         failures += len(tofu) + len(bad)
     # 가드: PIL stroke_width 재사용 금지 (textdraw 외). 스트로커가 다시 들어오면 여기서 실패한다.
     src_dir = Path(__file__).resolve().parent.parent / "clipforge"
-    offenders = [f.name for f in src_dir.rglob("*.py") if f.name != "textdraw.py"
-                 and any(line.lstrip().startswith(("d.text", "draw.text")) and "stroke_width" in line
-                         for line in f.read_text(encoding="utf-8").splitlines())]
+    offenders = [
+        f.name
+        for f in src_dir.rglob("*.py")
+        if f.name != "textdraw.py"
+        and any(
+            line.lstrip().startswith(("d.text", "draw.text")) and "stroke_width" in line
+            for line in f.read_text(encoding="utf-8").splitlines()
+        )
+    ]
     if offenders:
         print(f"[guard] PIL stroke_width 사용 금지 — textdraw.draw_text 를 쓰세요: {offenders}")
         failures += len(offenders)

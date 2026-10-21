@@ -8,9 +8,10 @@
   - 글자 단위 폰트 폴백: FontStack 이 각 글자를 cmap 에 있는 첫 폰트로 배정
   - scripts/check_fonts.py 가 번들 폰트의 커버리지와 스탬핑 단조성을 검사
 """
+
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from PIL import ImageDraw, ImageFont
@@ -24,18 +25,19 @@ FONT_FILES = {
 }
 
 
-@lru_cache(maxsize=None)
+@cache
 def coverage(path: str) -> frozenset[int]:
     """폰트의 cmap 코드포인트 집합. fontTools 가 없으면 빈 집합(= 전부 있다고 가정)."""
     try:
         from fontTools.ttLib import TTFont
+
         t = TTFont(path, lazy=True)
         return frozenset(t.getBestCmap().keys())
     except Exception:
         return frozenset()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load(path: str, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(path, size)
 
@@ -74,7 +76,8 @@ class FontStack:
         tops, bots = [], []
         for f, s in self.runs(text, size):
             b = f.getbbox(s)
-            tops.append(b[1]); bots.append(b[3])
+            tops.append(b[1])
+            bots.append(b[3])
         return (min(tops) if tops else 0, max(bots) if bots else size)
 
 
@@ -82,8 +85,17 @@ def _offsets(r: int) -> list[tuple[int, int]]:
     return [(dx, dy) for dx in range(-r, r + 1) for dy in range(-r, r + 1) if dx * dx + dy * dy <= r * r + 1]
 
 
-def draw_text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], text: str, stack: FontStack, size: int,
-              fill=(0, 0, 0), weight: int = 0, outline=None, outline_weight: int = 0) -> float:
+def draw_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[float, float],
+    text: str,
+    stack: FontStack,
+    size: int,
+    fill=(0, 0, 0),
+    weight: int = 0,
+    outline=None,
+    outline_weight: int = 0,
+) -> float:
     """text 를 (x, y) 에서 시작해 그린다. weight = 가짜 볼드 반경(px), outline = 테두리 색(스탬핑 반경 weight+outline_weight).
     stroke_width 는 절대 쓰지 않는다. 반환: 그린 폭."""
     x, y = xy
@@ -96,7 +108,7 @@ def draw_text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], text: str, sta
             cx += f.getlength(s)
     cx = x
     for f, s in runs:
-        for dx, dy in (_offsets(weight) if weight > 0 else [(0, 0)]):
+        for dx, dy in _offsets(weight) if weight > 0 else [(0, 0)]:
             draw.text((cx + dx, y + dy), s, font=f, fill=fill)
         cx += f.getlength(s)
     return cx - x

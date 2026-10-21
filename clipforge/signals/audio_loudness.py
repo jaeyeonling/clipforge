@@ -4,6 +4,7 @@
 - RMS를 dBFS로 변환 (hop=0.5s, window=1.0s)
 - 전체 영상의 중앙값 기준 상대값으로 정규화 → 녹화 볼륨 차이에 둔감
 """
+
 from __future__ import annotations
 
 import wave
@@ -31,7 +32,7 @@ def rms_db_curve(x: np.ndarray, sr: int, hop: float, window: float) -> np.ndarra
     n_frames = max(1, (len(x) - win_n) // hop_n + 1)
     out = np.empty(n_frames, dtype=np.float32)
     for i in range(n_frames):
-        seg = x[i * hop_n: i * hop_n + win_n]
+        seg = x[i * hop_n : i * hop_n + win_n]
         out[i] = np.sqrt(np.mean(seg * seg) + 1e-12)
     return 20 * np.log10(out + 1e-9)
 
@@ -40,7 +41,7 @@ def rms_db_curve(x: np.ndarray, sr: int, hop: float, window: float) -> np.ndarra
 def audio_loudness(cache: Path, hop: float = 0.5, window: float = 1.0) -> Curve:
     x, sr = read_wav_mono(cache / "audio.wav")
     db = rms_db_curve(x, sr, hop, window)
-    rel = db - np.median(db)             # 중앙값 대비 dB
+    rel = db - np.median(db)  # 중앙값 대비 dB
     return Curve(
         name="audio_loudness",
         hop=hop,

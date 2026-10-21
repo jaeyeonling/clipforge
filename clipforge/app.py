@@ -1,7 +1,8 @@
 """데스크톱 앱 진입점 (로컬 웹 UI): 엔진 서버를 127.0.0.1 에 띄우고 브라우저를 연다.
 
-    python -m clipforge.app [--port 8765] [--no-browser]
+python -m clipforge.app [--port 8765] [--no-browser]
 """
+
 from __future__ import annotations
 
 import argparse

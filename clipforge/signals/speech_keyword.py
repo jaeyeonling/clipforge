@@ -5,6 +5,7 @@ games/common.yaml 의 speech_keywords 그룹(강/중/약/득템)을 전사 텍�
 출력: Segments("speech_keyword"), label=그룹명, score=weight, meta={"word", "text"}.
 전사가 없으면 빈 Segments (신호는 선택적).
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 def speech_keyword(cache: Path) -> Segments:
     tr_p = cache / "transcript.json"
     if not tr_p.exists():
-        return Segments("speech_keyword", [], meta={"note": "transcript.json 없음 — python -m clipforge.run transcribe <id>"})
+        return Segments(
+            "speech_keyword", [], meta={"note": "transcript.json 없음 — python -m clipforge.run transcribe <id>"}
+        )
     tr = json.loads(tr_p.read_text(encoding="utf-8"))
     cfg = yaml.safe_load((ROOT / "games" / "common.yaml").read_text(encoding="utf-8")) or {}
     groups = cfg.get("speech_keywords", {})
@@ -36,7 +39,12 @@ def speech_keyword(cache: Path) -> Segments:
             for g, ent in groups.items():
                 hit = next((w for w in ent.get("words", []) if w.replace(" ", "") and w.replace(" ", "") in norm), None)
                 if hit and t - last.get(g, -1e9) >= cooldown:
-                    items.append(Segment(float(t), float(t), g, float(ent.get("weight", 0.5)),
-                                         {"word": hit, "text": s["text"][:60]}))
+                    items.append(
+                        Segment(
+                            float(t), float(t), g, float(ent.get("weight", 0.5)), {"word": hit, "text": s["text"][:60]}
+                        )
+                    )
                     last[g] = t
-    return Segments("speech_keyword", items, meta={"backend": tr.get("backend"), "n_segments": len(tr.get("segments", []))}).sorted()
+    return Segments(
+        "speech_keyword", items, meta={"backend": tr.get("backend"), "n_segments": len(tr.get("segments", []))}
+    ).sorted()

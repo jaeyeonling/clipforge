@@ -4,6 +4,7 @@
 data/<game>/slang.yaml 의 표제어·별칭으로 찾고, item_banner 의 append 토큰과 퍼지 매칭해
 그 시각 주변을 label="title_item" 구간으로 labels/<id>.shorts.csv 에 쓴다. 쇼츠 1순위의 자동 정답.
 """
+
 from __future__ import annotations
 
 import csv
@@ -13,7 +14,7 @@ from pathlib import Path
 import yaml
 from rapidfuzz import fuzz
 
-from .timeline import Segment, Segments
+from .timeline import Segments
 
 ROOT = Path(__file__).resolve().parent.parent
 NORM = re.compile(r"[\s,.'\"`★()\[\]【】!?/~:·-]")
@@ -44,7 +45,7 @@ def title_keywords(title: str, slang: dict) -> list[tuple[str, list[str]]]:
     t = norm(title)
     hits = []
     for head, ent in slang.items():
-        names = [head] + list(ent.get("aliases") or [])
+        names = [head, *list(ent.get("aliases") or [])]
         if any(norm(n) and norm(n) in t for n in names if len(norm(n)) >= 2):
             hits.append((head, names))
     return hits
@@ -68,20 +69,33 @@ def match_banner(keywords: list[tuple[str, list[str]]], banner: Segments, thresh
     return out
 
 
-def write_weak_labels(vid: str, matches: list[dict], labels_dir: Path, pre: float = 30.0, post: float = 30.0,
-                      duration: float | None = None) -> Path:
+def write_weak_labels(
+    vid: str,
+    matches: list[dict],
+    labels_dir: Path,
+    pre: float = 30.0,
+    post: float = 30.0,
+    duration: float | None = None,
+) -> Path:
     p = labels_dir / f"{vid}.shorts.csv"
     rows = []
     if p.exists():
         with open(p, encoding="utf-8", newline="") as f:
-            rows = [r for r in csv.DictReader(f) if r.get("label") != "title_item"]   # 기존 약한 정답은 교체
+            rows = [r for r in csv.DictReader(f) if r.get("label") != "title_item"]  # 기존 약한 정답은 교체
     for m in matches:
         s, e = max(0.0, m["t"] - pre), m["t"] + post
         if duration:
             e = min(duration, e)
-        rows.append({"start": f"{s:.1f}", "end": f"{e:.1f}", "label": "title_item",
-                     "note": f"title={m['keyword']} banner@{m['t']:.0f}s fuzz={m['score']} added={m['added'][:30]}"})
+        rows.append(
+            {
+                "start": f"{s:.1f}",
+                "end": f"{e:.1f}",
+                "label": "title_item",
+                "note": f"title={m['keyword']} banner@{m['t']:.0f}s fuzz={m['score']} added={m['added'][:30]}",
+            }
+        )
     with open(p, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["start", "end", "label", "note"])
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
     return p

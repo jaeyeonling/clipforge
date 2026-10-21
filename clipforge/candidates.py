@@ -11,9 +11,8 @@ Curve 신호는 z-score, Events 신호는 어댑터(adapters.py)로 0~1 곡선�
   3. score > threshold 인 구간을 잡고, 전후 pad초 확장, gap초 이내는 병합
   4. min_len 미만 버림, 상위 max_candidates개만 남김
 """
-from __future__ import annotations
 
-from pathlib import Path
+from __future__ import annotations
 
 import numpy as np
 
@@ -22,9 +21,12 @@ from .timeline import Curve, Segment, Segments
 
 # 베이스라인 가중치. Curve 신호는 z-score 후 곱해지고, Events 신호는 어댑터의 0~1 곡선에 곱해진다.
 DEFAULT_WEIGHTS = {
-    "audio_loudness": 1.0, "frame_motion": 0.0,
-    "chat_burst": 0.5, "cut_density": 0.3,          # Phase 1 (편집본) 전용. 원본에선 0 으로
-    "item_banner": 1.5, "edit_emphasis": 1.0,       # Events (프로필 events: 커널)
+    "audio_loudness": 1.0,
+    "frame_motion": 0.0,
+    "chat_burst": 0.5,
+    "cut_density": 0.3,  # Phase 1 (편집본) 전용. 원본에선 0 으로
+    "item_banner": 1.5,
+    "edit_emphasis": 1.0,  # Events (프로필 events: 커널)
 }
 DEFAULT_KERNELS = {
     "item_banner": {"labels": ["append"], "pre": 8.0, "post": 6.0},
@@ -50,7 +52,7 @@ def make_candidates(
     events: dict[str, Segments] | None = None,
     kernels: dict[str, dict] | None = None,
     hop: float = 0.5,
-    threshold: float = 1.5,      # z-score 단위
+    threshold: float = 1.5,  # z-score 단위
     pad_before: float = 4.0,
     pad_after: float = 3.0,
     gap: float = 3.0,
@@ -84,12 +86,14 @@ def make_candidates(
             while j < n and above[j]:
                 j += 1
             peak = float(score[i:j].max())
-            items.append(Segment(
-                start=max(0.0, i * hop - pad_before),
-                end=min(duration, j * hop + pad_after),
-                label="candidate",
-                score=round(peak, 3),
-            ))
+            items.append(
+                Segment(
+                    start=max(0.0, i * hop - pad_before),
+                    end=min(duration, j * hop + pad_after),
+                    label="candidate",
+                    score=round(peak, 3),
+                )
+            )
             i = j
         else:
             i += 1

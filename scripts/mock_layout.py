@@ -4,6 +4,7 @@
 
 렌더 파이프라인과 무관한 디자인 검토용. 확정되면 layout_*.py 로 옮긴다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -14,11 +15,11 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from clipforge.textdraw import FontStack, draw_text, fit_size  # noqa: E402
+from clipforge.textdraw import FontStack, draw_text, fit_size
 
 ROOT = Path(__file__).resolve().parent.parent
 W, H = 1080, 1920
-YELLOW = (240, 246, 96)      # 브랜드 노랑 (ep59 인트로 타이틀 실측)
+YELLOW = (240, 246, 96)  # 브랜드 노랑 (ep59 인트로 타이틀 실측)
 RED = (230, 60, 50)
 BG = (14, 13, 12)
 PANEL = (26, 24, 22)
@@ -34,8 +35,17 @@ def chip(d, xy, text, stack, size, fill, bg, pad=(26, 12), radius=18, weight=0, 
     w = stack.width(text, size) + pad[0] * 2
     h = size + pad[1] * 2
     d.rounded_rectangle((x, y, x + w, y + h), radius=radius, fill=bg)
-    draw_text(d, (x + pad[0], y + pad[1] - size * 0.12), text, stack, size, fill=fill, weight=weight,
-              outline=outline, outline_weight=2 if outline else 0)
+    draw_text(
+        d,
+        (x + pad[0], y + pad[1] - size * 0.12),
+        text,
+        stack,
+        size,
+        fill=fill,
+        weight=weight,
+        outline=outline,
+        outline_weight=2 if outline else 0,
+    )
     return w, h
 
 
@@ -66,18 +76,37 @@ def main():
     # 발화 자막: 영상 하단 중앙, 흰 글자 + 검은 테두리, 상자 없음 (방송 자막 관례)
     sub = "와, 뭐야!"
     sz = 54
-    draw_text(d, ((W - GOTHIC.width(sub, sz)) / 2, 718 - 54 - 28), sub, GOTHIC, sz, fill=(255, 255, 255),
-              outline=(0, 0, 0), outline_weight=3)
+    draw_text(
+        d,
+        ((W - GOTHIC.width(sub, sz)) / 2, 718 - 54 - 28),
+        sub,
+        GOTHIC,
+        sz,
+        fill=(255, 255, 255),
+        outline=(0, 0, 0),
+        outline_weight=3,
+    )
     # 시청자 반응 하이라이트: 영상 우상단 노란 말풍선 칩 (마골의 '화면 하단 큰 줄' 과 다른 자리)
     hi = "“헐 지참 나왔어요??”"
     szh = 44
-    chip(d, (40, 110 + 24), hi, GOTHIC, szh, (20, 18, 10), YELLOW, pad=(26, 12), radius=22, weight=1)   # 좌상단 (우측 192px 금지)
+    chip(
+        d, (40, 110 + 24), hi, GOTHIC, szh, (20, 18, 10), YELLOW, pad=(26, 12), radius=22, weight=1
+    )  # 좌상단 (우측 192px 금지)
     # 인트로 오버레이(0~1.2s): 영상 위 노랑 제목 2줄 — 목업에선 반투명으로 표시
-    ov = Image.new("RGBA", (W, 608), (0, 0, 0, 0)); od = ImageDraw.Draw(ov)
+    ov = Image.new("RGBA", (W, 608), (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
     for i, line in enumerate(["래더 12기 노거래 맨땅 59일차", "지존참 직득!"]):
         sz = fit_size(BLACK, line, 960, 80 if i == 0 else 96, floor=48)
-        draw_text(od, ((W - BLACK.width(line, sz)) / 2, 230 + i * 110), line, BLACK, sz, fill=(*YELLOW, 160),
-                  outline=(0, 0, 0, 160), outline_weight=3)
+        draw_text(
+            od,
+            ((W - BLACK.width(line, sz)) / 2, 230 + i * 110),
+            line,
+            BLACK,
+            sz,
+            fill=(*YELLOW, 160),
+            outline=(0, 0, 0, 160),
+            outline_weight=3,
+        )
     img.paste(Image.alpha_composite(img.crop((0, 110, W, 718)).convert("RGBA"), ov).convert("RGB"), (0, 110))
 
     # ── 2. 득템 로그 패널(좌 62%) + 가치 메모(우 38%)  (750~1010)  ← 채널 고유 모티프
@@ -86,10 +115,11 @@ def main():
     draw_text(d, (px + 28, py + 18), "오늘 득템", GOTHIC, 32, fill=MUTED)
     # 현재 시점까지의 배너 토큰 (append 이벤트) — 마지막 것 강조
     import re as _re
+
     state = ""
     for s in banner:
         if s["start"] <= t and s["meta"].get("text"):
-            state = s["meta"]["text"]                       # 배너 현재 전체 상태 (appear/append 누적)
+            state = s["meta"]["text"]  # 배너 현재 전체 상태 (appear/append 누적)
     state = _re.sub(r"^(득템|득렘|득램|특템|특램|템엄|템)", "", state)
     toks = [x for x in (tok.strip() for tok in state.split(",")) if len(x) >= 2 and x not in ("츠", "엄")]
     toks = toks[-6:] or ["화염5/3주얼", "슬가", "3맥20어레20피"]
@@ -117,7 +147,7 @@ def main():
     msgs = [s["meta"]["text"] for s in chat if s["meta"].get("nick") and t - 20 <= s["start"] <= t][-4:]
     yy = fy + 56
     for m in msgs:
-        line = m if len(m) <= 16 else m[:16] + "…"      # 폭 ≤ 880px (우측 버튼 열 회피)
+        line = m if len(m) <= 16 else m[:16] + "…"  # 폭 ≤ 880px (우측 버튼 열 회피)
         draw_text(d, (40, yy), line, GOTHIC, 54, fill=INK)
         yy += 86
     # ── 4. 하단 (1640~): 회차·해시태그 작은 글씨 (쇼츠 UI 안전영역이라 중요 정보 금지)

@@ -4,6 +4,7 @@ HUD 구슬 가림으로 추정하는 방식은 실패했다(구슬은 중독이�
 제목 띠(패널 상단, "소지품"·"캐릭터"·"보관함"…)를 직접 읽는 게 정확하다. 결과는 cache/<id>/panel_titles.json 에 초 단위 캐시.
 비용: 검출 생략(rec only) 시 크롭당 ~0.1s. 검출 포함은 0.55s.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,18 +17,33 @@ from PIL import Image
 # 기준 채널 4K 레이아웃 실측 ("캐릭터" 좌, "소지품" 우). 다른 UI 배율이면 games/<game>.yaml 의 panel_bands 로 덮어쓴다.
 DEFAULT_BANDS = {"left": [0.14, 0.112, 0.14, 0.05], "right": [0.70, 0.112, 0.16, 0.05]}
 KEYWORDS = {
-    "inventory": ["소지품"], "stash": ["보관함", "개인 보관함", "공유 보관함"], "cube": ["큐브", "호라드릭"],
-    "character": ["캐릭터"], "skills": ["스킬"], "stats": ["고급 통계", "고급통계"], "merc": ["용병"], "quest": ["퀘스트"],
-    "waypoint": ["경유지"], "vendor": ["거래", "상점", "수리", "도박"],
+    "inventory": ["소지품"],
+    "stash": ["보관함", "개인 보관함", "공유 보관함"],
+    "cube": ["큐브", "호라드릭"],
+    "character": ["캐릭터"],
+    "skills": ["스킬"],
+    "stats": ["고급 통계", "고급통계"],
+    "merc": ["용병"],
+    "quest": ["퀘스트"],
+    "waypoint": ["경유지"],
+    "vendor": ["거래", "상점", "수리", "도박"],
 }
 RIGHT_SIDE = {"inventory", "stash", "cube", "vendor"}
 
 
 def _engine(det: bool):
-    from rapidocr import RapidOCR, LangRec, ModelType, OCRVersion
-    return RapidOCR(params={"Rec.lang_type": LangRec.KOREAN, "Rec.model_type": ModelType.MOBILE,
-                            "Rec.ocr_version": OCRVersion.PPOCRV5, "Global.log_level": "error",
-                            "Global.use_det": det, "Global.use_cls": False})
+    from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
+
+    return RapidOCR(
+        params={
+            "Rec.lang_type": LangRec.KOREAN,
+            "Rec.model_type": ModelType.MOBILE,
+            "Rec.ocr_version": OCRVersion.PPOCRV5,
+            "Global.log_level": "error",
+            "Global.use_det": det,
+            "Global.use_cls": False,
+        }
+    )
 
 
 def classify(txts: list[str]) -> str | None:

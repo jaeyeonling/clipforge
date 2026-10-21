@@ -7,22 +7,25 @@
 주의: Pydantic 모델은 모듈 수준에 둔다. `from __future__ import annotations` 와 함수 내부 정의를 섞으면
 FastAPI 가 forward-ref 를 못 풀어 본문 모델을 쿼리 파라미터로 취급한다(422).
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
-
-from ..errors import classify
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .. import __version__
 from .. import jobs as jobs_mod
+from ..errors import classify
 from .methods import ApiError, Engine
 
 
@@ -31,8 +34,8 @@ class AddEpisode(BaseModel):
     id: str | None = None
     title: str = ""
     game: str = "d2r"
-    link: bool = True            # False = 복사/링크 없이 원본 경로 참조
-    kind: str = "edited"         # edited(편집본→쇼츠) | original(원본→편집 포인트)
+    link: bool = True  # False = 복사/링크 없이 원본 경로 참조
+    kind: str = "edited"  # edited(편집본→쇼츠) | original(원본→편집 포인트)
 
 
 class RunJob(BaseModel):
@@ -93,39 +96,48 @@ class Decision(BaseModel):
     label: str
     reason: str = ""
     file: str = ""
-    kind: str = "shorts"         # shorts | editpoints
+    kind: str = "shorts"  # shorts | editpoints
 
 
 def create_app(engine: Engine | None = None) -> FastAPI:
     engine = engine or Engine()
-    app = FastAPI(title="clipforge engine", version="0.1")
     clients: set[WebSocket] = set()
     loop_holder: dict = {}
     queue: asyncio.Queue = asyncio.Queue()
 
-    def on_event(ev: dict) -> None:          # Job 스레드 → asyncio 큐
+    def on_event(ev: dict) -> None:  # Job 스레드 → asyncio 큐
         loop = loop_holder.get("loop")
         if loop:
             loop.call_soon_threadsafe(queue.put_nowait, ev)
 
     jobs_mod.add_listener(on_event)
 
-    @app.on_event("startup")
-    async def _startup():
-        loop_holder["loop"] = asyncio.get_running_loop()
+    async def pump() -> None:
+        """작업·라이브 이벤트를 연결된 모든 WebSocket 으로 흘려보낸다. 끊긴 소켓은 정리한다."""
+        while True:
+            ev = await queue.get()
+            dead = []
+            for ws in list(clients):
+                try:
+                    await ws.send_text(json.dumps(ev, ensure_ascii=False))
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                clients.discard(ws)
 
-        async def pump():
-            while True:
-                ev = await queue.get()
-                dead = []
-                for ws in list(clients):
-                    try:
-                        await ws.send_text(json.dumps(ev, ensure_ascii=False))
-                    except Exception:
-                        dead.append(ws)
-                for ws in dead:
-                    clients.discard(ws)
-        asyncio.create_task(pump())
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        loop_holder["loop"] = asyncio.get_running_loop()
+        task = asyncio.create_task(pump())
+        try:
+            yield
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            loop_holder.pop("loop", None)
+
+    app = FastAPI(title="clipforge engine", version=__version__, lifespan=lifespan)
 
     # 오류 응답은 전부 {"error": {code, message, hint, kind}} 한 형태 (UI 가 한 군데서 파싱)
     log = logging.getLogger("clipforge.api")
@@ -137,8 +149,17 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def _bad_request(_, e: RequestValidationError):
         msg = "; ".join(f"{'.'.join(str(x) for x in err.get('loc', []))}: {err.get('msg')}" for err in e.errors())[:400]
-        return JSONResponse(status_code=400, content={"error": {"code": "E_BAD_REQUEST", "message": msg,
-                                                                "hint": "요청 본문의 필드 이름과 형식을 확인하세요.", "kind": "user"}})
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": {
+                    "code": "E_BAD_REQUEST",
+                    "message": msg,
+                    "hint": "요청 본문의 필드 이름과 형식을 확인하세요.",
+                    "kind": "user",
+                }
+            },
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled(request, e: Exception):
@@ -349,7 +370,23 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
-    ui_dir: Path = engine.project.ui_dir
-    if ui_dir.exists():
+    ui_dir: Path | None = engine.project.ui_dir
+    if ui_dir:
         app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")
+    else:
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def _no_ui() -> str:
+            return NO_UI_PAGE
+
     return app
+
+
+# 화면 빌드(app/dist)가 없을 때: 엔진 API 는 살아 있고, 화면을 만드는 방법을 알려 준다.
+NO_UI_PAGE = """<!doctype html><html lang="ko"><meta charset="utf-8"><title>clipforge engine</title>
+<body style="margin:0;background:#17171c;color:#e8e8ea;font:15px/1.6 system-ui,'Malgun Gothic';display:grid;place-items:center;height:100vh">
+<div style="max-width:560px;padding:24px"><div style="font-size:24px;font-weight:800;color:#f0f660">clipforge</div>
+<p style="font-size:18px;font-weight:700;margin:12px 0 4px">엔진은 켜져 있는데 화면 빌드가 없어요</p>
+<p style="color:#8b95a1;margin:0">저장소에서 한 번만 실행해 주세요.</p>
+<pre style="background:#202027;border-radius:12px;padding:14px;margin-top:14px">cd app\nnpm install\nnpm run build</pre>
+<p style="color:#8b95a1">API 문서: <a style="color:#4593fc" href="/docs">/docs</a></p></div></body></html>"""

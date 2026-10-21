@@ -9,6 +9,7 @@ frames/ 1fps 에서 두 가지를 본다.
 
 출력: Segments("edit_emphasis"), label ∈ {zoom, note}, meta={"len"}.
 """
+
 from __future__ import annotations
 
 import json
@@ -18,22 +19,22 @@ import numpy as np
 from PIL import Image
 
 from ..timeline import Segment, Segments
-from ._hud import orb_fractions, runs as _runs
+from ._hud import orb_fractions
+from ._hud import runs as _runs
 from .base import signal
 
 
-
-
 @signal("edit_emphasis")
-def edit_emphasis(cache: Path, orb_min: float = 0.05, note_white: float = 0.08, zoom_min_len: int = 2,
-                  note_min_len: int = 3) -> Segments:
+def edit_emphasis(
+    cache: Path, orb_min: float = 0.05, note_white: float = 0.08, zoom_min_len: int = 2, note_min_len: int = 3
+) -> Segments:
     meta = json.loads((cache / "meta.json").read_text(encoding="utf-8"))
     frames = sorted((cache / "frames").glob("*.jpg"))
     hop = 1.0 / float(meta["frames"]["fps"])
     rois = meta.get("rois", {})
     if "hud_red_orb" not in rois or "hud_blue_orb" not in rois:
         raise KeyError("게임 프로필 rois 에 hud_red_orb / hud_blue_orb 필요")
-    scale = meta["frames"]["height"] / meta["height"]      # 네이티브 픽셀 ROI → frames 해상도
+    scale = meta["frames"]["height"] / meta["height"]  # 네이티브 픽셀 ROI → frames 해상도
 
     def box(name, W, H):
         x, y, w, h = rois[name]
@@ -54,5 +55,6 @@ def edit_emphasis(cache: Path, orb_min: float = 0.05, note_white: float = 0.08, 
         items.append(Segment(i * hop, j * hop, "zoom", 1.0, {"len": j - i}))
     for i, j in _runs(note_f, note_min_len):
         items.append(Segment(i * hop, j * hop, "note", 1.0, {"len": j - i}))
-    return Segments("edit_emphasis", items, meta={"n_frames": len(frames), "orb_min": orb_min,
-                                                  "note_white": note_white}).sorted()
+    return Segments(
+        "edit_emphasis", items, meta={"n_frames": len(frames), "orb_min": orb_min, "note_white": note_white}
+    ).sorted()

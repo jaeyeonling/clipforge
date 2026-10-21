@@ -14,13 +14,22 @@ const skipEngine = process.env.CLIPFORGE_SKIP_ENGINE === "1";
 if (!skipEngine && !fs.existsSync(path.join(ENGINE, "clipforge", "app.py"))) {
   throw new Error(`engine-dist 가 없습니다: ${ENGINE} — 먼저 python scripts/build_engine_dist.py`);
 }
-const CODE = ["clipforge/**", "games/**", "data/**", "assets/**", "app/dist/**", "VERSION.json", "THIRD_PARTY_NOTICES.md"];
+const CODE = [
+  "clipforge/**",
+  "games/**",
+  "data/**",
+  "assets/**",
+  "app/dist/**",
+  "VERSION.json",
+  "THIRD_PARTY_NOTICES.md",
+];
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "kr.clipforge.app",
   productName: "clipforge",
-  copyright: "clipforge. 제3자 고지는 resources/engine/THIRD_PARTY_NOTICES.md (FFmpeg GPL 등은 첫 실행 때 내려받는 구성요소에 포함)",
+  copyright:
+    "clipforge. 제3자 고지는 resources/engine/THIRD_PARTY_NOTICES.md (FFmpeg GPL 등은 첫 실행 때 내려받는 구성요소에 포함)",
   directories: { output: "release", buildResources: "assets" },
   files: ["main.js", "preload.js", "engine.js", "components.js", "release.config.js", "assets/**", "package.json"],
   asar: true,
@@ -38,21 +47,26 @@ module.exports = {
   },
   nsis: {
     oneClick: false,
-    perMachine: false,                       // 사용자 폴더(%LOCALAPPDATA%\Programs) 설치 → UAC 없음
+    perMachine: false, // 사용자 폴더(%LOCALAPPDATA%\Programs) 설치 → UAC 없음
     allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: "clipforge",
     runAfterFinish: true,
-    deleteAppDataOnUninstall: false,         // 라벨·판정·런타임은 지우지 않는다 (§6 원칙)
+    deleteAppDataOnUninstall: false, // 라벨·판정·런타임은 지우지 않는다 (§6 원칙)
     installerIcon: "assets/icon.ico",
     uninstallerIcon: "assets/icon.ico",
     uninstallDisplayName: "clipforge",
-    language: "1042",                        // 한국어
-    differentialPackage: true,               // 껍데기(층 C) 차등 업데이트용 blockmap
+    language: "1042", // 한국어
+    differentialPackage: true, // 껍데기(층 C) 차등 업데이트용 blockmap
   },
   compression: process.env.CLIPFORGE_COMPRESSION || "normal",
   // 껍데기(층 C) 업데이트: electron-updater 가 GitHub Releases 의 latest.yml 을 본다. 빌드 때 app-update.yml 로 들어간다.
   // 실제 업로드는 scripts/publish_github.py(gh CLI)가 한다 — electron-builder 의 --publish 는 쓰지 않는다(GH_TOKEN 불필요).
-  publish: { provider: "github", owner: require("./release.config").owner, repo: require("./release.config").repo, releaseType: "release" },
+  publish: {
+    provider: "github",
+    owner: require("./release.config").owner,
+    repo: require("./release.config").repo,
+    releaseType: "release",
+  },
 };

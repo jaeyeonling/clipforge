@@ -16,7 +16,11 @@ export function useEngineEvents(onEvent: (ev: EngineEvent) => void): { connected
       ws = new WebSocket(`${proto}://${location.host}/ws`);
       ws.onopen = () => setConnected(true);
       ws.onmessage = (m) => {
-        try { handler.current(JSON.parse(m.data) as EngineEvent); } catch (e) { console.error("bad event", e); }
+        try {
+          handler.current(JSON.parse(m.data) as EngineEvent);
+        } catch (e) {
+          console.error("bad event", e);
+        }
       };
       ws.onclose = () => {
         setConnected(false);
@@ -25,7 +29,11 @@ export function useEngineEvents(onEvent: (ev: EngineEvent) => void): { connected
       ws.onerror = () => ws?.close();
     };
     connect();
-    return () => { closed = true; window.clearTimeout(timer); ws?.close(); };
+    return () => {
+      closed = true;
+      window.clearTimeout(timer);
+      ws?.close();
+    };
   }, []);
 
   return { connected };

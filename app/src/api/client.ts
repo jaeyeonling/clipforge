@@ -1,5 +1,26 @@
 import type {
-  CalibResult, Candidate, EditPointsResult, Episode, EpisodeKind, EpisodePaths, ErrorInfo, GameInfo, Health, Job, KeptSeg, LabelCategory, Layout, LiveBookmark, LiveSession, LiveStatus, LiveSuggestion, LogLine, MetricRow, PreviewResult, Profile, StageName,
+  CalibResult,
+  Candidate,
+  EditPointsResult,
+  Episode,
+  EpisodeKind,
+  EpisodePaths,
+  ErrorInfo,
+  GameInfo,
+  Health,
+  Job,
+  KeptSeg,
+  LabelCategory,
+  Layout,
+  LiveBookmark,
+  LiveSession,
+  LiveStatus,
+  LiveSuggestion,
+  LogLine,
+  MetricRow,
+  PreviewResult,
+  Profile,
+  StageName,
 } from "./types";
 
 /** 모든 오류 응답은 {"error": {code, message, hint, kind}} 한 형태 (server.py 예외 핸들러). 네트워크 실패도 같은 모양으로 올린다. */
@@ -31,15 +52,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
   } catch {
-    throw new ApiError({ code: "E_OFFLINE", message: "엔진에 연결할 수 없어요", hint: "python -m clipforge.app 이 떠 있는지 확인하세요.", kind: "user" }, 0);
+    throw new ApiError(
+      {
+        code: "E_OFFLINE",
+        message: "엔진에 연결할 수 없어요",
+        hint: "python -m clipforge.app 이 떠 있는지 확인하세요.",
+        kind: "user",
+      },
+      0,
+    );
   }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new ApiError(body.error || { message: body.detail || r.statusText }, r.status);
   return body as T;
 }
 
-const post = <T,>(path: string, data: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(data) });
-const put = <T,>(path: string, data: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(data) });
+const post = <T>(path: string, data: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(data) });
+const put = <T>(path: string, data: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(data) });
 
 export const api = {
   health: () => request<Health>("/api/health"),
@@ -48,29 +77,65 @@ export const api = {
   addEpisode: (video_path: string, title: string, game = "d2r", id?: string, kind: EpisodeKind = "edited") =>
     post<Episode>("/api/episodes", { video_path, title, game, id: id || null, kind }),
   editpoints: (id: string) => request<EditPointsResult>(`/api/episodes/${encodeURIComponent(id)}/editpoints`),
-  kept: (id: string) => request<{ episode: string; kept: KeptSeg[]; categories: LabelCategory[] }>(`/api/episodes/${encodeURIComponent(id)}/kept`),
+  kept: (id: string) =>
+    request<{ episode: string; kept: KeptSeg[]; categories: LabelCategory[] }>(
+      `/api/episodes/${encodeURIComponent(id)}/kept`,
+    ),
   keptSet: (id: string, start: number, end: number, label: string, new_start?: number, new_end?: number) =>
-    put<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept`, { start, end, label, new_start: new_start ?? null, new_end: new_end ?? null }),
+    put<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept`, {
+      start,
+      end,
+      label,
+      new_start: new_start ?? null,
+      new_end: new_end ?? null,
+    }),
   keptAdd: (id: string, start: number, end: number, label = "kept", note = "") =>
     post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept`, { start, end, label, note }),
   keptDelete: (id: string, start: number, end: number) =>
-    request<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept?start=${start}&end=${end}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/kept?start=${start}&end=${end}`, {
+      method: "DELETE",
+    }),
   decideEditPoint: (id: string, start: number, end: number, label: "kept" | "no" | "", reason = "") =>
-    post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/decision`, { start, end, label, reason, kind: "editpoints" }),
+    post<{ ok: boolean }>(`/api/episodes/${encodeURIComponent(id)}/decision`, {
+      start,
+      end,
+      label,
+      reason,
+      kind: "editpoints",
+    }),
   jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
-  jobLog: (id: string, tail = 400) => request<{ job_id: string; path: string; lines: LogLine[] }>(`/api/jobs/${id}/log?tail=${tail}`),
-  runJob: (episode: string, stages: StageName[], params: { layout: Layout; k: number; force: boolean; final?: string; shorts?: string[]; kind?: EpisodeKind; threshold?: number }) =>
-    post<Job>("/api/jobs", { episode, stages, params }),
+  jobLog: (id: string, tail = 400) =>
+    request<{ job_id: string; path: string; lines: LogLine[] }>(`/api/jobs/${id}/log?tail=${tail}`),
+  runJob: (
+    episode: string,
+    stages: StageName[],
+    params: {
+      layout: Layout;
+      k: number;
+      force: boolean;
+      final?: string;
+      shorts?: string[];
+      kind?: EpisodeKind;
+      threshold?: number;
+    },
+  ) => post<Job>("/api/jobs", { episode, stages, params }),
   cancelJob: (id: string) => post<Job>(`/api/jobs/${id}/cancel`, {}),
   candidates: (id: string) => request<Candidate[]>(`/api/episodes/${encodeURIComponent(id)}/candidates`),
   decide: (id: string, c: Candidate, label: "keep" | "no" | "", reason: string) =>
-    post<{ ok: boolean; labels: number }>(`/api/episodes/${encodeURIComponent(id)}/decision`, { start: c.start, end: c.end, label, reason, file: c.file || "" }),
+    post<{ ok: boolean; labels: number }>(`/api/episodes/${encodeURIComponent(id)}/decision`, {
+      start: c.start,
+      end: c.end,
+      label,
+      reason,
+      file: c.file || "",
+    }),
   calibrate: (id: string) => request<CalibResult>(`/api/episodes/${encodeURIComponent(id)}/calibrate`),
   calibratePreview: (id: string, t: number, rois: Record<string, number[]> | null) =>
     post<PreviewResult>(`/api/episodes/${encodeURIComponent(id)}/calibrate/preview`, { t, rois }),
   profile: (game: string) => request<Profile>(`/api/profiles/${game}`),
-  saveProfile: (game: string, rois: Record<string, number[]>) => put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
+  saveProfile: (game: string, rois: Record<string, number[]>) =>
+    put<{ ok: boolean; note?: string }>(`/api/profiles/${game}`, { rois }),
   metrics: () => request<MetricRow[]>("/api/metrics"),
   episodePaths: (id: string) => request<EpisodePaths>(`/api/episodes/${encodeURIComponent(id)}/paths`),
   feedbackExport: () => post<{ path: string; dir: string; files: number; size: number }>("/api/feedback/export", {}),
@@ -79,8 +144,10 @@ export const api = {
   liveStart: (config: Record<string, unknown>) => post<LiveSession>("/api/live/start", { config }),
   liveStop: () => post<LiveSession>("/api/live/stop", {}),
   liveMark: (note = "") => post<LiveBookmark>("/api/live/mark", { note }),
-  liveApprove: (id: string, text?: string) => post<LiveSuggestion>(`/api/live/suggestions/${id}/approve`, { text: text ?? null }),
+  liveApprove: (id: string, text?: string) =>
+    post<LiveSuggestion>(`/api/live/suggestions/${id}/approve`, { text: text ?? null }),
   liveDismiss: (id: string) => post<LiveSuggestion>(`/api/live/suggestions/${id}/dismiss`, {}),
   liveBanner: (items: string[]) => put<{ text: string; items: string[] }>("/api/live/banner", { items }),
-  liveObsProbe: (url: string, password: string) => post<{ ok: boolean; obs: { obs: string }; text_sources: string[] }>("/api/live/obs/probe", { url, password }),
+  liveObsProbe: (url: string, password: string) =>
+    post<{ ok: boolean; obs: { obs: string }; text_sources: string[] }>("/api/live/obs/probe", { url, password }),
 };

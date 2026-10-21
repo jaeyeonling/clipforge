@@ -23,6 +23,7 @@ extend-exclude = ["engine-dist", "release-test", "app", "desktop", "private"]
 
 [tool.ruff.format]
 quote-style = "double"
+line-ending = "lf"
 
 [tool.ruff.lint]
 select = [

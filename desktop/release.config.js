@@ -16,7 +16,9 @@ const repo = process.env.CLIPFORGE_GH_REPO || "clipforge";
 const isPrivate = (process.env.CLIPFORGE_GH_PRIVATE || "1") === "1";
 
 module.exports = {
-  owner, repo, isPrivate,
+  owner,
+  repo,
+  isPrivate,
   updateUrl: `https://github.com/${owner}/${repo}/releases/latest/download`,
   runtimeTag: (yyyymm) => `runtime-${yyyymm}`,
   runtimeUrl: (yyyymm) => `https://github.com/${owner}/${repo}/releases/download/runtime-${yyyymm}`,

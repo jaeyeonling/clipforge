@@ -33,18 +33,68 @@ export interface Health {
   problems: Problem[];
 }
 
-export type StageName = "prep" | "transcribe" | "subtitles" | "signals" | "candidates" | "align" | "shorts" | "export" | "xml" | "weaklabel" | "eval";
-export const STAGES: StageName[] = ["prep", "transcribe", "subtitles", "signals", "candidates", "align", "shorts", "export", "xml", "weaklabel", "eval"];
+export type StageName =
+  | "prep"
+  | "transcribe"
+  | "subtitles"
+  | "signals"
+  | "candidates"
+  | "align"
+  | "shorts"
+  | "export"
+  | "xml"
+  | "weaklabel"
+  | "eval";
+export const STAGES: StageName[] = [
+  "prep",
+  "transcribe",
+  "subtitles",
+  "signals",
+  "candidates",
+  "align",
+  "shorts",
+  "export",
+  "xml",
+  "weaklabel",
+  "eval",
+];
 export const STAGE_LABEL: Record<StageName, string> = {
-  prep: "영상 읽기", transcribe: "말을 글로", subtitles: "자막 파일 만들기", signals: "순간 신호 찾기", candidates: "편집 포인트 고르기", align: "편집본과 맞춰 정답 만들기",
-  shorts: "쇼츠 후보 고르기", export: "세로 초안 만들기", xml: "Premiere 파일 만들기", weaklabel: "제목으로 정답 추정", eval: "점수 매기기",
+  prep: "영상 읽기",
+  transcribe: "말을 글로",
+  subtitles: "자막 파일 만들기",
+  signals: "순간 신호 찾기",
+  candidates: "편집 포인트 고르기",
+  align: "편집본과 맞춰 정답 만들기",
+  shorts: "쇼츠 후보 고르기",
+  export: "세로 초안 만들기",
+  xml: "Premiere 파일 만들기",
+  weaklabel: "제목으로 정답 추정",
+  eval: "점수 매기기",
 };
 /** 단계의 기술 이름 설명 (고급 설정에서 작게) */
 export const STAGE_TECH: Record<StageName, string> = {
-  prep: "prep · 오디오·프레임·크롭 추출", transcribe: "transcribe · Whisper", subtitles: "subtitles · SRT/VTT/VEGAS TXT", signals: "signals · 배너 OCR·채팅·음량·줌", candidates: "candidates",
-  align: "align · 오디오 지문", shorts: "shorts · 순간 순위", export: "export · NVENC 렌더", xml: "xml · xmeml", weaklabel: "weaklabel", eval: "eval · hit@K / recall",
+  prep: "prep · 오디오·프레임·크롭 추출",
+  transcribe: "transcribe · Whisper",
+  subtitles: "subtitles · SRT/VTT/VEGAS TXT",
+  signals: "signals · 배너 OCR·채팅·음량·줌",
+  candidates: "candidates",
+  align: "align · 오디오 지문",
+  shorts: "shorts · 순간 순위",
+  export: "export · NVENC 렌더",
+  xml: "xml · xmeml",
+  weaklabel: "weaklabel",
+  eval: "eval · hit@K / recall",
 };
-export const ANCHOR_LABEL: Record<string, string> = { item: "득템", chat: "채팅", zoom: "줌", note: "메모", speech: "발화", loud: "음량", motion: "움직임", cut: "컷" };
+export const ANCHOR_LABEL: Record<string, string> = {
+  item: "득템",
+  chat: "채팅",
+  zoom: "줌",
+  note: "메모",
+  speech: "발화",
+  loud: "음량",
+  motion: "움직임",
+  cut: "컷",
+};
 export const VARIANT_LABEL: Record<string, string> = { story: "서사형 (30~45초)", short: "한방형 (15~20초)" };
 export const GRADE_LABEL: Record<string, string> = { set: "세트", unique: "유니크", rare: "희귀", magic: "매직" };
 export const DECISION_LABEL: Record<string, string> = { keep: "쓸 만함", no: "안 씀", kept: "정답", "": "" };
@@ -57,17 +107,43 @@ export const DEFAULT_STAGES: Record<EpisodeKind, StageName[]> = {
 };
 
 export interface EditPoint {
-  idx: number; start: number; end: number; score: number; label: string; meta: Record<string, unknown>;
-  kept: boolean; kept_labels: string[]; decision: "kept" | "no" | "";
+  idx: number;
+  start: number;
+  end: number;
+  score: number;
+  label: string;
+  meta: Record<string, unknown>;
+  kept: boolean;
+  kept_labels: string[];
+  decision: "kept" | "no" | "";
 }
-export interface LabelCategory { key: string; label: string; hint?: string; color?: string; shortcut?: string }
-export interface KeptSeg { start: number; end: number; label: string; source: "auto" | "manual" | "ui"; note: string }
+export interface LabelCategory {
+  key: string;
+  label: string;
+  hint?: string;
+  color?: string;
+  shortcut?: string;
+}
+export interface KeptSeg {
+  start: number;
+  end: number;
+  label: string;
+  source: "auto" | "manual" | "ui";
+  note: string;
+}
 export interface EditPointsResult {
-  episode: string; duration: number; candidates: EditPoint[]; signals: string[];
+  episode: string;
+  duration: number;
+  candidates: EditPoint[];
+  signals: string[];
   kept: { start: number; end: number; label: string; note: string }[];
   categories: LabelCategory[];
   report: {
-    recall: number; precision: number; coverage: number; n_labels: number; n_candidates: number;
+    recall: number;
+    precision: number;
+    coverage: number;
+    n_labels: number;
+    n_candidates: number;
     missed: { start: number; end: number; label: string }[];
     by_label: Record<string, { hit: number; total: number }>;
   } | null;
@@ -78,8 +154,8 @@ export interface EditPointsResult {
 export interface Episode {
   id: string;
   kind?: EpisodeKind;
-  source?: string;      // 영상 실제 경로
-  linked?: boolean;     // videos/ 안의 링크/복사본이면 true, 원본 경로 참조면 false
+  source?: string; // 영상 실제 경로
+  linked?: boolean; // videos/ 안의 링크/복사본이면 true, 원본 경로 참조면 false
   title?: string;
   game?: string;
   duration?: number;
@@ -131,10 +207,25 @@ export interface EngineEvent {
   warnings?: { code: string; message: string; hint: string }[];
 }
 
-export interface PathInfo { path: string; exists: boolean }
+export interface PathInfo {
+  path: string;
+  exists: boolean;
+}
 export interface EpisodePaths {
-  shorts_dir: PathInfo; premiere_review: PathInfo; premiere_shorts: PathInfo; premiere_dir: PathInfo; subtitles_srt: PathInfo; subtitles_vtt: PathInfo; subtitles_vegas: PathInfo; subtitles_dir: PathInfo; cache_dir: PathInfo;
-  labels_shorts: PathInfo; labels_editpoints: PathInfo; data_dir: PathInfo; shorts_count: number; video: string;
+  shorts_dir: PathInfo;
+  premiere_review: PathInfo;
+  premiere_shorts: PathInfo;
+  premiere_dir: PathInfo;
+  subtitles_srt: PathInfo;
+  subtitles_vtt: PathInfo;
+  subtitles_vegas: PathInfo;
+  subtitles_dir: PathInfo;
+  cache_dir: PathInfo;
+  labels_shorts: PathInfo;
+  labels_editpoints: PathInfo;
+  data_dir: PathInfo;
+  shorts_count: number;
+  video: string;
 }
 
 export interface LogLine {
@@ -164,7 +255,7 @@ export interface Candidate {
   decision?: "keep" | "no" | "";
   reason?: string;
   media_url?: string;
-  gt?: string[];        // 겹치는 친구 쇼츠(역매핑)·확정본 이름
+  gt?: string[]; // 겹치는 친구 쇼츠(역매핑)·확정본 이름
 }
 
 export interface CalibCheck {
@@ -185,11 +276,12 @@ export interface CalibResult {
 }
 
 export interface PreviewResult {
-  url: string;                 // 서버가 박스를 그린 합성 PNG
-  t: number; n_frames: number;
-  frame_url: string;           // 원본 프레임 (화면 편집기용)
+  url: string; // 서버가 박스를 그린 합성 PNG
+  t: number;
+  n_frames: number;
+  frame_url: string; // 원본 프레임 (화면 편집기용)
   frame_size: [number, number];
-  rois: Record<string, number[]>;         // 비율 [x, y, w, h]
+  rois: Record<string, number[]>; // 비율 [x, y, w, h]
   panel_bands: Record<string, number[]>;
   colors: Record<string, string>;
 }
@@ -216,14 +308,52 @@ export interface MetricRow {
   n_candidates?: number;
 }
 
-export interface LiveSuggestion { id: string; t_wall: number; t_rec: number | null; grade: string; text: string; head: string; score: number; status: "pending" | "approved" | "dismissed"; bbox: number[] }
-export interface LiveBookmark { id: string; t_wall: number; t_rec: number | null; kind: string; note: string }
-export interface LiveSession {
-  id: string; running: boolean; started: number; frames: number; last_frame_t: number; source: string; interval: number; approval: boolean;
-  obs: Record<string, unknown> | null; obs_connected: boolean; banner: string; pending: number; bookmarks: number; last_error: string | null; dir: string;
+export interface LiveSuggestion {
+  id: string;
+  t_wall: number;
+  t_rec: number | null;
+  grade: string;
+  text: string;
+  head: string;
+  score: number;
+  status: "pending" | "approved" | "dismissed";
+  bbox: number[];
 }
-export interface LiveStatus { active: boolean; session: LiveSession | null; suggestions: LiveSuggestion[]; bookmarks: LiveBookmark[]; preview_url?: string | null }
-export interface GameInfo { key: string; name: string }
+export interface LiveBookmark {
+  id: string;
+  t_wall: number;
+  t_rec: number | null;
+  kind: string;
+  note: string;
+}
+export interface LiveSession {
+  id: string;
+  running: boolean;
+  started: number;
+  frames: number;
+  last_frame_t: number;
+  source: string;
+  interval: number;
+  approval: boolean;
+  obs: Record<string, unknown> | null;
+  obs_connected: boolean;
+  banner: string;
+  pending: number;
+  bookmarks: number;
+  last_error: string | null;
+  dir: string;
+}
+export interface LiveStatus {
+  active: boolean;
+  session: LiveSession | null;
+  suggestions: LiveSuggestion[];
+  bookmarks: LiveBookmark[];
+  preview_url?: string | null;
+}
+export interface GameInfo {
+  key: string;
+  name: string;
+}
 export type LiveEvent = { session: string; t: number; type: string; [k: string]: unknown };
 
 export type Layout = "card" | "feed";

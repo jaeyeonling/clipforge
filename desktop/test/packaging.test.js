@@ -17,9 +17,12 @@ function localRequires(file) {
 
 test("electron-builder files 에 main/preload 가 require 하는 로컬 모듈이 전부 들어 있다", () => {
   const files = new Set(cfg.files);
-  const seen = new Set(); const queue = ["main.js", "preload.js"];
+  const seen = new Set();
+  const queue = ["main.js", "preload.js"];
   while (queue.length) {
-    const f = queue.pop(); if (seen.has(f)) continue; seen.add(f);
+    const f = queue.pop();
+    if (seen.has(f)) continue;
+    seen.add(f);
     assert.ok(files.has(f), `${f} 가 electron-builder files 에 없음`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} 파일이 없음`);
     for (const dep of localRequires(f)) queue.push(dep);

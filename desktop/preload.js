@@ -4,7 +4,11 @@
 //   - 브라우저로 열면 window.clipforgeShell 이 없다 → 화면은 그 부분을 숨긴다.
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
-const on = (channel) => (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on(channel, h); return () => ipcRenderer.removeListener(channel, h); };
+const on = (channel) => (cb) => {
+  const h = (_e, v) => cb(v);
+  ipcRenderer.on(channel, h);
+  return () => ipcRenderer.removeListener(channel, h);
+};
 
 contextBridge.exposeInMainWorld("clipforgeShell", {
   platform: process.platform,
@@ -17,16 +21,16 @@ contextBridge.exposeInMainWorld("clipforgeShell", {
     openLogs: () => ipcRenderer.invoke("shell:openLogs"),
   },
   update: {
-    state: () => ipcRenderer.invoke("update:state"),           // {checking, pending:[{name,version,size,reason}], shell:{version}|null, applying, lastCheck, error}
+    state: () => ipcRenderer.invoke("update:state"), // {checking, pending:[{name,version,size,reason}], shell:{version}|null, applying, lastCheck, error}
     onState: on("update:state"),
     check: () => ipcRenderer.invoke("update:check"),
-    apply: () => ipcRenderer.invoke("update:apply"),           // 층 A·B (엔진 재시작)
+    apply: () => ipcRenderer.invoke("update:apply"), // 층 A·B (엔진 재시작)
     applyShell: () => ipcRenderer.invoke("update:applyShell"), // 층 C (앱 재시작)
   },
   shell: {
-    pickVideos: () => ipcRenderer.invoke("shell:pickVideos"),         // 파일 선택 대화상자 → 경로 배열
-    pathForFile: (file) => webUtils.getPathForFile(file),              // 드래그 앤 드롭된 File → 실제 경로
-    info: () => ipcRenderer.invoke("shell:info"),              // {mode, runtimeDir, dataRoot, logDir, updateUrl, isPrivate, hasToken, versions:{engine, components}, shellVersion}
+    pickVideos: () => ipcRenderer.invoke("shell:pickVideos"), // 파일 선택 대화상자 → 경로 배열
+    pathForFile: (file) => webUtils.getPathForFile(file), // 드래그 앤 드롭된 File → 실제 경로
+    info: () => ipcRenderer.invoke("shell:info"), // {mode, runtimeDir, dataRoot, logDir, updateUrl, isPrivate, hasToken, versions:{engine, components}, shellVersion}
     openLogs: () => ipcRenderer.invoke("shell:openLogs"),
     openPath: (p) => ipcRenderer.invoke("shell:openPath", p),
   },

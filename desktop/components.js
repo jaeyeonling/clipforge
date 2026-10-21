@@ -14,8 +14,9 @@ const path = require("node:path");
 const { pathToFileURL, fileURLToPath } = require("node:url");
 
 const CODE_PATHS = ["clipforge", "games", "data", "assets", "app"];
-const COMPONENT_PATHS = {                       // 설치/교체 시 지우고 새로 놓는 경로 (zip 안 경로와 같다)
-  "python-base": null,                          // 특수: 루트의 파일들 + Lib (Lib/site-packages/nvidia 는 cuda 소유라 보존)
+const COMPONENT_PATHS = {
+  // 설치/교체 시 지우고 새로 놓는 경로 (zip 안 경로와 같다)
+  "python-base": null, // 특수: 루트의 파일들 + Lib (Lib/site-packages/nvidia 는 cuda 소유라 보존)
   cuda: ["Lib/site-packages/nvidia"],
   ffmpeg: ["bin"],
   whisper: ["models"],
@@ -23,7 +24,10 @@ const COMPONENT_PATHS = {                       // 설치/교체 시 지우고 �
 
 function sevenZip() {
   // 개발: node_modules/7zip-bin, 배포: resources/7za.exe (electron-builder extraResources)
-  const cands = [path.join(process.resourcesPath || "", "7za.exe"), path.join(__dirname, "node_modules", "7zip-bin", "win", "x64", "7za.exe")];
+  const cands = [
+    path.join(process.resourcesPath || "", "7za.exe"),
+    path.join(__dirname, "node_modules", "7zip-bin", "win", "x64", "7za.exe"),
+  ];
   const p = cands.find((c) => c && fs.existsSync(c));
   if (!p) throw new Error("7za.exe 를 찾지 못했습니다");
   return p;
@@ -35,29 +39,57 @@ function sevenZip() {
 // 토큰: CLIPFORGE_GH_TOKEN 환경변수 또는 %LOCALAPPDATA%\clipforge\github-token.txt (fine-grained PAT, 해당 저장소 Contents: read-only).
 function githubToken() {
   if (process.env.CLIPFORGE_GH_TOKEN) return process.env.CLIPFORGE_GH_TOKEN.trim();
-  try { return fs.readFileSync(path.join(process.env.LOCALAPPDATA || "", "clipforge", "github-token.txt"), "utf8").trim() || null; } catch { return null; }
+  try {
+    return (
+      fs.readFileSync(path.join(process.env.LOCALAPPDATA || "", "clipforge", "github-token.txt"), "utf8").trim() || null
+    );
+  } catch {
+    return null;
+  }
 }
 const GH_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/(?:latest\/download|download\/([^/]+))\/([^/?#]+)$/;
 
 function httpGetJson(url, headers) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "user-agent": "clipforge", accept: "application/vnd.github+json", ...headers } }, (res) => {
-      let body = ""; res.setEncoding("utf8"); res.on("data", (c) => (body += c));
-      res.on("end", () => { if (res.statusCode !== 200) return reject(new Error(`GitHub API ${res.statusCode} ${url}: ${body.slice(0, 120)}`)); try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
-    }).on("error", reject);
+    https
+      .get(
+        url,
+        { headers: { "user-agent": "clipforge", accept: "application/vnd.github+json", ...headers } },
+        (res) => {
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (c) => (body += c));
+          res.on("end", () => {
+            if (res.statusCode !== 200)
+              return reject(new Error(`GitHub API ${res.statusCode} ${url}: ${body.slice(0, 120)}`));
+            try {
+              resolve(JSON.parse(body));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        },
+      )
+      .on("error", reject);
   });
 }
 
 /** github.com 릴리스 자산 URL → {url, headers}. 토큰이 없거나 GitHub 가 아니면 그대로. */
 async function resolveAsset(url) {
-  const m = GH_RE.exec(url); const token = githubToken();
+  const m = GH_RE.exec(url);
+  const token = githubToken();
   if (!m || !token) return { url, headers: {} };
   const [, owner, repo, tag, name] = m;
-  const api = tag ? `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}` : `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+  const api = tag
+    ? `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`
+    : `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
   const rel = await httpGetJson(api, { authorization: `Bearer ${token}` });
   const asset = (rel.assets || []).find((a) => a.name === name);
   if (!asset) throw new Error(`릴리스 ${rel.tag_name} 에 자산 ${name} 이 없습니다`);
-  return { url: asset.url, headers: { authorization: `Bearer ${token}`, accept: "application/octet-stream", "user-agent": "clipforge" } };
+  return {
+    url: asset.url,
+    headers: { authorization: `Bearer ${token}`, accept: "application/octet-stream", "user-agent": "clipforge" },
+  };
 }
 
 // ---------- 매니페스트·버전 ----------
@@ -67,14 +99,23 @@ async function fetchText(url) {
   return new Promise((resolve, reject) => {
     const get = (u, headers, n) => {
       const mod = u.startsWith("https") ? https : http;
-      mod.get(u, { headers: { "cache-control": "no-cache", "user-agent": "clipforge", ...headers } }, (res) => {
-        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && n < 5) {
-          res.resume(); const next = new URL(res.headers.location, u).toString();
-          return get(next, new URL(next).host === new URL(u).host ? headers : {}, n + 1);          // 다른 호스트(S3)로 가면 Authorization 제거
-        }
-        if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} ${u}`)); }
-        let body = ""; res.setEncoding("utf8"); res.on("data", (c) => (body += c)); res.on("end", () => resolve(body));
-      }).on("error", reject);
+      mod
+        .get(u, { headers: { "cache-control": "no-cache", "user-agent": "clipforge", ...headers } }, (res) => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && n < 5) {
+            res.resume();
+            const next = new URL(res.headers.location, u).toString();
+            return get(next, new URL(next).host === new URL(u).host ? headers : {}, n + 1); // 다른 호스트(S3)로 가면 Authorization 제거
+          }
+          if (res.statusCode !== 200) {
+            res.resume();
+            return reject(new Error(`HTTP ${res.statusCode} ${u}`));
+          }
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (c) => (body += c));
+          res.on("end", () => resolve(body));
+        })
+        .on("error", reject);
     };
     get(r.url, r.headers, 0);
   });
@@ -91,7 +132,11 @@ async function fetchManifest(baseUrl) {
 }
 
 function readLocalVersion(runtimeDir) {
-  try { return JSON.parse(fs.readFileSync(path.join(runtimeDir, "VERSION.json"), "utf8")); } catch { return null; }
+  try {
+    return JSON.parse(fs.readFileSync(path.join(runtimeDir, "VERSION.json"), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 function writeLocalVersion(runtimeDir, v) {
@@ -115,13 +160,17 @@ function plan(runtimeDir, manifest, { wantOptional = {} } = {}) {
   const lv = local.component_versions || {};
   const out = [];
   if (manifest.engine_code) {
-    const reason = !present(runtimeDir, "engine_code") ? "missing" : (local.engine_version !== manifest.engine_code.version ? "update" : null);
+    const reason = !present(runtimeDir, "engine_code")
+      ? "missing"
+      : local.engine_version !== manifest.engine_code.version
+        ? "update"
+        : null;
     if (reason) out.push({ name: "engine_code", kind: "engine_code", reason, entry: manifest.engine_code });
   }
   for (const [name, entry] of Object.entries(manifest.components || {})) {
     if (!entry.url) continue;
     if (entry.optional && wantOptional[name] === false) continue;
-    const reason = !present(runtimeDir, name) ? "missing" : (lv[name] !== entry.version ? "update" : null);
+    const reason = !present(runtimeDir, name) ? "missing" : lv[name] !== entry.version ? "update" : null;
     if (reason) out.push({ name, kind: "component", reason, entry });
   }
   return out;
@@ -131,14 +180,18 @@ function plan(runtimeDir, manifest, { wantOptional = {} } = {}) {
 function sha256File(p) {
   return new Promise((resolve, reject) => {
     const h = crypto.createHash("sha256");
-    fs.createReadStream(p).on("data", (d) => h.update(d)).on("end", () => resolve(h.digest("hex"))).on("error", reject);
+    fs.createReadStream(p)
+      .on("data", (d) => h.update(d))
+      .on("end", () => resolve(h.digest("hex")))
+      .on("error", reject);
   });
 }
 
 async function download(entry, dest, onProgress, signal) {
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   if (fs.existsSync(dest) && fs.statSync(dest).size === entry.size && (await sha256File(dest)) === entry.sha256) {
-    onProgress?.({ done: entry.size, total: entry.size, cached: true }); return dest;
+    onProgress?.({ done: entry.size, total: entry.size, cached: true });
+    return dest;
   }
   const part = dest + ".part";
   if (entry.url.startsWith("file:")) {
@@ -146,12 +199,18 @@ async function download(entry, dest, onProgress, signal) {
     await copyWithProgress(src, part, entry.size, onProgress, signal);
   } else {
     let have = fs.existsSync(part) ? fs.statSync(part).size : 0;
-    if (have > entry.size) { await fsp.unlink(part); have = 0; }
+    if (have > entry.size) {
+      await fsp.unlink(part);
+      have = 0;
+    }
     const r = await resolveAsset(entry.url);
     await httpDownload(r.url, part, have, entry.size, onProgress, signal, 0, r.headers);
   }
   const sum = await sha256File(part);
-  if (sum !== entry.sha256) { await fsp.unlink(part); throw new Error(`해시 불일치: ${path.basename(dest)} (다운로드가 손상됨 — 다시 시도)`); }
+  if (sum !== entry.sha256) {
+    await fsp.unlink(part);
+    throw new Error(`해시 불일치: ${path.basename(dest)} (다운로드가 손상됨 — 다시 시도)`);
+  }
   await fsp.rename(part, dest);
   return dest;
 }
@@ -159,10 +218,18 @@ async function download(entry, dest, onProgress, signal) {
 function copyWithProgress(src, dst, total, onProgress, signal) {
   return new Promise((resolve, reject) => {
     let done = 0;
-    const r = fs.createReadStream(src), w = fs.createWriteStream(dst);
-    signal?.addEventListener("abort", () => { r.destroy(new Error("취소")); });
-    r.on("data", (d) => { done += d.length; onProgress?.({ done, total }); });
-    r.on("error", reject); w.on("error", reject); w.on("finish", resolve);
+    const r = fs.createReadStream(src),
+      w = fs.createWriteStream(dst);
+    signal?.addEventListener("abort", () => {
+      r.destroy(new Error("취소"));
+    });
+    r.on("data", (d) => {
+      done += d.length;
+      onProgress?.({ done, total });
+    });
+    r.on("error", reject);
+    w.on("error", reject);
+    w.on("finish", resolve);
     r.pipe(w);
   });
 }
@@ -175,16 +242,27 @@ function httpDownload(url, part, have, total, onProgress, signal, redirects = 0,
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 5) {
         res.resume();
         const next = new URL(res.headers.location, url).toString();
-        const keep = new URL(next).host === new URL(url).host ? extraHeaders : {};        // 다른 호스트(S3)로 가면 Authorization 제거
+        const keep = new URL(next).host === new URL(url).host ? extraHeaders : {}; // 다른 호스트(S3)로 가면 Authorization 제거
         return resolve(httpDownload(next, part, have, total, onProgress, signal, redirects + 1, keep));
       }
-      if (res.statusCode === 416) { res.resume(); return resolve(); }                    // 이미 다 받음
-      if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} ${url}`)); }
+      if (res.statusCode === 416) {
+        res.resume();
+        return resolve();
+      } // 이미 다 받음
+      if (res.statusCode !== 200 && res.statusCode !== 206) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} ${url}`));
+      }
       const append = res.statusCode === 206 && have > 0;
       let done = append ? have : 0;
       const w = fs.createWriteStream(part, { flags: append ? "a" : "w" });
-      res.on("data", (d) => { done += d.length; onProgress?.({ done, total }); });
-      res.on("error", reject); w.on("error", reject); w.on("finish", resolve);
+      res.on("data", (d) => {
+        done += d.length;
+        onProgress?.({ done, total });
+      });
+      res.on("error", reject);
+      w.on("error", reject);
+      w.on("finish", resolve);
       res.pipe(w);
     });
     req.on("error", reject);
@@ -204,15 +282,19 @@ function run7z(args, onLine) {
   });
 }
 
-async function rmrf(p) { await fsp.rm(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
+async function rmrf(p) {
+  await fsp.rm(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}
 
 async function install(runtimeDir, item, zipPath, onProgress) {
   const staging = path.join(runtimeDir, "_staging", item.name);
   const prev = path.join(runtimeDir, "_prev", item.name);
-  await rmrf(staging); await fsp.mkdir(staging, { recursive: true });
+  await rmrf(staging);
+  await fsp.mkdir(staging, { recursive: true });
   onProgress?.({ phase: "extract" });
   await run7z(["x", "-y", "-bd", "-bsp1", `-o${staging}`, zipPath], (line) => {
-    const m = line.match(/(\d+)%/); if (m) onProgress?.({ phase: "extract", pct: Number(m[1]) });
+    const m = line.match(/(\d+)%/);
+    if (m) onProgress?.({ phase: "extract", pct: Number(m[1]) });
   });
   // 교체 대상 경로
   let rels;
@@ -220,35 +302,60 @@ async function install(runtimeDir, item, zipPath, onProgress) {
   else if (item.name === "python-base") rels = (await fsp.readdir(staging)).filter((n) => n !== "Lib").concat(["Lib"]);
   else rels = COMPONENT_PATHS[item.name] || (await fsp.readdir(staging));
   onProgress?.({ phase: "swap" });
-  await rmrf(prev); await fsp.mkdir(prev, { recursive: true });
+  await rmrf(prev);
+  await fsp.mkdir(prev, { recursive: true });
   const moved = [];
   try {
     for (const rel of rels) {
-      const cur = path.join(runtimeDir, rel), bak = path.join(prev, rel), neu = path.join(staging, rel);
+      const cur = path.join(runtimeDir, rel),
+        bak = path.join(prev, rel),
+        neu = path.join(staging, rel);
       if (!fs.existsSync(neu)) continue;
       if (item.name === "python-base" && rel === "Lib") {
         // Lib 는 통째로 바꾸되 cuda 소유 폴더(site-packages/nvidia)는 새 Lib 로 옮겨 보존
-        const nv = path.join(cur, "site-packages", "nvidia"), nvNew = path.join(neu, "site-packages", "nvidia");
-        if (fs.existsSync(nv) && !fs.existsSync(nvNew)) { await fsp.mkdir(path.dirname(nvNew), { recursive: true }); await fsp.rename(nv, nvNew); }
+        const nv = path.join(cur, "site-packages", "nvidia"),
+          nvNew = path.join(neu, "site-packages", "nvidia");
+        if (fs.existsSync(nv) && !fs.existsSync(nvNew)) {
+          await fsp.mkdir(path.dirname(nvNew), { recursive: true });
+          await fsp.rename(nv, nvNew);
+        }
       }
-      if (fs.existsSync(cur)) { await fsp.mkdir(path.dirname(bak), { recursive: true }); await fsp.rename(cur, bak); moved.push(rel); }
+      if (fs.existsSync(cur)) {
+        await fsp.mkdir(path.dirname(bak), { recursive: true });
+        await fsp.rename(cur, bak);
+        moved.push(rel);
+      }
       await fsp.mkdir(path.dirname(cur), { recursive: true });
       await fsp.rename(neu, cur);
     }
   } catch (e) {
     // 롤백
     for (const rel of moved) {
-      const cur = path.join(runtimeDir, rel), bak = path.join(prev, rel);
-      try { await rmrf(cur); await fsp.rename(bak, cur); } catch { /* best effort */ }
+      const cur = path.join(runtimeDir, rel),
+        bak = path.join(prev, rel);
+      try {
+        await rmrf(cur);
+        await fsp.rename(bak, cur);
+      } catch {
+        /* best effort */
+      }
     }
     throw new Error(`교체 실패(복원함): ${e.message}`);
   }
-  await rmrf(staging); await rmrf(prev);
-  for (const d of [path.dirname(staging), path.dirname(prev)]) { try { await fsp.rmdir(d); } catch { /* 다른 구성요소가 쓰는 중이면 남긴다 */ } }
+  await rmrf(staging);
+  await rmrf(prev);
+  for (const d of [path.dirname(staging), path.dirname(prev)]) {
+    try {
+      await fsp.rmdir(d);
+    } catch {
+      /* 다른 구성요소가 쓰는 중이면 남긴다 */
+    }
+  }
   // VERSION.json
   const v = readLocalVersion(runtimeDir) || { component_versions: {} };
   v.component_versions = v.component_versions || {};
-  if (item.kind === "engine_code") v.engine_version = item.entry.version; else v.component_versions[item.name] = item.entry.version;
+  if (item.kind === "engine_code") v.engine_version = item.entry.version;
+  else v.component_versions[item.name] = item.entry.version;
   v.updated = new Date().toISOString();
   writeLocalVersion(runtimeDir, v);
 }
@@ -258,15 +365,25 @@ async function seedFromResources(runtimeDir, seedDir) {
   if (!seedDir || !fs.existsSync(path.join(seedDir, "clipforge", "app.py"))) return false;
   await fsp.mkdir(runtimeDir, { recursive: true });
   for (const rel of CODE_PATHS) {
-    const src = path.join(seedDir, rel), dst = path.join(runtimeDir, rel);
+    const src = path.join(seedDir, rel),
+      dst = path.join(runtimeDir, rel);
     if (!fs.existsSync(src)) continue;
-    await rmrf(dst); await fsp.cp(src, dst, { recursive: true });
+    await rmrf(dst);
+    await fsp.cp(src, dst, { recursive: true });
   }
-  const seedVer = (() => { try { return JSON.parse(fs.readFileSync(path.join(seedDir, "VERSION.json"), "utf8")); } catch { return {}; } })();
+  const seedVer = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(seedDir, "VERSION.json"), "utf8"));
+    } catch {
+      return {};
+    }
+  })();
   const v = readLocalVersion(runtimeDir) || { component_versions: {} };
-  v.engine_version = seedVer.engine_version || v.engine_version; v.seeded = new Date().toISOString();
+  v.engine_version = seedVer.engine_version || v.engine_version;
+  v.seeded = new Date().toISOString();
   writeLocalVersion(runtimeDir, v);
-  for (const f of ["THIRD_PARTY_NOTICES.md"]) if (fs.existsSync(path.join(seedDir, f))) await fsp.copyFile(path.join(seedDir, f), path.join(runtimeDir, f));
+  for (const f of ["THIRD_PARTY_NOTICES.md"])
+    if (fs.existsSync(path.join(seedDir, f))) await fsp.copyFile(path.join(seedDir, f), path.join(runtimeDir, f));
   return true;
 }
 
@@ -281,7 +398,17 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
   const onAbort = () => ac.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
   const zipOf = (item) => path.join(downloadDir, path.basename(new URL(item.entry.url).pathname));
-  const downloaded = new Map(items.map((it) => { let res, rej; const p = new Promise((a, b) => { res = a; rej = b; }); p.catch(() => {}); return [it.name, { p, res, rej }]; }));
+  const downloaded = new Map(
+    items.map((it) => {
+      let res, rej;
+      const p = new Promise((a, b) => {
+        res = a;
+        rej = b;
+      });
+      p.catch(() => {});
+      return [it.name, { p, res, rej }];
+    }),
+  );
   const queue = items.slice();
   const worker = async () => {
     while (queue.length) {
@@ -291,22 +418,47 @@ async function apply(runtimeDir, items, { downloadDir, onEvent, signal, concurre
         await download(item.entry, zipOf(item), (p) => onEvent({ type: "download", name: item.name, ...p }), ac.signal);
         onEvent({ type: "downloaded", name: item.name });
         downloaded.get(item.name).res();
-      } catch (e) { ac.abort(); downloaded.get(item.name).rej(e); throw e; }
+      } catch (e) {
+        ac.abort();
+        downloaded.get(item.name).rej(e);
+        throw e;
+      }
     }
   };
   const workers = Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, worker));
   workers.catch(() => {});
   try {
-    for (const item of items) {                       // 설치는 순서대로, 각 항목은 받아지는 대로
+    for (const item of items) {
+      // 설치는 순서대로, 각 항목은 받아지는 대로
       await downloaded.get(item.name).p;
       await install(runtimeDir, item, zipOf(item), (p) => onEvent({ type: "install", name: item.name, ...p }));
       onEvent({ type: "done", name: item.name });
-      try { await fsp.unlink(zipOf(item)); } catch { /* keep */ }
+      try {
+        await fsp.unlink(zipOf(item));
+      } catch {
+        /* keep */
+      }
     }
     await workers;
-  } finally { signal?.removeEventListener("abort", onAbort); }
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
-function fileUrl(p) { return pathToFileURL(p).toString(); }
+function fileUrl(p) {
+  return pathToFileURL(p).toString();
+}
 
-module.exports = { fetchManifest, readLocalVersion, present, plan, download, install, apply, seedFromResources, fileUrl, githubToken, CODE_PATHS };
+module.exports = {
+  fetchManifest,
+  readLocalVersion,
+  present,
+  plan,
+  download,
+  install,
+  apply,
+  seedFromResources,
+  fileUrl,
+  githubToken,
+  CODE_PATHS,
+};

@@ -333,13 +333,15 @@ def align_files(
             fp_o = None
     t0 = time.time()
     if fp_o is None:
-        fp_o = fingerprint(orig_wav, p, progress=lambda f: progress and progress(0.8 * f, "원본 지문"))
+        fp_o = fingerprint(
+            orig_wav, p, progress=lambda f: progress and progress(0.8 * f, "원본 소리 지문을 만드는 중이에요")
+        )
         if cache_p:
             fp_o.save(cache_p)
     t_fp = time.time() - t0
     fp_f = fingerprint(final_wav, p)
     if progress:
-        progress(0.9, "매칭")
+        progress(0.9, "편집본과 맞춰 보는 중이에요")
     segs, diag = align(fp_o, fp_f, p)
     diag["fingerprint_s"] = round(t_fp, 1)
     diag["orig_hashes"] = len(fp_o.hashes)
@@ -397,12 +399,12 @@ def align_shorts(
     work.mkdir(parents=True, exist_ok=True)
     for i, s in enumerate(shorts):
         if progress:
-            progress(i / max(1, len(shorts)), f"쇼츠 {s.name}")
+            progress(i / max(1, len(shorts)), f"쇼츠 {s.name} 를 맞추는 중이에요")
         wav = s if s.suffix.lower() == ".wav" else extract_audio(s, work / f"shorts_{s.stem}.wav")
         segs, diag = align_files(episode_wav, wav, cache_dir=cache_dir, p=p)
         results.append({"file": s.name, "path": str(s), "segments": segs, "diag": diag})
     if progress:
-        progress(1.0, "쇼츠 정렬 완료")
+        progress(1.0, "쇼츠를 다 맞췄어요")
     return results
 
 

@@ -364,7 +364,7 @@ def render_feed(
             continue
         name = f"{rank:02d}_{c.variant}_{fmt_time(c.start).replace(':', '-')}_{c.score:.2f}.mp4"
         if progress:
-            progress((rank - 1) / max(total, 1), f"{rank}/{total} {name}")
+            progress((rank - 1) / max(total, 1), f"세로 초안 {rank}/{total}개째를 만드는 중이에요")
         lines = hook_lines(c)
         hook = lines[-1] if len(lines) > 1 else lines[0]  # 고정 훅 = 아이템 맥락 줄 ("지존참 직득!")
         intro = [episode_label, hook] if episode_label and hook else lines[:2]  # 인트로: 회차(흰) / 득템 훅(금)

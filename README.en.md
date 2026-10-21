@@ -13,7 +13,9 @@ and learns from every "keep / skip" you press.
 
 [한국어](README.md) · **English**
 
-<img src="docs/images/make.png" alt="The Make screen: Shorts drafts and subtitles" width="860">
+<img src="docs/images/demo.gif" alt="Making drafts from one video and judging them" width="860">
+
+<sub>Make → progress → jumps to the drafts tab → keep (synthetic test clip, about 1.5× speed)</sub>
 
 </div>
 

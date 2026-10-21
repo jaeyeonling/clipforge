@@ -56,6 +56,20 @@ def episode_kind(project: Project, vid: str, params: dict | None = None) -> str:
     return k if k in ("edited", "original") else "edited"
 
 
+# 진행 줄에 보일 신호 이름
+SIGNAL_LABEL = {
+    "audio_loudness": "소리 크기",
+    "frame_motion": "화면 움직임",
+    "chat_burst": "채팅 폭주",
+    "chat_text": "채팅 글자",
+    "cut_density": "장면 전환",
+    "edit_emphasis": "편집 강조",
+    "item_banner": "득템 배너",
+    "speech_keyword": "리액션 말",
+    "ui_state": "템 창 위치",
+}
+
+
 def pipeline_cfg(project: Project, kind: str, game: str | None = None) -> dict:
     """회차 종류별 신호 묶음·장면 전환 설정. 게임 프로필의 pipelines 가 있으면 그 게임에서는 그것을 쓴다."""
     from .profiles import load_settings
@@ -380,7 +394,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             )
         kind = episode_kind(project, vid, job.params)
         pcfg = pipeline_cfg(project, kind, episode_game_of(project, vid))
-        prog(0.02, f"ffprobe / 단일 패스 디코딩 ({kind})")
+        prog(0.02, f"영상을 읽는 중이에요 ({'편집본' if kind == 'edited' else '원본'})")
         # 진행률: ffmpeg 가 쓰는 frames/*.jpg 개수를 폴링해 기대 프레임 수(길이 × fps) 대비 비율로
         done_flag = threading.Event()
         err: list[BaseException] = []
@@ -415,19 +429,22 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                     pass
             if expected:
                 n = len(list((cache / "frames").glob("*.jpg"))) if (cache / "frames").exists() else 0
-                prog(0.05 + 0.9 * min(1.0, n / expected), f"디코딩 {n}/{expected} 프레임")
+                prog(0.05 + 0.9 * min(1.0, n / expected), f"화면 {n}/{expected}장을 읽었어요")
             if job.cancel_event.is_set():
                 job.log("취소 요청 — 현재 ffmpeg 패스가 끝나면 멈춥니다")
         if err:
             raise err[0]
-        prog(1.0, "frames/rois/audio 준비됨")
+        prog(1.0, "영상 읽기가 끝났어요")
     elif stage == "transcribe":
         from .transcribe import transcribe
 
         _require(cache / "audio.wav", "E_NO_PREP", "오디오(prep 결과)", "prep 단계를 먼저 실행하세요.")
-        prog(0.05, "Whisper (GPU → CPU 폴백)")
+        prog(0.05, "말을 글로 바꾸는 중이에요")
         tr = transcribe(cache, force=bool(job.params.get("force")))
-        prog(1.0, f"{tr.get('backend')} {len(tr.get('segments', []))} segments")
+        prog(
+            1.0,
+            f"말 {len(tr.get('segments', []))}마디를 글로 바꿨어요 ({'GPU' if tr.get('device') == 'cuda' else 'CPU'})",
+        )
     elif stage == "subtitles":
         # 영상 전체 자막 파일 (SRT + VTT). 쇼츠 초안 옆 .srt 와 달리 회차 하나를 통째로 — '자막만 달고 싶을 때' 경로.
         from .subtitles import cues_for_clip, write_srt, write_vegas_txt, write_vtt
@@ -459,7 +476,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 }
             )
         job.log(f"subtitles: {len(cues)} cues · {out_dir / (vid + '.srt')}")
-        prog(1.0, f"자막 {len(cues)}줄 → {vid}.srt / .vtt / .vegas.txt ({fps:.2f}fps)")
+        prog(1.0, f"자막 {len(cues)}줄을 만들었어요 (SRT · VTT · VEGAS)")
     elif stage == "signals":
         from .signals import REGISTRY, run_signal
 
@@ -473,7 +490,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         for i, name in enumerate(names):
             if job.cancel_event.is_set():
                 return
-            prog(i / len(names), f"signal {name}")
+            prog(i / len(names), f"{SIGNAL_LABEL.get(name, name)} 찾는 중이에요")
             run_signal(name, cache, bool(job.params.get("force")))
         # 신호가 끝나면 ROI 적중률을 자동 점검 — 화면 레이아웃이 바뀐 회차를 사람이 모르고 지나가지 않게
         try:
@@ -497,7 +514,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 )
         except Exception as e:
             job.log(f"캘리브레이션 점검 실패(무시): {str(e)[:120]}")
-        prog(1.0, f"{len(names)} signals")
+        prog(1.0, f"순간 신호 {len(names)}가지를 찾았어요")
     elif stage == "candidates":
         # Phase 2: 신호 → 편집 포인트 후보 (candidates.json). 가중치·커널은 프로필, 임계값은 파라미터
         from .candidates import make_candidates
@@ -518,7 +535,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         segs.save(cache / "candidates.json")
         cov = segs.total_duration() / max(1.0, meta["duration"])
         job.log(f"candidates: {len(segs.items)}개, coverage {cov:.1%}, signals={segs.meta.get('signals')}")
-        prog(1.0, f"{len(segs.items)} candidates · coverage {cov:.0%}")
+        prog(1.0, f"편집 포인트 후보 {len(segs.items)}개 · 원본의 {cov:.0%}")
     elif stage == "align":
         # Phase 2 정답: 최종본 ↔ 원본 정렬 → labels/<vid>.csv kept
         from .align import (
@@ -569,13 +586,13 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 encoding="utf-8",
             )
             if not final:
-                prog(1.0, f"쇼츠 {len(files)}개 → keep {n}구간")
+                prog(1.0, f"쇼츠 {len(files)}개를 맞춰 정답 {n}구간을 찾았어요")
                 return
         fp = Path(str(final))
         if (project.cache / str(final) / "audio.wav").exists():
             final_wav, final_name = project.cache / str(final) / "audio.wav", str(final)
         elif fp.is_file():
-            prog(0.02, "최종본 오디오 추출")
+            prog(0.02, "편집본에서 소리를 꺼내는 중이에요")
             final_wav, final_name = extract_audio(fp, cache / "align" / f"{fp.stem}.wav"), fp.name
         else:
             raise EngineError(
@@ -594,7 +611,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         )
         n = write_labels(project.labels / f"{vid}.csv", segs, final_name)
         job.log(pretty(segs, diag))
-        prog(1.0, f"{n} kept 구간 · 최종본 {diag['matched_frac'] * 100:.0f}% 매칭")
+        prog(1.0, f"정답 구간 {n}개 · 편집본의 {diag['matched_frac'] * 100:.0f}%를 원본에서 찾았어요")
     elif stage == "shorts":
         from .preference import current_preference
         from .shorts import make_shorts, save_shorts
@@ -613,7 +630,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             cache, events, curves, meta["duration"], k=int(job.params.get("k", 5)), weights=pref.weights
         )
         save_shorts(cands, cache / "shorts.json")
-        prog(1.0, f"{len(cands)} candidates")
+        prog(1.0, f"쇼츠 후보 {len(cands)}개를 골랐어요")
     elif stage == "export":
         from .render import render_shorts
         from .run import load_episode, short_episode_label
@@ -642,7 +659,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
         out = project.review / vid / "shorts"
         (out / "keep").mkdir(parents=True, exist_ok=True)
         (out / "no").mkdir(parents=True, exist_ok=True)
-        prog(0.05, "렌더 (NVENC)")
+        prog(0.05, "세로 초안을 만드는 중이에요")
         idx = render_shorts(
             cands,
             meta,
@@ -657,7 +674,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             episode_label=short_episode_label(ep.get("title", "")) or vid,
             progress=lambda f, m="": prog(0.05 + 0.9 * f, m),
         )
-        prog(1.0, f"{len(idx)} drafts")
+        prog(1.0, f"세로 초안 {len(idx)}개를 만들었어요")
     elif stage == "xml":
         from .export_xml import export_xml
 
@@ -678,7 +695,7 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
                 "shorts 또는 candidates 단계를 먼저 실행하세요.",
             )
         export_xml(meta, cands, shorts, ui, project.premiere, vid, k=int(job.params.get("k", 5)))
-        prog(1.0, "xml")
+        prog(1.0, "Premiere 파일을 만들었어요")
     elif stage == "weaklabel":
         from .weaklabel import load_episode, load_slang, match_banner, title_keywords, write_weak_labels
 
@@ -689,9 +706,9 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             kws = title_keywords(title, load_slang(meta.get("game", "d2r")))
             matches = match_banner(kws, Segments.load(cache / "item_banner.json"))
             write_weak_labels(vid, matches, project.labels, duration=meta["duration"])
-            prog(1.0, f"{len(matches)} weak labels")
+            prog(1.0, f"제목에서 정답 {len(matches)}개를 찾았어요")
         else:
-            prog(1.0, "제목 없음 — 건너뜀")
+            prog(1.0, "제목이 없어 건너뛰었어요")
     elif stage == "eval":
         from .eval_shorts import evaluate_shorts
         from .evaluate import evaluate
@@ -725,6 +742,6 @@ def run_stage(project: Project, job: Job, stage: str, prog: Callable[[float, str
             )
         if not done:
             job.log("eval: 정답(labels/<id>.shorts.csv 또는 labels/<id>.csv)과 후보가 아직 없습니다")
-        prog(1.0, "eval " + ("·".join(done) or "건너뜀"))
+        prog(1.0, "점수를 매겼어요" if done else "점수를 매길 정답이 아직 없어요")
     else:
         raise EngineError("E_BAD_STAGE", f"알 수 없는 단계: {stage}", f"가능: {STAGES}")

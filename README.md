@@ -13,7 +13,9 @@
 
 **한국어** · [English](README.en.md)
 
-<img src="docs/images/make.png" alt="만들기 화면: 쇼츠 초안과 자막 카드" width="860">
+<img src="docs/images/demo.gif" alt="영상 하나로 쇼츠 초안을 만들고 판정하는 흐름" width="860">
+
+<sub>만들기 → 진행률 → 쇼츠 초안 탭으로 자동 이동 → 쓸 만함 (합성 테스트 영상, 실제 속도의 약 1.5배)</sub>
 
 </div>
 

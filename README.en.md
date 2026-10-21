@@ -13,9 +13,18 @@ and learns from every "keep / skip" you press.
 
 [한국어](README.md) · **English**
 
-<img src="docs/images/demo.gif" alt="Making drafts from one video and judging them" width="860">
+<table>
+<tr>
+<td><img src="docs/images/demo.gif" alt="Making drafts from a real edited stream, playing one and marking it keep" width="620"></td>
+<td><img src="docs/images/short.gif" alt="A rendered vertical draft: an item drop after a boss kill, with the stream chat reacting" width="216"></td>
+</tr>
+<tr>
+<td align="center"><sub>Make → progress → drafts → play → keep</sub></td>
+<td align="center"><sub>A draft exactly as the app renders it</sub></td>
+</tr>
+</table>
 
-<sub>Make → progress → jumps to the drafts tab → keep (synthetic test clip, about 1.5× speed)</sub>
+<sub>A real edited stream, shown with the streamer's permission. Viewer nicknames in the stream chat are blurred and the render wait is shortened.</sub>
 
 </div>
 
@@ -40,7 +49,7 @@ and learns from every "keep / skip" you press.
 </tr>
 </table>
 
-<sub>The video in the screenshots is a synthetic test clip.</sub>
+<sub>The drafts and update screenshots use the same real edited stream (viewer nicknames blurred).</sub>
 
 ## How it works
 

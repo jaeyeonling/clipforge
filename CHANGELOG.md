@@ -32,7 +32,7 @@
 ### 개발
 - 다른 게임 추가: 게임 프로필이 공통 설정(리액션·채팅 어휘, 전사, 신호 묶음, 정답 범주)을 실제로 덮어써요. 파일 이름 접두어로 어떤 프로필이든 알아봐요.
 - 저장소 규칙: ruff(엔진), Prettier · ESLint(화면·데스크톱), TypeScript strict(화면), 엔진 · 화면 · 데스크톱 테스트, Windows CI, `scripts/check.ps1` 로 한 번에.
-- 문서: 지금 구조(ARCHITECTURE · ENGINE · GAME_PROFILE), 시간순 설계 노트(notes/), 기여 · 보안 안내, 영어 소개.
+- 문서: 지금 구조(ARCHITECTURE · ENGINE · GAME_PROFILE · CODE_SIGNING), 시간순 설계 노트(notes/), 기여 · 보안 안내, 영어 소개. README 데모는 스트리머 허락을 받은 실제 방송 편집본(시청자 닉네임 가림).
 
 ### 고친 것
 - 설치본에 `release.config.js` 가 빠져 시작하자마자 꺼지던 문제 (패키징 검사 테스트 추가).

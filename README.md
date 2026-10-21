@@ -13,9 +13,18 @@
 
 **한국어** · [English](README.en.md)
 
-<img src="docs/images/demo.gif" alt="영상 하나로 쇼츠 초안을 만들고 판정하는 흐름" width="860">
+<table>
+<tr>
+<td><img src="docs/images/demo.gif" alt="실제 방송 편집본으로 쇼츠 초안을 만들고 재생해 본 뒤 쓸 만함을 누르는 흐름" width="620"></td>
+<td><img src="docs/images/short.gif" alt="만들어진 세로 초안: 메피스토를 잡고 지존참을 줍는 순간, 방송 채팅이 반응한다" width="216"></td>
+</tr>
+<tr>
+<td align="center"><sub>만들기 → 진행률 → 쇼츠 초안 → 재생 → 쓸 만함</sub></td>
+<td align="center"><sub>앱이 만든 초안 그대로</sub></td>
+</tr>
+</table>
 
-<sub>만들기 → 진행률 → 쇼츠 초안 탭으로 자동 이동 → 쓸 만함 (합성 테스트 영상, 실제 속도의 약 1.5배)</sub>
+<sub>스트리머의 허락을 받은 실제 방송 편집본이에요. 방송 채팅의 시청자 닉네임은 가렸고, 렌더를 기다리는 구간은 줄였어요.</sub>
 
 </div>
 
@@ -38,7 +47,7 @@
 </tr>
 </table>
 
-<sub>화면의 영상은 합성 테스트 영상이에요.</sub>
+<sub>쇼츠 초안 · 업데이트 화면은 실제 방송 편집본(시청자 닉네임 가림)이에요.</sub>
 
 ## 설치
 

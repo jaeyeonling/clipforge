@@ -21,8 +21,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DESKTOP = ROOT / "desktop"
-NODE = Path(os.environ.get("CLIPFORGE_NODE_DIR", r"C:\Users\jaeye\tools\node"))
-GH = shutil.which("gh") or str(Path(os.environ.get("CLIPFORGE_GH_DIR", r"C:\Users\jaeye\tools\gh\bin")) / "gh.exe")
+def _node_dir() -> Path:
+    """npm/node 가 있는 폴더: CLIPFORGE_NODE_DIR → PATH 의 node → 포터블 Node 기본 위치(~/tools/node)."""
+    if os.environ.get("CLIPFORGE_NODE_DIR"):
+        return Path(os.environ["CLIPFORGE_NODE_DIR"])
+    found = shutil.which("node")
+    return Path(found).parent if found else Path.home() / "tools" / "node"
+
+
+NODE = _node_dir()
+GH = shutil.which("gh") or str(Path(os.environ.get("CLIPFORGE_GH_DIR", str(Path.home() / "tools" / "gh" / "bin"))) / "gh.exe")
 
 
 def sh(cmd: list[str], cwd: Path | None = None, capture: bool = False) -> str:
@@ -109,7 +117,7 @@ def main() -> None:
     ap.add_argument("--runtime-tag"); ap.add_argument("--notes"); ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     if not Path(GH).exists() and not shutil.which("gh"):
-        raise SystemExit("gh CLI 가 없습니다 (C:/Users/jaeye/tools/gh/bin/gh.exe 또는 PATH)")
+        raise SystemExit("gh CLI 가 없어요. PATH 에 gh 를 두거나 CLIPFORGE_GH_DIR 로 폴더를 알려 주세요")
     cfg = release_cfg()
     print(f"[publish] 대상 {cfg['owner']}/{cfg['repo']} (private={cfg['isPrivate']})")
     (cmd_runtime if a.what == "runtime" else cmd_app)(a, cfg)

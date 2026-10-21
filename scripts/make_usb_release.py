@@ -19,7 +19,15 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-NODE = Path(os.environ.get("CLIPFORGE_NODE_DIR", r"C:\Users\jaeye\tools\node"))
+def _node_dir() -> Path:
+    """npm/node 가 있는 폴더: CLIPFORGE_NODE_DIR → PATH 의 node → 포터블 Node 기본 위치(~/tools/node)."""
+    if os.environ.get("CLIPFORGE_NODE_DIR"):
+        return Path(os.environ["CLIPFORGE_NODE_DIR"])
+    found = shutil.which("node")
+    return Path(found).parent if found else Path.home() / "tools" / "node"
+
+
+NODE = _node_dir()
 
 
 def main() -> None:

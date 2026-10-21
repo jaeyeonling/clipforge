@@ -3,9 +3,15 @@
   "productName": "clipforge",
   "version": "0.2.0",
   "description": "clipforge 데스크톱 껍데기 (Electron): Python 엔진을 사이드카로 띄우고 React 화면을 창에 담는다. 트레이 상주, 작업 알림.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jaeyeonling/clipforge.git",
+    "directory": "desktop"
+  },
   "main": "main.js",
   "private": true,
-  "author": "clipforge",
+  "author": "jaeyeonling",
   "scripts": {
     "start": "electron .",
     "smoke": "electron . --smoke",

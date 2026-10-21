@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 사용 안내
+    url: https://github.com/jaeyeonling/clipforge/blob/main/docs/USER_GUIDE.md
+    about: 설치·사용법·문제 해결을 한 장에 정리했어요

@@ -1,144 +1,126 @@
-# clipforge — 게임 영상 하이라이트 실험 하네스
+<div align="center">
 
-"무엇이 좋은 편집인지 측정 가능하게 만들고, 신호를 바꿔 끼우며 지표로 결정한다"는 원칙을 코드로 옮긴 최소 뼈대.
-모델 선택은 나중 문제. 지금 이 하네스가 하는 일은 딱 하나 — **신호 하나 추가 → recall 변화 확인** 사이클을 분 단위로 만드는 것.
+# clipforge
 
-```
-원본 mp4 ─prep─▶ cache/<id>/ (meta.json, audio.wav, frames/ 1fps≤1080p, rois/<name>/ 네이티브 크롭, [proxy.mp4])
-                   │
-            signals ▼  Curve/Segments JSON  (audio_loudness, frame_motion, ... 플러그인)
-                   │
-              cands ▼  candidates.json      (가중합 + 임계값. 나중에 분류기로 교체)
-                   │
-      ┌── eval ◀───┴───▶ export ── review/<id>/*.mp4 ─(사람이 keep/로 이동)─ harvest ──▶ labels/<id>.csv
-      │   recall / precision / coverage / 놓친 구간                                       ▲
-      └───────────────── labels/<id>.csv (정답: 친구가 실제로 남긴 구간) ────────────────┘
-```
+**게임 방송 편집본을 넣으면 세로 쇼츠 초안과 자막이 나오는 Windows 데스크톱 앱**
 
-제품 설계는 [docs/PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md), 분석 코어 설계·조사·결정 기록은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 쇼츠 공식 조사는 [docs/research/shorts_formula.md](docs/research/shorts_formula.md).
+득템 배너 · 리액션 · 채팅이 겹치는 순간을 찾아 9:16 초안을 순위대로 만들고,<br>
+"쓸 만함 / 안 씀"을 누를수록 다음 회차부터 취향에 맞춰 갑니다.
 
-## 설치 (Windows)
+[![CI](https://github.com/jaeyeonling/clipforge/actions/workflows/ci.yml/badge.svg)](https://github.com/jaeyeonling/clipforge/actions/workflows/ci.yml)
+![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)
+![license](https://img.shields.io/badge/license-MIT-green)
 
-```powershell
-# ffmpeg 필요: winget install Gyan.FFmpeg  (설치 후 터미널 재시작)
-cd C:\Users\jaeye\source\clipforge
-python -m venv .venv ; .\.venv\Scripts\activate
-pip install -r requirements.txt
-```
+<img src="docs/images/make.png" alt="만들기 화면: 쇼츠 초안과 자막 카드" width="860">
 
-## 앱 (로컬 웹 UI)
+</div>
 
-```powershell
-python -m clipforge.app            # http://127.0.0.1:8765 가 브라우저로 열림 (127.0.0.1 전용, 외부 접근 없음)
-```
-영상 넣기 → 실행 탭의 버튼 하나(처음은 전체, 이후는 캐시 재사용) → 쇼츠 초안 탭에서 재생 → 쓸 만함 / 안 씀(이유) 판정이 `labels/` 에 바로 저장 → 기록 탭 점수.
-화면은 토스 결(중성 다크 면, 파란 주요 버튼, 테두리 없는 카드, 큰 숫자, '~해요' 문구)로 맞춰져 있고, 낯선 말에 마우스를 올리면 설명(`app/src/api/tips.ts`)이 뜬다. 친구용 사용 안내는 [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
-엔진 API 는 `/api/*`(HTTP) + `/ws`(이벤트), 데스크톱 껍데기용 stdio 전송은 `python -m clipforge.api.stdio`.
-캘리브레이션 패널에서 ROI 적중률 점검·미리보기·수치 편집이 가능하다. 테스트: `python -m pytest -q tests` (ffmpeg/GPU 불필요), 폰트 검사: `python scripts/check_fonts.py`.
+## 무엇을 해 주나요
 
-## 첫 실험 (친구 영상 1개로 30분)
+- **쇼츠 초안.** 10~15분 편집본에서 쇼츠로 쓸 만한 순간을 골라 세로 mp4 초안을 만들어요. 손글씨 제목 띠, 템 창을 따라가는 크롭, 대사 자막, 방송 채팅이 그대로 들어가요. Premiere 로 바로 여는 XML 도 같이 나와요.
+- **자막만 만들기.** 영상 전체의 말을 글로 바꿔 SRT · VTT · VEGAS Pro 용 텍스트로 내보내요. 4K 10분이면 GPU 로 1~2분.
+- **판정이 쌓일수록 정확해져요.** 초안마다 쓸 만함 / 안 씀(이유 하나)을 누르면 다음 회차부터 비슷한 순간이 위로 올라와요.
+- **설명 없이 쓰는 화면.** 버튼 하나로 처음부터 끝까지 돌고, "다음" 줄이 지금 할 일을 알려줘요. 낯선 말에 마우스를 올리면 설명이 떠요.
+- **고급 기능** (설정에서 켜기). 원본 녹화에서 편집 포인트 후보 뽑기, 화면 영역 보정, 판정 점수 기록, 방송 중 득템 배너 도우미(OBS 연동).
 
-```powershell
-# 1. 원본 영상을 videos/ 에 넣고 전처리. 단일 패스로 오디오·프레임·ROI 크롭을 동시에 뽑는다 (NVDEC 자동 시도).
-#    4K60 은 NVDEC 로도 실시간의 ~4배 → 2시간이면 ~30분. 게임 프로필은 games/<game>.yaml (--game, 기본 d2r)
-python -m clipforge.run prep videos\ep01.mp4 [--game d2r] [--proxy]
+<table>
+<tr>
+<td width="50%"><img src="docs/images/shorts.png" alt="쇼츠 초안 탭"><br><sub>쇼츠 초안 — 재생해 보고 쓸 만함 / 안 씀</sub></td>
+<td width="50%"><img src="docs/images/welcome.png" alt="처음 화면"><br><sub>처음 켰을 때 — 세 단계 안내</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/setup.png" alt="첫 실행 구성요소 설치"><br><sub>첫 실행 — 엔진 구성요소를 동시에 받으며 소개를 보여줘요</sub></td>
+<td width="50%"><img src="docs/images/update.png" alt="업데이트 안내"><br><sub>업데이트 — 재설치 없이 앱 안에서, 작업 중이면 끝난 뒤</sub></td>
+</tr>
+</table>
 
-# 2. 정답 만들기: 친구 최종본을 보면서 "원본에서 어느 구간이 살아남았나"를 labels\ep01.csv 에 적는다
-#    start,end,label,note   (시간은 mm:ss 또는 hh:mm:ss, label은 rune_drop / reaction / fail / explain / clear 등 자유)
-#    labels\_template.csv 참고. 이 표 한 장이 프로젝트에서 제일 중요한 산출물.
+<sub>화면의 영상은 합성 테스트 영상이에요.</sub>
 
-# 3. 신호 계산 → 후보 생성 → 평가
-python -m clipforge.run signals ep01
-python -m clipforge.run cands ep01
-python -m clipforge.run eval ep01
-```
+## 설치
 
-`eval` 출력에서 봐야 할 것:
-- **recall** — 정답 중 몇 %를 후보가 덮었나. 1순위 지표.
-- **coverage** — 검토해야 할 영상 비율. 비용 지표. (목표 예: recall ≥ 95%, coverage ≤ 20%)
-- **놓친 구간 / 라벨별 recall** — 다음에 어떤 신호를 만들어야 하는지 데이터가 알려줌.
-  음량만으로 `reaction`은 잡히는데 `rune_drop`을 전부 놓친다면 → OCR 신호가 다음 과제.
+1. [Releases](https://github.com/jaeyeonling/clipforge/releases) 에서 `clipforge-Setup-x.y.z.exe` 를 받아 실행해요. 관리자 권한은 필요 없어요.
+2. "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**. 아직 코드 서명이 없어서 떠요.
+3. 처음 켜면 분석 엔진 구성요소(파이썬 런타임 · FFmpeg · 음성 인식 모델 · GPU 가속)를 받아요. 약 3.3GB, 3개씩 동시에 받아요.
 
-```powershell
-# 임계값/가중치 스윕
-python -m clipforge.run sweep ep01
-python -m clipforge.run sweep ep01 --w audio_loudness=1 --w frame_motion=0.5
+인터넷 없이 전달하려면 구성요소까지 담은 폴더를 만들 수 있어요. [desktop/README.md](desktop/README.md) 를 보세요.
 
-# 후보를 클립으로 잘라 검토 → 쓸 것만 review\ep01\keep\ 로 이동 → 레이블로 회수
-python -m clipforge.run export ep01
-python -m clipforge.run harvest ep01
-```
-
-## 신호 추가하기
-
-`clipforge/signals/` 에 파일 하나 만들고 `__init__.py` 에 import 한 줄.
-
-```python
-from ..timeline import Segments, Segment
-from .base import signal
-
-@signal("d2_item_drop")
-def d2_item_drop(cache: Path) -> Segments:
-    # cache/rois/banner/*.jpg 또는 cache/frames/*.jpg 를 RapidOCR 로 읽어 룬·유니크 이름이 보이는 초를 구간으로
-    ...
-```
-
-Curve(연속값)든 Segments(이벤트)든 공통 포맷으로만 내놓으면 `cands`/`eval`이 그대로 돈다.
-`candidates.py`의 `DEFAULT_WEIGHTS`에 이름을 추가하면 가중합에 들어간다. (Segments 신호는 아직 Curve로 변환하는 어댑터가 없음 — 다음 단계)
-
-## 다음 단계 (우선순위 순)
-
-1. **정답 데이터**: 친구 영상 3~5개로 `labels/` 채우기. 라벨 범주 확정.
-2. **베이스라인 숫자**: 음량만으로 recall 몇 %인지. 놓친 라벨이 뭔지.
-3. 놓친 라벨에 맞는 신호 추가 — 예상: Whisper 키워드(리액션 보강), d2r-image OCR(조용한 드랍), 던파 결과창 템플릿 매칭
-4. Segments → Curve 어댑터, 판정 층을 작은 분류기로 교체
-5. 렌더 층: candidates → 프리미어 XML / OTIO (AutoEditor 방식)
-
-## 내장 신호
-
-| 이름 | 입력 | 설명 |
+| | 최소 | 권장 |
 |---|---|---|
-| `audio_loudness` | audio.wav | RMS dB, 중앙값 대비. hop 0.5s |
-| `frame_motion` | frames/ | 1fps 프레임 간 평균 절대 차이(160×90 축소). 정적 구간 탐지용 |
+| OS | Windows 10/11 64비트 | |
+| GPU | 없어도 돼요 (전사가 느려요) | NVIDIA (CUDA 12) — 전사 약 20배, 렌더 NVENC |
+| 디스크 | 런타임 4GB + 회차당 수백 MB | |
 
+사용법은 [docs/USER_GUIDE.md](docs/USER_GUIDE.md) 한 장에 정리돼 있어요.
 
-## 화면 (React + Vite) — `app/`
-엔진은 `python -m clipforge.app` (127.0.0.1:8765). 화면은 `app/dist` 가 있으면 그걸, 없으면 `ui/`(예전 바닐라)를 서빙한다.
-```
-set PATH=C:/Users/jaeye/tools/node;%PATH%      # 포터블 Node 22
-cd app && npm install && npm run build         # → app/dist (엔진이 서빙)
-npm run dev                                    # 개발 서버 5173, API 는 8765 로 프록시
+## 어떻게 동작하나요
+
+```mermaid
+flowchart LR
+  V[편집본 mp4] --> P[영상 읽기<br>소리 · 1초 프레임 · 화면 영역]
+  P --> T[말을 글로<br>Whisper]
+  P --> S[순간 신호<br>득템 배너 OCR · 채팅 · 음량 · 줌/컷]
+  T --> S
+  S --> R[쇼츠 후보 고르기<br>점수 · 순위]
+  L[(판정<br>쓸 만함 / 안 씀)] --> R
+  R --> E[세로 초안 렌더<br>제목 띠 · 크롭 · 자막]
+  R --> X[Premiere XML]
+  T --> C[자막 파일<br>SRT · VTT · VEGAS]
 ```
 
-## 데스크톱 (Electron) — `desktop/`
-창 하나에 위 화면을 담고, 엔진을 자식 프로세스로 띄우며, 트레이에 상주한다.
+- **엔진** (`clipforge/`, Python 3.12): FFmpeg 로 소리·프레임·화면 영역을 한 번에 뽑고, RapidOCR 로 득템 배너와 채팅을, faster-whisper 로 말을 읽어요. 신호는 플러그인이고 게임별 화면 배치는 `games/<게임>.yaml` 에 있어요.
+- **화면** (`app/`, React + Vite): 엔진이 HTTP · WebSocket 으로 진행률과 결과를 보내요. 토스 디자인 결(한 화면 한 버튼, 큰 숫자, '~해요' 문구)을 따라요.
+- **데스크톱** (`desktop/`, Electron): 엔진을 자식 프로세스로 띄우고 트레이 상주 · 알림 · 첫 실행 설치 · 앱 내 업데이트를 맡아요. 설치본은 88MB 이고 큰 구성요소는 처음 켤 때 받아요.
+
+지금은 디아블로2 레저렉션(한국어 클라이언트) 방송 화면에 맞춰져 있어요. 다른 게임은 화면 영역과 신호 묶음을 프로필로 더하면 돼요.
+
+## 개발
+
+```powershell
+python -m venv .venv ; .\.venv\Scripts\activate ; pip install -r requirements.txt
+cd app ; npm install ; npm run build ; cd ..
+python -m clipforge.app                    # http://127.0.0.1:8765
+cd desktop ; npm install ; npm start       # 데스크톱 창
+python -m pytest ; cd desktop ; npm test   # 테스트
 ```
-cd desktop && npm install
-npm start          # 창 + 엔진 (8765 에 엔진이 이미 떠 있으면 그것에 붙음)
-npm run smoke      # 자동 점검: 창·엔진 준비 확인 후 5초 뒤 종료, 로그는 %APPDATA%\clipforge\shell.log
+FFmpeg 가 필요해요 (`winget install Gyan.FFmpeg`). 자세한 내용, CLI 실험 하네스, 신호 추가 방법은 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 에 있어요.
+
+```
+clipforge/        분석 엔진 — 전처리 · 신호 · 후보 · 렌더 · 정렬 · 라이브 · API
+  signals/        신호 플러그인 (item_banner, chat_burst, speech_keyword, …)
+  api/            HTTP · WebSocket · stdio 메서드
+  live/           방송 중 화면 감지 · OBS 연동
+app/              React 화면
+desktop/          Electron 껍데기 · 구성요소 설치/업데이트 · 설치본 설정
+games/            게임 프로필 (화면 영역 · 신호 묶음 · 라벨 범주)
+data/d2r/         아이템 사전 · 약어 사전
+scripts/          포터블 런타임 · 릴리스 · USB 묶음 빌드
+tests/            pytest
+docs/             사용 안내 · 설계 문서
 ```
 
-## 배포 번들 (포터블 엔진) — `engine-dist/`
-설치본의 몸통. 임베더블 파이썬 + 패키지 + 엔진 코드 + 화면 + ffmpeg + Whisper 모델을 한 폴더에 모은다 (관리자 권한·레지스트리 불필요).
-```
-python scripts/build_engine_dist.py --smoke     # 구성 + 번들 파이썬으로 엔진을 띄워 health 확인
-set CLIPFORGE_ENGINE_DIST=1 && cd desktop && npm start   # 껍데기를 번들 런타임으로 띄워 보기
-```
-데이터(영상·캐시·라벨)는 `CLIPFORGE_DATA` 로 분리한다. 설치본에서는 껍데기가 `%APPDATA%/clipforge/data` 를 넘긴다.
+## 문서
 
-## Phase 2: 최종본 ↔ 원본 정렬 (align)
-```
-python -m clipforge.run prep <orig>                       # 원본 VOD 전처리 (audio.wav)
-python -m clipforge.run align <orig> --final <final.mp4>  # 살아남은 구간 → labels/<orig>.csv (kept), cache/<orig>/align.json
-python -m clipforge.run align <edited> --shorts <쇼츠.mp4|폴더>  # 친구 쇼츠 역매핑 → labels/<edited>.shorts.csv (keep) — Phase 1 정답 늘리기
-python -m clipforge.run eval <orig>                       # 후보 vs kept → recall / coverage
-```
-설계: docs/design/ALIGN.md (오디오 랜드마크 지문, 창 투표, 경계 다듬기).
+| 문서 | 내용 |
+|---|---|
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | 사용 안내 (한 장) |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 개발 · 테스트 · CLI · 신호 추가 |
+| [PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) | 제품 구조 · 껍데기 · 업데이트 설계 · 로드맵 |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 분석 코어 설계와 결정 기록 |
+| [design/](docs/design) | 쇼츠 레이아웃 · 정렬(align) · 라이브 · 페르소나 점검 |
+| [research/shorts_formula.md](docs/research/shorts_formula.md) | 게임 쇼츠 공식 조사 |
+| [desktop/README.md](desktop/README.md) | 설치본 · 릴리스 · 오프라인 전달 |
 
-## 라이브 (방송 중) — 라이브 탭
-화면을 1초에 한 장 보고 세트·유니크 아이템 라벨이 뜨면 "배너에 추가?" 제안을 올린다(승인 모드). 승인하면 득템 배너 텍스트와 OBS 텍스트 소스가 바뀌고 북마크가 남는다.
-OBS 연동: OBS → 도구 → WebSocket 서버 설정(포트 4455, 비밀번호) → 라이브 탭에서 연결 확인 → 텍스트 소스 선택. GPU 는 쓰지 않는다. 설계·검증: docs/design/LIVE.md.
+## 상태
 
-## 친구에게 전달
-- 온라인: GitHub Releases (`scripts/publish_github.py`) + 사용 안내 `docs/USER_GUIDE.md`
-- 오프라인(USB): `python scripts/make_usb_release.py --out E:/clipforge-release` → 폴더째 전달. 친구는 1-설치 → 2-위치등록.cmd → 앱 실행.
+개인 프로젝트이고, 한 스트리머의 방송을 기준으로 만들고 검증했어요.
+
+- 검증됨: 편집본 → 쇼츠 초안 · 자막 전체 흐름, 첫 실행 설치(깨끗한 런타임 폴더), 앱 내 업데이트 화면.
+- 실사용 확인 전: Premiere XML 가져오기, 원본 VOD 편집 포인트 실측, 라이브 탭 실방송.
+- 코드 서명이 없어 설치할 때 SmartScreen 경고가 떠요.
+
+변경 내역은 [CHANGELOG.md](CHANGELOG.md) 에 있어요.
+
+## 라이선스
+
+[MIT](LICENSE). 함께 배포되는 FFmpeg(GPL), Whisper 모델, 글꼴(SIL OFL), 게임 데이터 출처는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 를 보세요.
+Diablo II: Resurrected 는 Blizzard Entertainment 의 상표이고, 이 프로젝트는 Blizzard 와 관계가 없어요.

@@ -152,7 +152,7 @@
 - `src/state/store.tsx` — AppProvider 하나: health·회차·선택·작업·활성 작업·로그·오류 카드·토스트·tick(데이터 변경 신호). WS 이벤트가 여기서 상태를 갱신한다.
 - `src/components/ui.tsx` — Button/Badge/Card/Empty/Progress/Spinner/Toasts/Tabs + fmtTime 류. `src/styles/tokens.css`(디자인 토큰: 다크, 브랜드 노랑 `--accent`), `app.css`(골격·컴포넌트).
 - `src/features/` — Header(상태 칩·실행 중 배지·연결 끊김) + Alerts(health.problems 배너), Sidebar(회차 목록·단계 점·등록), Pipeline(단계 선택 그리드·프리셋·실행/취소·진행률·오류 카드·로그 창), Candidates(필터·카드·keep/no), Calibration(점검·미리보기·ROI 편집), Metrics(지표 표 + 작업 이력 → 로그).
-- 개발: `npm run dev`(5173, /api·/media·/ws 를 8765 로 프록시). 배포: `npm run build` → `dist/` 를 엔진 `project.ui_dir` 가 자동 서빙(없으면 예전 `ui/`). Node 는 포터블(`C:/Users/jaeye/tools/node`, PATH 에 추가해 사용).
+- 개발: `npm run dev`(5173, /api·/media·/ws 를 8765 로 프록시). 배포: `npm run build` → `dist/` 를 엔진 `project.ui_dir` 가 자동 서빙(없으면 예전 `ui/`). Node 는 포터블(`<node 폴더>`, PATH 에 추가해 사용).
 - 다음 화면 작업: 후보 카드 드래그 정렬/비교 보기, ROI 드래그 편집(지금은 수치), 키보드 판정(K/N), 라이브 탭 자리.
 
 **`desktop/` 껍데기 (Electron, 2026-10-18 밤)** — 의존성 electron + ws 뿐, 빌드 도구 없음(플레인 CommonJS 3파일).
@@ -219,7 +219,7 @@
 **호스팅 결정 (2026-10-18 밤): GitHub Releases, 저장소 `jaeyeonling/clipforge`, 일단 private.**
 - 두 종류의 릴리스: 앱 `v<ver>`(Setup.exe · blockmap · latest.yml · engine-code zip · latest.json) 와 런타임 `runtime-YYYY.MM`(구성요소 zip 4개, 각 2GB 미만). latest.json 은 `releases/latest/download/latest.json` 으로 항상 최신 앱 릴리스를 가리키고, 그 안의 구성요소 URL 은 런타임 릴리스의 절대 URL.
 - **private 의 대가**: 릴리스 자산을 토큰 없이 못 받는다. 앱은 `%LOCALAPPDATA%\clipforge\github-token.txt`(또는 `CLIPFORGE_GH_TOKEN`)의 fine-grained PAT(저장소 clipforge, Contents read-only)로 API 를 거쳐 받는다(`components.js resolveAsset`: 릴리스 조회 → 자산 API URL → `Accept: application/octet-stream`, S3 리다이렉트 시 Authorization 제거). electron-updater 는 `setFeedURL({private:true, token})`. 친구 PC 에 토큰 파일 하나를 놓아 주는 운영 부담이 있고, 토큰이 새면 저장소 읽기가 가능하므로 **공개 전환 시점에 토큰 발급을 취소**한다. public 으로 바꾸면 토큰 없이 그대로 동작(`CLIPFORGE_GH_PRIVATE=0` 또는 release.config.js).
-- 배포 명령: `python scripts/publish_github.py runtime`(처음 한 번·런타임 갱신 시) → `python scripts/publish_github.py app`(화면 빌드 → 엔진 코드 zip·latest.json → NSIS → gh release create). gh CLI 는 포터블(`C:/Users/jaeye/tools/gh`), `gh auth login` 은 사용자가 한 번.
+- 배포 명령: `python scripts/publish_github.py runtime`(처음 한 번·런타임 갱신 시) → `python scripts/publish_github.py app`(화면 빌드 → 엔진 코드 zip·latest.json → NSIS → gh release create). gh CLI 는 포터블(`<gh 폴더>`), `gh auth login` 은 사용자가 한 번.
 - 껍데기(층 C): electron-updater, 자동 다운로드 + 종료 시 설치(강제 재시작 없음), 트레이 "앱 X 설치하고 다시 시작". 코드 서명이 없어 electron-updater 의 서명 검증은 건너뛴다(publisherName 미설정).
 
 **구현 상태**: ✅ (1) `scripts/build_engine_dist.py --release DIR --release-components` : engine-code zip + 구성요소 zip(python-base/cuda/ffmpeg/whisper) + latest.json(sha256·size·label·optional) ✅ (2) `desktop/components.js` : fetchManifest(https/file) · present(파일로 설치 판정) · plan(missing/update) · download(이어받기·sha256) · install(7za → `_staging` → 경로 교체, 실패 시 `_prev` 복원; python-base 교체 시 cuda 폴더 보존) · seedFromResources(동봉 엔진 코드 심기) ✅ (2') `desktop/main.js` : 첫 실행 설치 화면(IPC), 10초 뒤·6시간마다 확인 → 알림 + 트레이 "업데이트 적용"(작업 중이면 비활성) → 엔진 중지·교체·재시작 · ⬜ (3) React 화면의 업데이트 배너/카드 (지금은 트레이·알림) · ✅ (4) electron-updater 로 C 층(`main.js setupShellUpdater`) · ✅ 호스팅 = GitHub private(위) · ⬜ 저장소 생성·첫 릴리스 업로드(gh auth 뒤).

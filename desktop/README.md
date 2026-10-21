@@ -1,7 +1,7 @@
 # clipforge desktop (Electron 껍데기)
 
 ```
-set PATH=C:\Users\jaeye\tools\node;%PATH%        # 포터블 Node 22
+set PATH=<node 폴더>;%PATH%        # 포터블 Node 22
 npm install
 npm start                                        # 창 + 엔진(저장소 .venv). 8765 에 엔진이 이미 떠 있으면 그것에 붙음
 npm run smoke                                    # 자동 점검: 창·엔진 준비 뒤 5초 후 종료 (로그 %APPDATA%\clipforge\shell.log)
@@ -19,9 +19,9 @@ set CLIPFORGE_SKIP_ENGINE=1 && npm run pack      # 엔진 없이 빠른 빌드 (
 
 ## 릴리스 아티팩트 · 첫 실행 흐름 점검
 ```
-python scripts/build_engine_dist.py --release release-test --release-components --base-url file:///C:/Users/jaeye/source/clipforge/release-test
+python scripts/build_engine_dist.py --release release-test --release-components --base-url file:///<저장소>/release-test
 set CLIPFORGE_RUNTIME_DIR=%TEMP%\cf-runtime-test
-set CLIPFORGE_UPDATE_URL=file:///C:/Users/jaeye/source/clipforge/release-test
+set CLIPFORGE_UPDATE_URL=file:///<저장소>/release-test
 npm start                                        # 첫 실행 설치 화면 → 구성요소 선택 → 설치 → 엔진 시작
 npx electron . --auto-setup --smoke              # 같은 흐름을 클릭 없이 끝까지 (자동 점검)
 ```
@@ -29,7 +29,7 @@ npx electron . --auto-setup --smoke              # 같은 흐름을 클릭 없�
 
 ## GitHub Releases 배포 (private 저장소)
 ```
-set PATH=C:\Users\jaeye\tools\gh\bin;%PATH%
+set PATH=<gh 폴더>;%PATH%
 gh auth login                                    # 한 번 (브라우저)
 python scripts\publish_github.py runtime         # 런타임 릴리스 runtime-YYYY.MM (구성요소 zip 4개, 처음 한 번)
 python scripts\publish_github.py app             # 앱 릴리스 v<ver>: 화면 빌드 → 엔진 코드 zip·latest.json → NSIS → 업로드

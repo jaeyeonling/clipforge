@@ -19,3 +19,11 @@ release-runtime/
 release-app/
 live/
 app/tsconfig.tsbuildinfo
+
+# 개인 데이터 (공개 저장소에 넣지 않음): 실제 회차 목록·판정·실험 결과·전달 메모
+private/
+episodes.csv
+labels/*.csv
+!labels/_template.csv
+!labels/demo.csv
+experiments/*.json

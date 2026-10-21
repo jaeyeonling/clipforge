@@ -152,6 +152,7 @@ function setupHtml() {
 <div class="btns"><button id="logs">로그 폴더</button><button id="retry" style="display:none">다시 시도</button><button id="start" class="p" disabled>설치 시작</button></div></div>
 <script>
 const S = window.clipforgeShell.setup; const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const human = (n) => n >= 1e9 ? (n/1e9).toFixed(1)+'GB' : n >= 1e6 ? Math.round(n/1e6)+'MB' : Math.round(n/1e3)+'KB';
 const fmtDur = (s) => s >= 3600 ? Math.round(s/3600) + '시간 ' + Math.round((s%3600)/60) + '분' : s >= 60 ? Math.round(s/60) + '분' : Math.round(s) + '초';
 let items = [], running = false, t0 = 0;
@@ -172,8 +173,8 @@ function showSlide(i) {
 }
 showSlide(0); setInterval(() => showSlide(slide + 1), 6000);
 function render() {
-  $('#tb').innerHTML = items.map((it, i) => \`<tr data-n="\${it.name}"><td class="n"><input type="checkbox" \${it.selected ? 'checked' : ''} \${it.optional && !running ? '' : 'disabled'} data-i="\${i}"></td>
-    <td><div>\${it.label}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || (it.reason === 'update' ? '업데이트' : '새로 설치')}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
+  $('#tb').innerHTML = items.map((it, i) => \`<tr data-n="\${esc(it.name)}"><td class="n"><input type="checkbox" \${it.selected ? 'checked' : ''} \${it.optional && !running ? '' : 'disabled'} data-i="\${i}"></td>
+    <td><div>\${esc(it.label)}</div><div class="bar"><i style="width:\${it.pct || 0}%"></i></div><div class="st">\${it.status || (it.reason === 'update' ? '업데이트' : '새로 설치')}</div></td><td class="s">\${human(it.size || 0)}</td></tr>\`).join('');
   const sel = items.filter((x) => x.selected);
   const total = sel.reduce((a, x) => a + (x.size || 0), 0);
   $('#hint').textContent = running ? '받는 동안 창을 닫아도 트레이에서 계속 받아요.' : '선택한 구성요소 합계 ' + human(total) + ' — 네트워크 속도에 따라 수 분~수십 분 걸려요. 여러 개를 동시에 받아요.';
@@ -196,7 +197,7 @@ S.onEvent((ev) => {
   if (ev.type === 'downloaded') { it.done = it.size; it.pct = 100; it.status = '받았어요 · 설치 차례 기다리는 중'; }
   if (ev.type === 'install') { it.done = it.size; it.status = ev.phase === 'extract' ? '푸는 중' + (ev.pct != null ? ' ' + ev.pct + '%' : '') : '교체 중'; it.pct = 100; }
   if (ev.type === 'done') { it.done = it.size; it.finished = true; it.status = '<span class="ok">완료</span>'; it.pct = 100; }
-  if (ev.type === 'error') { running = false; it.status = '<span class="bad">실패: ' + ev.message + '</span>'; $('#retry').style.display = ''; }
+  if (ev.type === 'error') { running = false; it.status = '<span class="bad">실패: ' + esc(ev.message) + '</span>'; $('#retry').style.display = ''; }
   render();
 });
 $('#start').onclick = () => { running = true; $('#retry').style.display = 'none'; render(); S.start({ optional: Object.fromEntries(items.filter((x) => x.optional).map((x) => [x.name, !!x.selected])) }); };
@@ -403,6 +404,7 @@ function subscribeEvents() {
     });
     ws.on("close", () => {
       ws = null;
+      setLiveShortcuts(false); // 엔진과 끊기면 라이브 이벤트를 못 받으므로 단축키를 놓는다
       if (!quitting) setTimeout(connect, 2000);
     });
     ws.on("error", (e) => log(`ws: ${e.message}`));
@@ -806,6 +808,7 @@ async function boot() {
     `engine: mode=${engine.cfg.mode} runtime=${engine.cfg.runtimeDir || "-"} data=${engine.cfg.dataRoot || "-"} update=${updateUrl()}`,
   );
   engine.onExit = (code) => {
+    setLiveShortcuts(false);
     if (quitting) return;
     updateTrayMenu("엔진 종료됨");
     win?.loadURL(

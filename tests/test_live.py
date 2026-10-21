@@ -72,6 +72,9 @@ def test_session_frames_source_suggests_and_bookmarks(tmp_project, live_frames):
             break
         time.sleep(0.1)
     assert not s.running and s.frames == 20
+    assert [e for e in events if e["type"] == "stopped"], (
+        "파일이 끝나면 stop() 없이도 stopped 를 알린다 (셸이 단축키를 놓게)"
+    )
     sug = [e for e in events if e["type"] == "suggestion"]
     assert sug and sug[0]["head"] == "카이트쉴드" and sug[0]["status"] == "pending"
     assert len(s.suggestions) == 1, "같은 이름은 쿨다운 안에 한 번만"

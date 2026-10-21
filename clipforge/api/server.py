@@ -107,7 +107,7 @@ class LocalOnlyMiddleware:
     """엔진은 127.0.0.1 에만 열리지만, 사용자가 브라우저로 연 다른 사이트도 그 주소로 요청을 보낼 수 있다.
     - Host 가 로컬 이름이 아니면 거절한다 (DNS 리바인딩: 공격자 도메인이 127.0.0.1 을 가리키게 해서 응답을 읽는 것).
     - Origin 이 있고 로컬이 아니면 거절한다 (다른 사이트의 fetch · WebSocket · 폼 전송).
-    Origin 이 없는 요청(데스크톱 셸, curl, 같은 페이지의 GET)은 통과한다. HTTP 와 WebSocket 모두에 걸린다."""
+    Origin 이 없는 요청(데스크톱 셸, curl, 같은 페이지의 GET)은 통과하고, Origin: null 은 거절한다. HTTP 와 WebSocket 모두에 걸린다."""
 
     def __init__(self, app, allowed_hosts: tuple[str, ...] = LOCAL_HOSTS):
         self.app = app
@@ -122,8 +122,9 @@ class LocalOnlyMiddleware:
             return await self.app(scope, receive, send)
         headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope.get("headers", [])}
         origin = headers.get("origin")
+        # Origin 이 'null' 인 요청(샌드박스 iframe·data: 페이지)은 어느 사이트든 만들 수 있으므로 거절한다.
         ok = self._host_ok(headers.get("host", "")) and (
-            not origin or origin == "null" or (urlsplit(origin).hostname or "") in self.allowed
+            origin is None or (origin != "null" and (urlsplit(origin).hostname or "") in self.allowed)
         )
         if ok:
             return await self.app(scope, receive, send)

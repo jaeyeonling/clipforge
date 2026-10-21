@@ -269,6 +269,15 @@ class LiveSession:
             )
 
     def _loop(self) -> None:
+        """프레임 루프. stop() 없이 스스로 끝나도(소스 실패·파일 끝) 'stopped' 를 알려, 셸이 전역 단축키를 놓게 한다."""
+        try:
+            self._run_frames()
+        finally:
+            if not self._stop.is_set():
+                self._save()
+                self._emit({"type": "stopped", "reason": self.last_error or "source_end", **self.status()})
+
+    def _run_frames(self) -> None:
         try:
             src = make_source(self.cfg, self.project)
         except Exception as e:

@@ -327,6 +327,7 @@ def test_engine_refuses_other_sites_and_rebinding(tmp_project):
     r = local.get("/api/episodes", headers={"Origin": "https://evil.example"})
     assert r.status_code == 403 and r.json()["error"]["code"] == "E_FORBIDDEN_ORIGIN"
     assert local.post("/api/jobs", json={"episode": "x"}, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert local.get("/api/episodes", headers={"Origin": "null"}).status_code == 403  # 샌드박스 iframe
 
     rebound = TestClient(app, base_url="http://attacker.example:8765")
     assert rebound.get("/api/episodes").status_code == 403
@@ -340,5 +341,11 @@ def test_engine_refuses_other_sites_and_rebinding(tmp_project):
         with local.websocket_connect("/ws", headers={**local_host, "Origin": "https://evil.example"}) as ws:
             ws.receive_text()
         raise AssertionError("다른 사이트의 WebSocket 이 열렸다")
+    except WebSocketDisconnect as e:
+        assert e.code == 1008
+    try:
+        with local.websocket_connect("/ws", headers={**local_host, "Origin": "null"}) as ws:
+            ws.receive_text()
+        raise AssertionError("Origin: null 인 WebSocket 이 열렸다")
     except WebSocketDisconnect as e:
         assert e.code == 1008
